@@ -1,122 +1,194 @@
-﻿# 🚀 RepoDNA v1.1.0 — Community Launch Kit & Copy
+# RepoDNA v1.1.0 — Community Launch Kit
 
-This document contains pre-formatted submission copy, direct 1-click submit links, and tags ready for Reddit, Hacker News, Product Hunt, and X (Twitter).
+This runbook covers a two-day launch for individual developers. It prepares copy and links; every public submission remains a human-approved Chrome handoff.
 
----
+## Positioning guardrails
 
-## 1. Reddit Launch
+- RepoDNA never executes repository code, installs repository dependencies, evaluates downloaded scripts, or invokes repository hooks.
+- The web engine uses deterministic language-specific structural parsing. The Python CLI uses the standard-library AST; the web and Python engines are checked against shared structural fixtures.
+- Public and private GitHub URL analyses are processed transiently by the Vercel service. Local folders and ZIP uploads are parsed inside the browser.
+- Route, architecture, database, and impact results are static inferences with evidence and confidence—not runtime guarantees.
+- GitHub OAuth requires the `repo` scope for private repositories. RepoDNA makes read-only GitHub requests and does not modify repositories or persist source code.
+- Do not ask users to upvote, coordinate comments, or disclose confidential source code in feedback.
 
-### Direct Submit Links:
-- 🔗 [Submit to r/programming](https://www.reddit.com/r/programming/submit?title=RepoDNA%3A%20I%20built%20a%20zero-code-execution%20visual%20architecture%20and%20execution%20trace%20visualizer%20for%20Python%2C%20JS%2C%20and%20TS)
-- 🔗 [Submit to r/webdev](https://www.reddit.com/r/webdev/submit?title=RepoDNA%3A%20I%20built%20a%20zero-code-execution%20visual%20architecture%20and%20execution%20trace%20visualizer%20for%20Python%2C%20JS%2C%20and%20TS)
-- 🔗 [Submit to r/Python](https://www.reddit.com/r/Python/submit?title=RepoDNA%3A%20I%20built%20a%20zero-code-execution%20visual%20architecture%20and%20execution%20trace%20visualizer%20for%20Python%20and%20TypeScript)
-- 🔗 [Submit to r/typescript](https://www.reddit.com/r/typescript/submit?title=RepoDNA%3A%20I%20built%20a%20zero-code-execution%20visual%20architecture%20and%20execution%20trace%20visualizer%20for%20TypeScript%20and%20Python)
+## Launch schedule
 
-### Post Title:
-```text
-RepoDNA: I built a zero-code-execution visual architecture and execution trace visualizer for Python, JS, and TS
-```
+Times below use daylight offsets for 25–26 August 2026:
 
-### Post Body (Markdown):
-```markdown
-Hey everyone!
+| Date | Time | Platform | Action |
+| --- | --- | --- | --- |
+| Tue 25 Aug | 00:01 PT / 03:01 ET / 08:01 BST | Product Hunt | Publish the listing and maker comment |
+| Tue 25 Aug | 05:30 PT / 08:30 ET / 13:30 BST | X | Publish a two-post announcement thread |
+| Wed 26 Aug | 05:00 PT / 08:00 ET / 13:00 BST | Hacker News | Submit the Show HN story and technical comment |
+| Wed 26 Aug | 07:30 PT / 10:30 ET / 15:30 BST | r/webdev | Submit the web visualizer post after checking rules |
+| Wed 26 Aug | 10:30 PT / 13:30 ET / 18:30 BST | r/Python | Submit the Python-focused post if the first Reddit thread is healthy |
 
-Whenever I jump into a new or unfamiliar codebase, I spend the first few days manually digging through routers, tracking down database models, and mentally mapping architecture layers.
+The initial Reddit rollout is limited to `r/webdev` and `r/Python`. `r/programming` and `r/typescript` are reserved for a substantive later release.
 
-I built **[RepoDNA](https://repodna-one.vercel.app)** ([GitHub](https://github.com/AnasBabari/RepoDNA)) to turn any repository into an interactive structural map in seconds.
+## Pre-launch checklist — 22–24 August
 
-### Key Features:
-- **Zero Runtime Code Execution**: It never runs `npm install`, `pip install`, `eval`, or untrusted scripts. It parses abstract syntax trees as text safely in memory or 100% inside your browser tab.
-- **Deep Execution Tracing**: Follows multi-tier execution paths from HTTP routes (FastAPI, Express, NestJS, Next.js App Router) down through controllers, services, and ORM models (Prisma, SQLAlchemy, SQLModel, Beanie).
-- **Interactive Architecture Map**: Drag, pan, and zoom through clustered layers with glowing dependency edges and instant **Mermaid flowchart export**.
-- **Change Impact & Blast Radius**: Inspect what symbols and files break when a core model or function changes.
-- **Client-Side First**: Analyze public GitHub URLs, pick a local folder directly from your machine (`webkitdirectory`), or upload a `.zip`.
-- **Private Repository Beta**: Sign in with GitHub OAuth to securely inspect your own private repositories transiently in memory.
+- [ ] Create a Product Hunt draft; verify the listing, links, pricing, and accepted image dimensions.
+- [ ] Prepare `docs/screenshots/overview.png`, `architecture.png`, `routes-trace.png`, and `dependencies.png`.
+- [ ] Smoke-test public GitHub analysis, private-repository OAuth, local folder and ZIP analysis, Mermaid export, JSON export, feedback, and mobile layout.
+- [ ] Confirm Vercel production health, Upstash rate limiting, GitHub CI, OAuth callback URLs, and PostHog EU consent/events.
+- [ ] Inspect the current `r/webdev` and `r/Python` rules immediately before preparing each form.
+- [ ] Add source-specific UTM links only; never include repository URLs, names, paths, symbols, or analysis output in analytics properties.
 
-### Tech Stack:
-- **Core Engine**: TypeScript AST parser + Python static analyzer
-- **Frontend**: Next.js / React Flow / Lucide icons / Custom cyberpunk theme & transparent scrollbars
-- **Safety**: Upstash sliding-window rate limiting, ZIP-bomb protection, and EU-hosted privacy-safe telemetry.
+## Hacker News — Show HN
 
-Live App: **https://repodna-one.vercel.app**  
-Source Code: **https://github.com/AnasBabari/RepoDNA**
+- Submit: <https://news.ycombinator.com/submit>
+- Title: `Show HN: RepoDNA – Zero-execution visual architecture and trace explorer`
+- URL: <https://repodna-one.vercel.app/?utm_source=hackernews&utm_medium=launch&utm_campaign=repodna_v1_1>
 
-I’d love to hear your feedback, thoughts on missing framework adapters, or feature ideas!
-```
+First comment:
 
----
-
-## 2. Hacker News (Show HN)
-
-- 🔗 [Submit to Hacker News](https://news.ycombinator.com/submit)
-
-### Title:
-```text
-Show HN: RepoDNA – Zero-execution visual architecture and trace explorer
-```
-
-### URL:
-```text
-https://repodna-one.vercel.app
-```
-
-### First Comment:
 ```text
 Hey HN,
 
-I built RepoDNA (https://github.com/AnasBabari/RepoDNA) to make exploring unfamiliar codebases fast and visual.
+I built RepoDNA to make exploring unfamiliar codebases faster and more visual.
 
-Instead of running the repository (which requires installing dependencies, configuring Docker, or running untrusted code), RepoDNA statically parses Python, TypeScript, and JavaScript syntax as text:
-- Resolves routes (FastAPI, Express, NestJS, Next.js) down to database models (SQLAlchemy, Prisma, Beanie).
-- Renders an interactive React Flow architecture map with layer clustering and Mermaid diagram export.
-- Supports public GitHub URLs, private repositories (via GitHub OAuth in-memory transience), and local folders via browser file system access.
+Instead of running a repository, installing its dependencies, or relying on an LLM, RepoDNA reads source as text and builds a deterministic structural map:
 
-It's free, open-source (MIT), and does not use LLMs for parsing. Feedback and ideas welcome!
+- Python, JavaScript, and TypeScript language-specific parsing.
+- Route and execution-flow inference for FastAPI, Express, NestJS, and Next.js patterns.
+- Architecture layers, dependency edges, cycle signals, impact slices, and Mermaid export.
+- Public GitHub URLs, private repositories through GitHub OAuth, and local folders or ZIPs.
+
+The analyzer never executes repository code. Results are static inferences with evidence and confidence, and the project is free and open source under MIT.
+
+I would especially value feedback on parser edge cases, false positives, and which language adapter would be most useful next.
 ```
 
----
+## Reddit: r/webdev
 
-## 3. Product Hunt Launch
+- Submit: [r/webdev submission](https://www.reddit.com/r/webdev/submit?title=RepoDNA%3A%20Interactive%20architecture%20maps%20and%20execution%20flows%20for%20Next.js%2C%20Express%2C%20and%20FastAPI)
+- Title: `RepoDNA: Interactive architecture maps and execution flows for Next.js, Express, and FastAPI`
+- URL: <https://repodna-one.vercel.app/?utm_source=reddit_webdev&utm_medium=launch&utm_campaign=repodna_v1_1>
+- Focus: React Flow architecture map, Next.js/Express route detection, Mermaid export, and browser-local folder analysis.
 
-- 🔗 [New Product on Product Hunt](https://www.producthunt.com/posts/new)
+```markdown
+Hey r/webdev!
 
-### Listing Details:
-- **Product Name**: `RepoDNA`
-- **Tagline**: `Understand and trace any codebase visually in seconds`
-- **Short Description**: `Deterministic, zero-code-execution architecture visualizer and execution tracer for Python, TypeScript, and JavaScript repositories.`
-- **Pricing**: `Free / Open Source (MIT)`
-- **Links**: 
-  - Website: `https://repodna-one.vercel.app`
-  - GitHub: `https://github.com/AnasBabari/RepoDNA`
+I built [RepoDNA](https://repodna-one.vercel.app/?utm_source=reddit_webdev&utm_medium=launch&utm_campaign=repodna_v1_1), an open-source visualizer for understanding unfamiliar web codebases.
 
-### First Maker Comment:
+It reads source statically and never executes repository code. It can:
+
+- Group files into inferred API, services, frontend, database, and configuration layers.
+- Trace likely paths from Next.js, Express, NestJS, and FastAPI routes through local symbols.
+- Show dependency and impact views and export the architecture as Mermaid.
+- Analyze a public GitHub URL, a local folder selected with `webkitdirectory`, or a ZIP entirely in the browser.
+
+The results are evidence-backed inferences rather than runtime guarantees. I would love feedback on the architecture heuristics and missing web framework adapters.
+
+Live app: https://repodna-one.vercel.app
+Source: https://github.com/AnasBabari/RepoDNA
+```
+
+## Reddit: r/Python
+
+- Submit: [r/Python submission](https://www.reddit.com/r/Python/submit?title=RepoDNA%3A%20Visual%20architecture%20mapping%20and%20route-to-model%20tracing%20for%20Python%20codebases)
+- Title: `RepoDNA: Visual architecture mapping and route-to-model tracing for Python codebases`
+- URL: <https://repodna-one.vercel.app/?utm_source=reddit_python&utm_medium=launch&utm_campaign=repodna_v1_1>
+- Focus: Python AST CLI, shared fixtures, FastAPI/Flask/Django patterns, ORM detection, and confidence-based flow inference.
+
+```markdown
+Hey Pythonistas!
+
+I built [RepoDNA](https://repodna-one.vercel.app/?utm_source=reddit_python&utm_medium=launch&utm_campaign=repodna_v1_1), an open-source static analyzer and visualizer for Python and full-stack repositories.
+
+The Python CLI uses the standard-library `ast` module to extract classes, functions, imports, routes, calls, and ORM evidence without running the project. The web engine provides a browser-first structural analyzer, and both engines are checked against shared structural fixtures.
+
+It recognizes patterns such as FastAPI router prefixes, Flask routes, Django URL patterns, SQLAlchemy/SQLModel/Beanie models, and local dependency flows. Results include evidence and confidence so heuristics are visible.
+
+Try it: https://repodna-one.vercel.app
+Source: https://github.com/AnasBabari/RepoDNA
+
+Feedback on parser edge cases and useful Python framework adapters is welcome.
+```
+
+## Product Hunt
+
+- Draft: <https://www.producthunt.com/posts/new>
+- Product name: `RepoDNA`
+- Tagline: `Understand and trace any codebase visually in seconds`
+- Pricing: `Free / Open Source (MIT)`
+- Website: <https://repodna-one.vercel.app/?utm_source=producthunt&utm_medium=launch&utm_campaign=repodna_v1_1>
+- Source: <https://github.com/AnasBabari/RepoDNA>
+- Media: `docs/screenshots/overview.png`, `architecture.png`, `routes-trace.png`, `dependencies.png`
+
+Maker comment:
+
 ```markdown
 Hey Product Hunt! 👋
 
-When onboarding onto a new codebase or reviewing complex pull requests, understanding how layers connect is the hardest part.
+When onboarding to an unfamiliar codebase, understanding how routes, services, components, and data layers connect is often the hardest part.
 
-We built RepoDNA to solve this:
-1. Paste any GitHub URL or select a local project folder.
-2. RepoDNA deterministically parses the code (zero execution, safe static analysis).
-3. Explore the visual architecture map, multi-tier route execution flows, and export Mermaid diagrams for your documentation.
+RepoDNA turns that structure into an interactive map:
 
-It’s 100% free and open-source (MIT). Try it out and let us know what frameworks or features you'd like to see next!
+1. Paste a public or authorized private GitHub URL, or select a local folder.
+2. RepoDNA reads source statically and never executes repository code.
+3. Explore architecture layers, route-flow inferences, impact views, and Mermaid export.
+
+It is free, open source under MIT, and designed to make parser evidence visible instead of hiding guesses behind a black box.
+
+I would love to hear which frameworks and codebase questions should come next.
 ```
 
----
+## X — two-post thread
 
-## 4. X / Twitter Announcement
+Post 1:
 
 ```text
-🚀 Introducing RepoDNA v1.1: Understand any codebase visually in seconds.
+🚀 RepoDNA is live: understand unfamiliar codebases visually.
 
-⚡ Zero code execution (safe AST parsing)
-🗺️ Interactive Architecture Map + Mermaid export
-🔍 Deep multi-tier execution tracing (Route → Service → DB)
-🔒 Private Repo Beta with GitHub OAuth
+🗺️ Architecture maps
+🔍 Route-flow and impact views
+📐 Mermaid export
+🔒 Public + authorized private GitHub repos
+🧭 Local folder/ZIP analysis in the browser
 
-Try it live: https://repodna-one.vercel.app
-GitHub: https://github.com/AnasBabari/RepoDNA
-
-#buildinpublic #opensource #webdev #python #typescript
+Try it: https://repodna-one.vercel.app/?utm_source=x&utm_medium=launch&utm_campaign=repodna_v1_1
 ```
+
+Post 2:
+
+```text
+RepoDNA reads source as text and never executes repository code. Results are deterministic structural inferences with evidence and confidence—not LLM-generated guesses.
+
+Open source: https://github.com/AnasBabari/RepoDNA
+
+#opensource #webdev #python
+```
+
+## Chrome-assisted handoff
+
+1. Open the target platform in the user’s signed-in Chrome session.
+2. Verify the current URL, title, community rules, flair, copy, links, and screenshots.
+3. Stop for user approval immediately before publishing each story, post, or comment.
+4. If a login, CAPTCHA, OAuth prompt, moderation warning, or safety interstitial appears, hand control to the user.
+5. After publishing, record the live URL and timestamp in the launch log; do not solicit votes or coordinated engagement.
+
+## Response and measurement
+
+- Reply to genuine questions and acknowledge parser limitations.
+- Monitor Vercel errors, GitHub OAuth failures, Upstash quotas, and PostHog opt-in events.
+- Track only source type, platform, outcome code, duration bucket, and engagement events—never repository identity or code.
+- After 48 hours, record visitors, analysis starts/completions, workspace engagement, private-auth conversion, errors, feedback score, and GitHub stars.
+
+## FAQ
+
+**How is this different from a basic dependency graph?**
+
+RepoDNA combines import edges with symbols, routes, framework evidence, architecture layers, confidence-rated flows, and impact slices.
+
+**Is my code sent to an LLM?**
+
+No. RepoDNA does not use an LLM for parsing and never executes repository code. Local folders and ZIPs stay in the browser; GitHub URL analysis is processed transiently by the service.
+
+**Does private-repository access modify my code?**
+
+No. GitHub OAuth is used for read-only GET requests. RepoDNA does not write to repositories, install hooks, or persist source code.
+
+**Will you support Go, Rust, or Java?**
+
+Language adapters are possible, but no release date is promised. Feedback on the next most useful adapter is welcome.
