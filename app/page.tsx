@@ -1,107 +1,92 @@
-const sidebarWidths = [74, 58, 82, 66, 71, 54];
-const articleWidths = [100, 97, 94, 98, 86];
+'use client';
+
+const components = [
+  { name: 'Web client', detail: 'React · 42 files', tone: 'cyan' },
+  { name: 'API layer', detail: 'FastAPI · 13 routes', tone: 'violet' },
+  { name: 'Services', detail: '16 modules', tone: 'amber' },
+  { name: 'PostgreSQL', detail: '11 models', tone: 'green' },
+];
 
 export default function Home() {
   return (
-    <main className="fixed inset-0 overflow-hidden bg-[#fbfaf8] text-zinc-900">
-      <header
-        aria-hidden="true"
-        className="grid h-[76px] grid-cols-[1fr_auto_1fr] items-center border-b border-stone-200 bg-white/95 px-6 sm:px-14"
-      >
-        <div className="flex items-center gap-3">
-          <span className="h-9 w-9 rounded-full bg-stone-100" />
-          <span className="h-3.5 w-28 rounded-full bg-stone-100" />
-        </div>
-        <span className="hidden h-9 w-[min(30vw,420px)] rounded-xl bg-stone-100 sm:block" />
-        <div className="flex items-center justify-end gap-3">
-          <span className="hidden h-9 w-9 rounded-full bg-stone-100 sm:block" />
-          <span className="h-9 w-24 rounded-xl bg-stone-100" />
-        </div>
+    <main className="app-shell">
+      <header className="topbar">
+        <a className="brand" href="#" aria-label="RepoDNA home">
+          <span className="brand-mark">R</span>
+          <span>RepoDNA</span>
+          <span className="version">LOCAL</span>
+        </a>
+        <div className="repo-pill"><span className="status-dot" /> acme / pulse-api</div>
+        <button className="analyse-button" type="button">Analyse repository</button>
       </header>
 
-      <div
-        aria-hidden="true"
-        className="grid h-[calc(100%-76px)] grid-cols-[180px_minmax(0,1fr)_260px] gap-10 px-6 pb-24 pt-10 opacity-55 max-lg:grid-cols-[150px_minmax(0,1fr)] max-sm:grid-cols-1 sm:px-14"
-      >
-        <aside className="hidden border-r border-stone-200 pr-7 sm:block">
-          <div className="mb-6 h-2.5 w-16 rounded-full bg-stone-200" />
-          <div className="space-y-4">
-            {sidebarWidths.map((width) => (
-              <div key={width} className="flex items-center gap-3">
-                <span className="h-4 w-4 rounded bg-stone-200" />
-                <span
-                  className="h-2.5 rounded-full bg-stone-200"
-                  style={{ width: `${width}%` }}
-                />
+      <aside className="sidebar">
+        <p className="eyebrow">Workspace</p>
+        {['Overview', 'Architecture', 'Routes', 'Dependencies', 'Files'].map((item, index) => (
+          <button className={`nav-item ${index === 1 ? 'active' : ''}`} key={item} type="button">
+            <span className="nav-index">0{index + 1}</span>{item}
+          </button>
+        ))}
+        <div className="privacy-card">
+          <span className="shield">◆</span>
+          <div><strong>Local by design</strong><p>Your source never leaves this machine.</p></div>
+        </div>
+      </aside>
+
+      <section className="workspace">
+        <div className="workspace-heading">
+          <div>
+            <p className="eyebrow cyan-text">Architecture map</p>
+            <h1>See how the system<br />actually works.</h1>
+          </div>
+          <div className="summary">
+            <span><strong>147</strong> source files</span>
+            <span><strong>18.4k</strong> lines indexed</span>
+            <span><strong>94%</strong> parsed</span>
+          </div>
+        </div>
+
+        <div className="graph-stage" aria-label="Repository architecture graph">
+          <div className="graph-grid" />
+          <div className="flow-row">
+            {components.map((component, index) => (
+              <div className="flow-item" key={component.name}>
+                <button className={`node ${component.tone}`} type="button">
+                  <span className="node-type">{index === 3 ? 'DATA' : `LAYER 0${index + 1}`}</span>
+                  <strong>{component.name}</strong>
+                  <span>{component.detail}</span>
+                  <i>{index === 0 ? '03' : index === 1 ? '08' : index === 2 ? '12' : '04'} links</i>
+                </button>
+                {index < components.length - 1 && <span className="connector">→</span>}
               </div>
             ))}
           </div>
-          <div className="mb-6 mt-9 h-2.5 w-24 rounded-full bg-stone-200" />
-          <div className="space-y-4">
-            {sidebarWidths.slice(0, 3).map((width) => (
-              <span
-                key={width}
-                className="block h-2.5 rounded-full bg-stone-200"
-                style={{ width: `${width}%` }}
-              />
-            ))}
+          <div className="graph-caption">
+            <span>Request path</span>
+            <p>Browser request → API router → business logic → persistence</p>
           </div>
-        </aside>
-
-        <article className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-          <div className="space-y-3">
-            <div className="h-2.5 w-28 rounded-full bg-stone-200" />
-            <div className="h-7 w-4/5 rounded-lg bg-stone-200" />
-            <div className="h-7 w-3/5 rounded-lg bg-stone-200" />
-          </div>
-          <div className="min-h-[240px] flex-1 rounded-2xl bg-stone-200" />
-          <div className="flex items-center gap-3">
-            <span className="h-9 w-9 rounded-full bg-stone-200" />
-            <span className="h-2.5 w-28 rounded-full bg-stone-200" />
-          </div>
-          <div className="space-y-2">
-            {articleWidths.map((width) => (
-              <span
-                key={width}
-                className="block h-2.5 rounded-full bg-stone-200"
-                style={{ width: `${width}%` }}
-              />
-            ))}
-          </div>
-        </article>
-
-        <aside className="space-y-5 max-lg:hidden">
-          {[0, 1].map((card) => (
-            <div
-              key={card}
-              className="space-y-4 rounded-2xl border border-stone-200 bg-white/70 p-6"
-            >
-              <span className="block h-10 w-10 rounded-full bg-stone-200" />
-              <span className="block h-3 w-3/5 rounded-full bg-stone-200" />
-              <span className="block h-2.5 w-full rounded-full bg-stone-200" />
-              <span className="block h-2.5 w-4/5 rounded-full bg-stone-200" />
-              <span className="block h-8 w-24 rounded-lg bg-stone-200" />
-            </div>
-          ))}
-        </aside>
-      </div>
-
-      <section
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="absolute left-1/2 top-[clamp(96px,13vh,122px)] w-[min(620px,calc(100%-40px))] -translate-x-1/2 rounded-[18px] border border-stone-200 bg-white/95 px-5 py-5 shadow-[0_18px_50px_rgb(24_24_27/9%)] backdrop-blur-sm"
-      >
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-stone-500">
-          Building your site
-        </p>
-        <h1 className="text-xl font-semibold tracking-tight">
-          Your site is taking shape
-        </h1>
-        <p className="mt-1 text-sm text-stone-500">
-          Your first version will appear here automatically when it’s ready.
-        </p>
+        </div>
       </section>
+
+      <aside className="detail-panel">
+        <p className="eyebrow">Selected component</p>
+        <div className="detail-icon">A</div>
+        <h2>API layer</h2>
+        <p className="muted">HTTP boundaries and request handlers discovered from framework evidence.</p>
+        <dl>
+          <div><dt>Framework</dt><dd>FastAPI</dd></div>
+          <div><dt>Confidence</dt><dd className="good">96%</dd></div>
+          <div><dt>Files</dt><dd>8</dd></div>
+          <div><dt>Routes</dt><dd>13</dd></div>
+        </dl>
+        <p className="eyebrow section-label">Evidence</p>
+        <ul className="evidence-list">
+          <li>FastAPI application instance</li>
+          <li>8 registered route handlers</li>
+          <li>Imports service modules</li>
+        </ul>
+        <button className="trace-button" type="button">Trace this component <span>↗</span></button>
+      </aside>
     </main>
   );
 }
