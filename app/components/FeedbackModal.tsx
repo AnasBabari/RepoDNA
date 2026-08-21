@@ -137,13 +137,14 @@ export function FeedbackModal({
 
             {/* 2. Primary Use Case */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '8px' }}>
+              <span style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '8px' }}>
                 What is your primary use case today?
-              </label>
+              </span>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '6px' }}>
                 {USE_CASES.map((uc) => (
                   <label
                     key={uc.id}
+                    htmlFor={`usecase-${uc.id}`}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -158,6 +159,7 @@ export function FeedbackModal({
                     }}
                   >
                     <input
+                      id={`usecase-${uc.id}`}
                       type="radio"
                       name="useCase"
                       value={uc.id}
