@@ -1507,25 +1507,31 @@ function WorkspaceContent() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <Link className="brand" href="/" onClick={(e) => { e.preventDefault(); setProject(null); }} aria-label="RepoDNA overview">
-          <span className="brand-mark">R</span>
-          <span className="brand-title">RepoDNA</span>
-          <span className="version">v1.1</span>
-        </Link>
-        <label className="global-search">
-          <span>⌕</span>
-          <input
-            ref={searchInputRef}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onFocus={() => handleSwitchView('files')}
-            placeholder="Search files, symbols, routes…"
-          />
-          <kbd>⌘ K</kbd>
-        </label>
-        <div className="repo-pill" title={project.repository.source}>
-          <span className="status-dot" /> {project.repository.name}
+        <div className="topbar-left">
+          <Link className="brand" href="/" onClick={(e) => { e.preventDefault(); setProject(null); }} aria-label="RepoDNA overview">
+            <span className="brand-mark">R</span>
+            <span className="brand-title">RepoDNA</span>
+            <span className="version">v1.1</span>
+          </Link>
+          <div className="repo-pill" title={project.repository.source}>
+            <span className="status-dot" /> {project.repository.name}
+          </div>
         </div>
+
+        <div className="topbar-center">
+          <label className="global-search">
+            <span>⌕</span>
+            <input
+              ref={searchInputRef}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onFocus={() => handleSwitchView('files')}
+              placeholder="Search files, symbols, routes…"
+            />
+            <kbd>⌘ K</kbd>
+          </label>
+        </div>
+
         <div className="topbar-actions">
           <button
             className="chip-button"

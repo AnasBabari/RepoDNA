@@ -208,7 +208,7 @@ export function FeedbackModal({
             {/* 4. Text Comments with Privacy Warning */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <label style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
+                <label htmlFor="feedback-comment" style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
                   Optional feedback or feature request (max 500 chars)
                 </label>
                 <span style={{ fontSize: '0.75rem', color: comment.length > 480 ? '#f87171' : 'var(--text-dim)' }}>
@@ -216,23 +216,45 @@ export function FeedbackModal({
                 </span>
               </div>
               <textarea
+                id="feedback-comment"
                 value={comment}
                 onChange={(e) => setComment(e.target.value.slice(0, 500))}
                 rows={3}
                 placeholder="What worked well? What felt confusing?"
                 className="filter-input"
-                style={{ width: '100%', resize: 'none', fontFamily: 'inherit', fontSize: '0.85rem' }}
-              />
-              <p
                 style={{
+                  width: '100%',
+                  resize: 'none',
+                  fontFamily: 'inherit',
+                  fontSize: '0.85rem',
+                  background: '#06090d',
+                  border: '1px solid var(--line)',
+                  borderRadius: '8px',
+                  padding: '10px 14px',
+                  color: 'var(--ink)',
+                  outline: 'none',
+                }}
+              />
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
                   fontSize: '0.75rem',
-                  color: 'rgba(255, 180, 50, 0.9)',
-                  marginTop: '6px',
-                  lineHeight: 1.3,
+                  color: 'rgba(241, 188, 85, 0.9)',
+                  background: 'rgba(241, 188, 85, 0.06)',
+                  border: '1px solid rgba(241, 188, 85, 0.18)',
+                  borderRadius: '6px',
+                  padding: '7px 10px',
+                  marginTop: '8px',
+                  lineHeight: 1.35,
                 }}
               >
-                🔒 <strong>Privacy Caution:</strong> Please do not include code snippets, passwords, or confidential company secrets.
-              </p>
+                <span>🔒</span>
+                <span>
+                  <strong>Privacy Caution:</strong> Please do not include code snippets, passwords, or confidential company secrets.
+                </span>
+              </div>
             </div>
 
             {/* Actions */}
