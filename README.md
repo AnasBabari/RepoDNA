@@ -2,6 +2,8 @@
 
 **Understand any codebase visually.**
 
+[Open the live Vercel demo](https://repodna-one.vercel.app)
+
 RepoDNA turns an unfamiliar Python, JavaScript, or TypeScript repository into a portable structural map: files, symbols, imports, routes, databases, external systems, architecture layers, execution traces, impact slices, and an onboarding tour.
 
 It is deterministic, local-first, and does not use an LLM. The analyzer reads source as text and never executes repository code.
