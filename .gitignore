@@ -59,3 +59,10 @@ LAUNCH_POSTS.md
 launch_posts.md
 launch_*.md
 LAUNCH_*.md
+RELEASE_NOTES.md
+SECURITY.md
+
+# Tooling, scripts & IDE clutter
+.openai/
+.vscode/
+scripts/
