@@ -1,0 +1,912 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-08-21T20:52:10.496Z",
+  "repository": {
+    "name": "pytorch",
+    "source": "https://github.com/pytorch/pytorch",
+    "languages": {
+      "Python": 100
+    },
+    "fileCount": 8,
+    "sourceFileCount": 7,
+    "parsedFileCount": 0,
+    "lines": 110,
+    "fingerprint": {
+      "languages": [
+        "Python"
+      ],
+      "languageFileCounts": {
+        "Python": 7
+      },
+      "frameworks": [],
+      "infrastructure": [],
+      "databases": [],
+      "externalSystems": [],
+      "testing": [],
+      "buildTools": [],
+      "tooling": []
+    }
+  },
+  "technologies": [],
+  "files": [
+    {
+      "id": "file:pyproject.toml",
+      "path": "pyproject.toml",
+      "language": "Configuration",
+      "lines": 5,
+      "bytes": 300,
+      "hash": "pt_p1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:torch/__init__.py",
+      "path": "torch/__init__.py",
+      "language": "Python",
+      "lines": 15,
+      "bytes": 1500,
+      "hash": "pt_1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:torch/tensor.py",
+      "path": "torch/tensor.py",
+      "language": "Python",
+      "lines": 19,
+      "bytes": 1100,
+      "hash": "pt_2",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:torch/nn/modules/module.py",
+      "path": "torch/nn/modules/module.py",
+      "language": "Python",
+      "lines": 25,
+      "bytes": 1600,
+      "hash": "pt_3",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:torch/nn/modules/linear.py",
+      "path": "torch/nn/modules/linear.py",
+      "language": "Python",
+      "lines": 14,
+      "bytes": 800,
+      "hash": "pt_4",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:torch/nn/modules/conv.py",
+      "path": "torch/nn/modules/conv.py",
+      "language": "Python",
+      "lines": 14,
+      "bytes": 900,
+      "hash": "pt_5",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:torch/optim/adam.py",
+      "path": "torch/optim/adam.py",
+      "language": "Python",
+      "lines": 13,
+      "bytes": 700,
+      "hash": "pt_6",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:torch/autograd/engine.py",
+      "path": "torch/autograd/engine.py",
+      "language": "Python",
+      "lines": 5,
+      "bytes": 850,
+      "hash": "pt_7",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    }
+  ],
+  "symbols": [
+    {
+      "id": "torch/__init__.py",
+      "type": "module",
+      "name": "__init__.py",
+      "file": "torch/__init__.py",
+      "line": 1,
+      "end_line": 15,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "torch/__init__.py::zeros",
+      "type": "function",
+      "name": "zeros",
+      "file": "torch/__init__.py",
+      "line": 10,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/__init__.py::ones",
+      "type": "function",
+      "name": "ones",
+      "file": "torch/__init__.py",
+      "line": 13,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/tensor.py",
+      "type": "module",
+      "name": "tensor.py",
+      "file": "torch/tensor.py",
+      "line": 1,
+      "end_line": 19,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "torch/tensor.py::Tensor",
+      "type": "class",
+      "name": "Tensor",
+      "file": "torch/tensor.py",
+      "line": 2,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/tensor.py::Tensor::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "torch/tensor.py",
+      "line": 3,
+      "end_line": null,
+      "parent": "torch/tensor.py::Tensor",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/tensor.py::Tensor::backward",
+      "type": "method",
+      "name": "backward",
+      "file": "torch/tensor.py",
+      "line": 8,
+      "end_line": null,
+      "parent": "torch/tensor.py::Tensor",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/tensor.py::Tensor::to",
+      "type": "method",
+      "name": "to",
+      "file": "torch/tensor.py",
+      "line": 11,
+      "end_line": null,
+      "parent": "torch/tensor.py::Tensor",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/tensor.py::Tensor::cuda",
+      "type": "method",
+      "name": "cuda",
+      "file": "torch/tensor.py",
+      "line": 14,
+      "end_line": null,
+      "parent": "torch/tensor.py::Tensor",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/tensor.py::Tensor::cpu",
+      "type": "method",
+      "name": "cpu",
+      "file": "torch/tensor.py",
+      "line": 17,
+      "end_line": null,
+      "parent": "torch/tensor.py::Tensor",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/module.py",
+      "type": "module",
+      "name": "module.py",
+      "file": "torch/nn/modules/module.py",
+      "line": 1,
+      "end_line": 25,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module",
+      "type": "class",
+      "name": "Module",
+      "file": "torch/nn/modules/module.py",
+      "line": 4,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "torch/nn/modules/module.py",
+      "line": 5,
+      "end_line": null,
+      "parent": "torch/nn/modules/module.py::Module",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::forward",
+      "type": "method",
+      "name": "forward",
+      "file": "torch/nn/modules/module.py",
+      "line": 10,
+      "end_line": null,
+      "parent": "torch/nn/modules/module.py::Module",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::__call__",
+      "type": "method",
+      "name": "__call__",
+      "file": "torch/nn/modules/module.py",
+      "line": 13,
+      "end_line": null,
+      "parent": "torch/nn/modules/module.py::Module",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::parameters",
+      "type": "method",
+      "name": "parameters",
+      "file": "torch/nn/modules/module.py",
+      "line": 16,
+      "end_line": null,
+      "parent": "torch/nn/modules/module.py::Module",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::train",
+      "type": "method",
+      "name": "train",
+      "file": "torch/nn/modules/module.py",
+      "line": 19,
+      "end_line": null,
+      "parent": "torch/nn/modules/module.py::Module",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::eval",
+      "type": "method",
+      "name": "eval",
+      "file": "torch/nn/modules/module.py",
+      "line": 23,
+      "end_line": null,
+      "parent": "torch/nn/modules/module.py::Module",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/linear.py",
+      "type": "module",
+      "name": "linear.py",
+      "file": "torch/nn/modules/linear.py",
+      "line": 1,
+      "end_line": 14,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/linear.py::Linear",
+      "type": "class",
+      "name": "Linear",
+      "file": "torch/nn/modules/linear.py",
+      "line": 5,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/linear.py::Linear::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "torch/nn/modules/linear.py",
+      "line": 6,
+      "end_line": null,
+      "parent": "torch/nn/modules/linear.py::Linear",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/linear.py::Linear::forward",
+      "type": "method",
+      "name": "forward",
+      "file": "torch/nn/modules/linear.py",
+      "line": 12,
+      "end_line": null,
+      "parent": "torch/nn/modules/linear.py::Linear",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/conv.py",
+      "type": "module",
+      "name": "conv.py",
+      "file": "torch/nn/modules/conv.py",
+      "line": 1,
+      "end_line": 14,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/conv.py::Conv2d",
+      "type": "class",
+      "name": "Conv2d",
+      "file": "torch/nn/modules/conv.py",
+      "line": 5,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/conv.py::Conv2d::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "torch/nn/modules/conv.py",
+      "line": 6,
+      "end_line": null,
+      "parent": "torch/nn/modules/conv.py::Conv2d",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/nn/modules/conv.py::Conv2d::forward",
+      "type": "method",
+      "name": "forward",
+      "file": "torch/nn/modules/conv.py",
+      "line": 12,
+      "end_line": null,
+      "parent": "torch/nn/modules/conv.py::Conv2d",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/optim/adam.py",
+      "type": "module",
+      "name": "adam.py",
+      "file": "torch/optim/adam.py",
+      "line": 1,
+      "end_line": 13,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "torch/optim/adam.py::Adam",
+      "type": "class",
+      "name": "Adam",
+      "file": "torch/optim/adam.py",
+      "line": 2,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/optim/adam.py::Adam::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "torch/optim/adam.py",
+      "line": 3,
+      "end_line": null,
+      "parent": "torch/optim/adam.py::Adam",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/optim/adam.py::Adam::step",
+      "type": "method",
+      "name": "step",
+      "file": "torch/optim/adam.py",
+      "line": 7,
+      "end_line": null,
+      "parent": "torch/optim/adam.py::Adam",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/optim/adam.py::Adam::zero_grad",
+      "type": "method",
+      "name": "zero_grad",
+      "file": "torch/optim/adam.py",
+      "line": 10,
+      "end_line": null,
+      "parent": "torch/optim/adam.py::Adam",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/autograd/engine.py",
+      "type": "module",
+      "name": "engine.py",
+      "file": "torch/autograd/engine.py",
+      "line": 1,
+      "end_line": 5,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "torch/autograd/engine.py::ExecutionEngine",
+      "type": "class",
+      "name": "ExecutionEngine",
+      "file": "torch/autograd/engine.py",
+      "line": 2,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "torch/autograd/engine.py::ExecutionEngine::run_backward",
+      "type": "method",
+      "name": "run_backward",
+      "file": "torch/autograd/engine.py",
+      "line": 3,
+      "end_line": null,
+      "parent": "torch/autograd/engine.py::ExecutionEngine",
+      "exported": true,
+      "evidence": []
+    }
+  ],
+  "imports": [
+    {
+      "id": "torch/__init__.py:import:2:torch.nn",
+      "source": "torch/__init__.py",
+      "module": "torch.nn",
+      "names": [
+        "torch.nn"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "torch/__init__.py:import:3:torch.autograd",
+      "source": "torch/__init__.py",
+      "module": "torch.autograd",
+      "names": [
+        "torch.autograd"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "torch/__init__.py:import:4:torch.optim",
+      "source": "torch/__init__.py",
+      "module": "torch.optim",
+      "names": [
+        "torch.optim"
+      ],
+      "line": 4,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "torch/__init__.py:import:5:torch.cuda",
+      "source": "torch/__init__.py",
+      "module": "torch.cuda",
+      "names": [
+        "torch.cuda"
+      ],
+      "line": 5,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "torch/__init__.py:import:6:torch.tensor",
+      "source": "torch/__init__.py",
+      "module": "torch.tensor",
+      "names": [
+        "Tensor"
+      ],
+      "line": 6,
+      "target": "torch/tensor.py",
+      "external": false
+    },
+    {
+      "id": "torch/nn/modules/module.py:import:2:torch.tensor",
+      "source": "torch/nn/modules/module.py",
+      "module": "torch.tensor",
+      "names": [
+        "Tensor"
+      ],
+      "line": 2,
+      "target": "torch/tensor.py",
+      "external": false
+    },
+    {
+      "id": "torch/nn/modules/linear.py:import:2:torch.nn.modules.module",
+      "source": "torch/nn/modules/linear.py",
+      "module": "torch.nn.modules.module",
+      "names": [
+        "Module"
+      ],
+      "line": 2,
+      "target": "torch/nn/modules/module.py",
+      "external": false
+    },
+    {
+      "id": "torch/nn/modules/linear.py:import:3:torch.tensor",
+      "source": "torch/nn/modules/linear.py",
+      "module": "torch.tensor",
+      "names": [
+        "Tensor"
+      ],
+      "line": 3,
+      "target": "torch/tensor.py",
+      "external": false
+    },
+    {
+      "id": "torch/nn/modules/conv.py:import:2:torch.nn.modules.module",
+      "source": "torch/nn/modules/conv.py",
+      "module": "torch.nn.modules.module",
+      "names": [
+        "Module"
+      ],
+      "line": 2,
+      "target": "torch/nn/modules/module.py",
+      "external": false
+    },
+    {
+      "id": "torch/nn/modules/conv.py:import:3:torch.tensor",
+      "source": "torch/nn/modules/conv.py",
+      "module": "torch.tensor",
+      "names": [
+        "Tensor"
+      ],
+      "line": 3,
+      "target": "torch/tensor.py",
+      "external": false
+    }
+  ],
+  "calls": [
+    {
+      "id": "torch/__init__.py::zeros:call:11:Tensor",
+      "source": "torch/__init__.py::zeros",
+      "callee": "Tensor",
+      "file": "torch/__init__.py",
+      "line": 11,
+      "target": "torch/tensor.py::Tensor",
+      "confidence": 0.72
+    },
+    {
+      "id": "torch/__init__.py::ones:call:14:Tensor",
+      "source": "torch/__init__.py::ones",
+      "callee": "Tensor",
+      "file": "torch/__init__.py",
+      "line": 14,
+      "target": "torch/tensor.py::Tensor",
+      "confidence": 0.72
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::__call__:call:14:self.forward",
+      "source": "torch/nn/modules/module.py::Module::__call__",
+      "callee": "self.forward",
+      "file": "torch/nn/modules/module.py",
+      "line": 14,
+      "target": "torch/nn/modules/module.py::Module::forward",
+      "confidence": 0.88
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::parameters:call:17:list",
+      "source": "torch/nn/modules/module.py::Module::parameters",
+      "callee": "list",
+      "file": "torch/nn/modules/module.py",
+      "line": 17,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::parameters:call:17:self._parameters.values",
+      "source": "torch/nn/modules/module.py::Module::parameters",
+      "callee": "self._parameters.values",
+      "file": "torch/nn/modules/module.py",
+      "line": 17,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "torch/nn/modules/module.py::Module::eval:call:24:self.train",
+      "source": "torch/nn/modules/module.py::Module::eval",
+      "callee": "self.train",
+      "file": "torch/nn/modules/module.py",
+      "line": 24,
+      "target": "torch/nn/modules/module.py::Module::train",
+      "confidence": 0.88
+    },
+    {
+      "id": "torch/nn/modules/linear.py::Linear::__init__:call:7:super",
+      "source": "torch/nn/modules/linear.py::Linear::__init__",
+      "callee": "super",
+      "file": "torch/nn/modules/linear.py",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "torch/nn/modules/linear.py::Linear::__init__:call:7:__init__",
+      "source": "torch/nn/modules/linear.py::Linear::__init__",
+      "callee": "__init__",
+      "file": "torch/nn/modules/linear.py",
+      "line": 7,
+      "target": "torch/nn/modules/linear.py::Linear::__init__",
+      "confidence": 0.88
+    },
+    {
+      "id": "torch/nn/modules/linear.py::Linear::__init__:call:10:Tensor",
+      "source": "torch/nn/modules/linear.py::Linear::__init__",
+      "callee": "Tensor",
+      "file": "torch/nn/modules/linear.py",
+      "line": 10,
+      "target": "torch/tensor.py::Tensor",
+      "confidence": 0.72
+    },
+    {
+      "id": "torch/nn/modules/conv.py::Conv2d::__init__:call:7:super",
+      "source": "torch/nn/modules/conv.py::Conv2d::__init__",
+      "callee": "super",
+      "file": "torch/nn/modules/conv.py",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "torch/nn/modules/conv.py::Conv2d::__init__:call:7:__init__",
+      "source": "torch/nn/modules/conv.py::Conv2d::__init__",
+      "callee": "__init__",
+      "file": "torch/nn/modules/conv.py",
+      "line": 7,
+      "target": "torch/nn/modules/conv.py::Conv2d::__init__",
+      "confidence": 0.88
+    },
+    {
+      "id": "torch/optim/adam.py::Adam::__init__:call:4:list",
+      "source": "torch/optim/adam.py::Adam::__init__",
+      "callee": "list",
+      "file": "torch/optim/adam.py",
+      "line": 4,
+      "target": null,
+      "confidence": 0.55
+    }
+  ],
+  "routes": [],
+  "databases": [],
+  "external_systems": [],
+  "entrypoints": [],
+  "flows": [],
+  "architecture": {
+    "components": [
+      {
+        "id": "configuration",
+        "name": "Configuration",
+        "type": "configuration",
+        "files": [
+          "pyproject.toml"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "configuration file"
+        ]
+      },
+      {
+        "id": "other",
+        "name": "Application core",
+        "type": "other",
+        "files": [
+          "torch/__init__.py",
+          "torch/autograd/engine.py",
+          "torch/nn/modules/conv.py",
+          "torch/nn/modules/linear.py",
+          "torch/nn/modules/module.py",
+          "torch/optim/adam.py",
+          "torch/tensor.py"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "source file outside a recognized layer"
+        ]
+      }
+    ],
+    "connections": []
+  },
+  "important_files": [
+    {
+      "file": "pyproject.toml",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    },
+    {
+      "file": "torch/tensor.py",
+      "score": 12,
+      "reasons": [
+        "imported by 4 file(s)"
+      ]
+    },
+    {
+      "file": "torch/nn/modules/module.py",
+      "score": 8,
+      "reasons": [
+        "imported by 2 file(s)",
+        "imports 1 local file(s)"
+      ]
+    },
+    {
+      "file": "torch/nn/modules/conv.py",
+      "score": 4,
+      "reasons": [
+        "imports 2 local file(s)"
+      ]
+    },
+    {
+      "file": "torch/nn/modules/linear.py",
+      "score": 4,
+      "reasons": [
+        "imports 2 local file(s)"
+      ]
+    },
+    {
+      "file": "torch/__init__.py",
+      "score": 2,
+      "reasons": [
+        "imports 1 local file(s)"
+      ]
+    }
+  ],
+  "onboarding": [
+    {
+      "step": 1,
+      "title": "Read a central file",
+      "file": "pyproject.toml",
+      "description": "project configuration"
+    },
+    {
+      "step": 2,
+      "title": "Read a central file",
+      "file": "torch/tensor.py",
+      "description": "imported by 4 file(s)"
+    },
+    {
+      "step": 3,
+      "title": "Read a central file",
+      "file": "torch/nn/modules/module.py",
+      "description": "imported by 2 file(s), imports 1 local file(s)"
+    },
+    {
+      "step": 4,
+      "title": "Read a central file",
+      "file": "torch/nn/modules/conv.py",
+      "description": "imports 2 local file(s)"
+    },
+    {
+      "step": 5,
+      "title": "Read a central file",
+      "file": "torch/nn/modules/linear.py",
+      "description": "imports 2 local file(s)"
+    },
+    {
+      "step": 6,
+      "title": "Read a central file",
+      "file": "torch/__init__.py",
+      "description": "imports 1 local file(s)"
+    }
+  ],
+  "metrics": {
+    "complexityScore": 3,
+    "localDependencies": 6,
+    "externalDependencies": 4,
+    "dependencyCycles": [],
+    "mostConnectedFiles": [
+      {
+        "file": "torch/tensor.py",
+        "connections": 4
+      },
+      {
+        "file": "torch/nn/modules/module.py",
+        "connections": 3
+      },
+      {
+        "file": "torch/nn/modules/conv.py",
+        "connections": 2
+      },
+      {
+        "file": "torch/nn/modules/linear.py",
+        "connections": 2
+      },
+      {
+        "file": "torch/__init__.py",
+        "connections": 1
+      },
+      {
+        "file": "pyproject.toml",
+        "connections": 0
+      },
+      {
+        "file": "torch/autograd/engine.py",
+        "connections": 0
+      },
+      {
+        "file": "torch/optim/adam.py",
+        "connections": 0
+      }
+    ],
+    "highCouplingFiles": [],
+    "symbols": 34,
+    "routes": 0,
+    "components": 2,
+    "parseSuccessRate": 0
+  },
+  "diagnostics": [],
+  "metadata": {
+    "analysisMode": "static-typescript",
+    "executedRepositoryCode": false,
+    "limits": {
+      "maxFiles": 10000,
+      "maxFileBytes": 1000000,
+      "maxArchiveBytes": 26214400,
+      "maxTotalExtractedBytes": 104857600
+    },
+    "fileComponents": {
+      "pyproject.toml": "configuration",
+      "torch/__init__.py": "other",
+      "torch/tensor.py": "other",
+      "torch/nn/modules/module.py": "other",
+      "torch/nn/modules/linear.py": "other",
+      "torch/nn/modules/conv.py": "other",
+      "torch/optim/adam.py": "other",
+      "torch/autograd/engine.py": "other"
+    },
+    "cache": {
+      "hits": 0,
+      "misses": 8
+    }
+  }
+}

@@ -226,6 +226,10 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
           error: {
             code: error.code,
             message: error.message,
+            fallbackAvailable:
+              error.code === 'UPSTREAM_GITHUB_RATE_LIMITED' ||
+              error.code === 'UPSTREAM_GITHUB_ERROR' ||
+              error.code === 'FETCH_TIMEOUT',
           },
         },
         { status: error.status }

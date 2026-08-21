@@ -1,0 +1,610 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-08-21T20:52:10.501Z",
+  "repository": {
+    "name": "Twitter-Sentiment-Analysis",
+    "source": "https://github.com/yusrababari/Twitter-Sentiment-Analysis",
+    "languages": {
+      "Python": 100
+    },
+    "fileCount": 4,
+    "sourceFileCount": 3,
+    "parsedFileCount": 0,
+    "lines": 47,
+    "fingerprint": {
+      "languages": [
+        "Python"
+      ],
+      "languageFileCounts": {
+        "Python": 3
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "infrastructure": [],
+      "databases": [],
+      "externalSystems": [],
+      "testing": [],
+      "buildTools": [],
+      "tooling": []
+    }
+  },
+  "technologies": [
+    "Flask"
+  ],
+  "files": [
+    {
+      "id": "file:requirements.txt",
+      "path": "requirements.txt",
+      "language": "Configuration",
+      "lines": 7,
+      "bytes": 150,
+      "hash": "tw_p1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:app.py",
+      "path": "app.py",
+      "language": "Python",
+      "lines": 23,
+      "bytes": 1200,
+      "hash": "tw_1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:model/predictor.py",
+      "path": "model/predictor.py",
+      "language": "Python",
+      "lines": 9,
+      "bytes": 800,
+      "hash": "tw_2",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:utils/preprocessor.py",
+      "path": "utils/preprocessor.py",
+      "language": "Python",
+      "lines": 8,
+      "bytes": 600,
+      "hash": "tw_3",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    }
+  ],
+  "symbols": [
+    {
+      "id": "app.py",
+      "type": "module",
+      "name": "app.py",
+      "file": "app.py",
+      "line": 1,
+      "end_line": 23,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "app.py::home",
+      "type": "function",
+      "name": "home",
+      "file": "app.py",
+      "line": 10,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "app.py::predict",
+      "type": "function",
+      "name": "predict",
+      "file": "app.py",
+      "line": 14,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model/predictor.py",
+      "type": "module",
+      "name": "predictor.py",
+      "file": "model/predictor.py",
+      "line": 1,
+      "end_line": 9,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "model/predictor.py::SentimentPredictor",
+      "type": "class",
+      "name": "SentimentPredictor",
+      "file": "model/predictor.py",
+      "line": 2,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model/predictor.py::SentimentPredictor::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "model/predictor.py",
+      "line": 3,
+      "end_line": null,
+      "parent": "model/predictor.py::SentimentPredictor",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model/predictor.py::SentimentPredictor::predict",
+      "type": "method",
+      "name": "predict",
+      "file": "model/predictor.py",
+      "line": 7,
+      "end_line": null,
+      "parent": "model/predictor.py::SentimentPredictor",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "utils/preprocessor.py",
+      "type": "module",
+      "name": "preprocessor.py",
+      "file": "utils/preprocessor.py",
+      "line": 1,
+      "end_line": 8,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "utils/preprocessor.py::clean_tweet",
+      "type": "function",
+      "name": "clean_tweet",
+      "file": "utils/preprocessor.py",
+      "line": 4,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    }
+  ],
+  "imports": [
+    {
+      "id": "app.py:import:2:flask",
+      "source": "app.py",
+      "module": "flask",
+      "names": [
+        "Flask",
+        "render_template",
+        "request",
+        "jsonify"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "app.py:import:3:model.predictor",
+      "source": "app.py",
+      "module": "model.predictor",
+      "names": [
+        "SentimentPredictor"
+      ],
+      "line": 3,
+      "target": "model/predictor.py",
+      "external": false
+    },
+    {
+      "id": "app.py:import:4:utils.preprocessor",
+      "source": "app.py",
+      "module": "utils.preprocessor",
+      "names": [
+        "clean_tweet"
+      ],
+      "line": 4,
+      "target": "utils/preprocessor.py",
+      "external": false
+    },
+    {
+      "id": "utils/preprocessor.py:import:2:re",
+      "source": "utils/preprocessor.py",
+      "module": "re",
+      "names": [
+        "re"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    }
+  ],
+  "calls": [
+    {
+      "id": "app.py:call:6:Flask",
+      "source": "app.py",
+      "callee": "Flask",
+      "file": "app.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "app.py:call:7:SentimentPredictor",
+      "source": "app.py",
+      "callee": "SentimentPredictor",
+      "file": "app.py",
+      "line": 7,
+      "target": "model/predictor.py::SentimentPredictor",
+      "confidence": 0.72
+    },
+    {
+      "id": "app.py::home:call:11:render_template",
+      "source": "app.py::home",
+      "callee": "render_template",
+      "file": "app.py",
+      "line": 11,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "app.py::predict:call:15:request.get_json",
+      "source": "app.py::predict",
+      "callee": "request.get_json",
+      "file": "app.py",
+      "line": 15,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "app.py::predict:call:16:data.get",
+      "source": "app.py::predict",
+      "callee": "data.get",
+      "file": "app.py",
+      "line": 16,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "app.py::predict:call:17:clean_tweet",
+      "source": "app.py::predict",
+      "callee": "clean_tweet",
+      "file": "app.py",
+      "line": 17,
+      "target": "utils/preprocessor.py::clean_tweet",
+      "confidence": 0.72
+    },
+    {
+      "id": "app.py::predict:call:18:predictor.predict",
+      "source": "app.py::predict",
+      "callee": "predictor.predict",
+      "file": "app.py",
+      "line": 18,
+      "target": "model/predictor.py::SentimentPredictor::predict",
+      "confidence": 0.92
+    },
+    {
+      "id": "app.py::predict:call:19:jsonify",
+      "source": "app.py::predict",
+      "callee": "jsonify",
+      "file": "app.py",
+      "line": 19,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "app.py::predict:call:22:app.run",
+      "source": "app.py::predict",
+      "callee": "app.run",
+      "file": "app.py",
+      "line": 22,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "utils/preprocessor.py::clean_tweet:call:5:re.sub",
+      "source": "utils/preprocessor.py::clean_tweet",
+      "callee": "re.sub",
+      "file": "utils/preprocessor.py",
+      "line": 5,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "utils/preprocessor.py::clean_tweet:call:6:re.sub",
+      "source": "utils/preprocessor.py::clean_tweet",
+      "callee": "re.sub",
+      "file": "utils/preprocessor.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "utils/preprocessor.py::clean_tweet:call:7:tweet.lower",
+      "source": "utils/preprocessor.py::clean_tweet",
+      "callee": "tweet.lower",
+      "file": "utils/preprocessor.py",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "utils/preprocessor.py::clean_tweet:call:7:strip",
+      "source": "utils/preprocessor.py::clean_tweet",
+      "callee": "strip",
+      "file": "utils/preprocessor.py",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    }
+  ],
+  "routes": [
+    {
+      "id": "route:app.py:10:GET:/",
+      "method": "GET",
+      "path": "/",
+      "handler": "app.py::home",
+      "file": "app.py",
+      "line": 10,
+      "framework": "Flask",
+      "confidence": 0.98
+    },
+    {
+      "id": "route:app.py:14:POST:/predict",
+      "method": "POST",
+      "path": "/predict",
+      "handler": "app.py::predict",
+      "file": "app.py",
+      "line": 14,
+      "framework": "Flask",
+      "confidence": 0.98
+    }
+  ],
+  "databases": [],
+  "external_systems": [],
+  "entrypoints": [
+    {
+      "id": "entrypoint:app.py",
+      "file": "app.py",
+      "kind": "application",
+      "score": 94,
+      "confidence": 0.99,
+      "evidence": [
+        "creates a Flask application",
+        "contains a __main__ execution guard",
+        "uses the conventional app.py filename"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow:route:app.py:10:GET:/",
+      "name": "GET /",
+      "confidence": 0.86,
+      "nodes": [
+        {
+          "id": "route:app.py:10:GET:/",
+          "type": "route",
+          "label": "GET /",
+          "file": "app.py",
+          "line": 10
+        },
+        {
+          "id": "app.py::home",
+          "type": "function",
+          "label": "home",
+          "file": "app.py",
+          "line": 10
+        }
+      ],
+      "edges": [
+        {
+          "source": "route:app.py:10:GET:/",
+          "target": "app.py::home",
+          "type": "handles"
+        }
+      ]
+    },
+    {
+      "id": "flow:route:app.py:14:POST:/predict",
+      "name": "POST /predict",
+      "confidence": 0.86,
+      "nodes": [
+        {
+          "id": "route:app.py:14:POST:/predict",
+          "type": "route",
+          "label": "POST /predict",
+          "file": "app.py",
+          "line": 14
+        },
+        {
+          "id": "app.py::predict",
+          "type": "function",
+          "label": "predict",
+          "file": "app.py",
+          "line": 14
+        },
+        {
+          "id": "utils/preprocessor.py::clean_tweet",
+          "type": "function",
+          "label": "clean_tweet",
+          "file": "utils/preprocessor.py",
+          "line": 4
+        },
+        {
+          "id": "model/predictor.py::SentimentPredictor::predict",
+          "type": "method",
+          "label": "predict",
+          "file": "model/predictor.py",
+          "line": 7
+        }
+      ],
+      "edges": [
+        {
+          "source": "route:app.py:14:POST:/predict",
+          "target": "app.py::predict",
+          "type": "handles"
+        },
+        {
+          "source": "app.py::predict",
+          "target": "utils/preprocessor.py::clean_tweet",
+          "type": "calls"
+        },
+        {
+          "source": "app.py::predict",
+          "target": "model/predictor.py::SentimentPredictor::predict",
+          "type": "calls"
+        }
+      ]
+    }
+  ],
+  "architecture": {
+    "components": [
+      {
+        "id": "api",
+        "name": "API layer",
+        "type": "api",
+        "files": [
+          "app.py"
+        ],
+        "confidence": 0.94,
+        "evidence": [
+          "contains or groups request handlers"
+        ]
+      },
+      {
+        "id": "other",
+        "name": "Application core",
+        "type": "other",
+        "files": [
+          "model/predictor.py",
+          "requirements.txt",
+          "utils/preprocessor.py"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "source file outside a recognized layer"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "component:api:other",
+        "source": "api",
+        "target": "other",
+        "type": "imports",
+        "weight": 2
+      }
+    ]
+  },
+  "important_files": [
+    {
+      "file": "app.py",
+      "score": 114,
+      "reasons": [
+        "entrypoint candidate",
+        "defines 2 route(s)",
+        "imports 2 local file(s)"
+      ]
+    },
+    {
+      "file": "model/predictor.py",
+      "score": 3,
+      "reasons": [
+        "imported by 1 file(s)"
+      ]
+    },
+    {
+      "file": "utils/preprocessor.py",
+      "score": 3,
+      "reasons": [
+        "imported by 1 file(s)"
+      ]
+    }
+  ],
+  "onboarding": [
+    {
+      "step": 1,
+      "title": "Start at the entry point",
+      "file": "app.py",
+      "description": "creates a Flask application; contains a __main__ execution guard"
+    },
+    {
+      "step": 2,
+      "title": "Explore API layer",
+      "file": "app.py",
+      "description": "Requests enter the application through these handlers."
+    },
+    {
+      "step": 3,
+      "title": "Read a central file",
+      "file": "model/predictor.py",
+      "description": "imported by 1 file(s)"
+    },
+    {
+      "step": 4,
+      "title": "Read a central file",
+      "file": "utils/preprocessor.py",
+      "description": "imported by 1 file(s)"
+    }
+  ],
+  "metrics": {
+    "complexityScore": 1,
+    "localDependencies": 2,
+    "externalDependencies": 2,
+    "dependencyCycles": [],
+    "mostConnectedFiles": [
+      {
+        "file": "app.py",
+        "connections": 2
+      },
+      {
+        "file": "model/predictor.py",
+        "connections": 1
+      },
+      {
+        "file": "utils/preprocessor.py",
+        "connections": 1
+      },
+      {
+        "file": "requirements.txt",
+        "connections": 0
+      }
+    ],
+    "highCouplingFiles": [],
+    "symbols": 9,
+    "routes": 2,
+    "components": 2,
+    "parseSuccessRate": 0
+  },
+  "diagnostics": [],
+  "metadata": {
+    "analysisMode": "static-typescript",
+    "executedRepositoryCode": false,
+    "limits": {
+      "maxFiles": 10000,
+      "maxFileBytes": 1000000,
+      "maxArchiveBytes": 26214400,
+      "maxTotalExtractedBytes": 104857600
+    },
+    "fileComponents": {
+      "requirements.txt": "other",
+      "app.py": "api",
+      "model/predictor.py": "other",
+      "utils/preprocessor.py": "other"
+    },
+    "cache": {
+      "hits": 0,
+      "misses": 4
+    }
+  }
+}

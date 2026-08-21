@@ -121,4 +121,34 @@ describe('/api/analyze Route Handler', () => {
 
     vi.restoreAllMocks();
   });
+
+  it('handles UPSTREAM_GITHUB_RATE_LIMITED with fallbackAvailable flag', async () => {
+    vi.spyOn(ratelimitModule, 'checkAnalysisRateLimit').mockResolvedValue({
+      allowed: true,
+      limit: 5,
+      remaining: 4,
+      reset: Date.now() + 60000,
+      quotaType: 'public',
+    });
+
+    vi.spyOn(analyzerModule, 'analyzeGitHubUrl').mockRejectedValueOnce(
+      new IngestionError('UPSTREAM_GITHUB_RATE_LIMITED', 'GitHub API rate limit reached on server', 429)
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/analyze', {
+      method: 'POST',
+      body: JSON.stringify({ url: 'https://github.com/pytorch/pytorch' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(data.success).toBe(false);
+    expect(data.error.code).toBe('UPSTREAM_GITHUB_RATE_LIMITED');
+    expect(data.error.fallbackAvailable).toBe(true);
+
+    vi.restoreAllMocks();
+  });
 });

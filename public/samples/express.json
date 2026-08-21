@@ -1,0 +1,782 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-08-21T20:52:10.491Z",
+  "repository": {
+    "name": "express",
+    "source": "https://github.com/expressjs/express",
+    "languages": {
+      "JavaScript": 100
+    },
+    "fileCount": 6,
+    "sourceFileCount": 5,
+    "parsedFileCount": 0,
+    "lines": 82,
+    "fingerprint": {
+      "languages": [
+        "JavaScript"
+      ],
+      "languageFileCounts": {
+        "JavaScript": 5
+      },
+      "frameworks": [],
+      "infrastructure": [],
+      "databases": [],
+      "externalSystems": [],
+      "testing": [],
+      "buildTools": [],
+      "tooling": []
+    }
+  },
+  "technologies": [],
+  "files": [
+    {
+      "id": "file:package.json",
+      "path": "package.json",
+      "language": "Configuration",
+      "lines": 1,
+      "bytes": 400,
+      "hash": "ex_p1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:lib/express.js",
+      "path": "lib/express.js",
+      "language": "JavaScript",
+      "lines": 18,
+      "bytes": 1100,
+      "hash": "ex_1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:lib/application.js",
+      "path": "lib/application.js",
+      "language": "JavaScript",
+      "lines": 25,
+      "bytes": 1800,
+      "hash": "ex_2",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:lib/router/index.js",
+      "path": "lib/router/index.js",
+      "language": "JavaScript",
+      "lines": 16,
+      "bytes": 1400,
+      "hash": "ex_3",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:lib/request.js",
+      "path": "lib/request.js",
+      "language": "JavaScript",
+      "lines": 10,
+      "bytes": 900,
+      "hash": "ex_4",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:lib/response.js",
+      "path": "lib/response.js",
+      "language": "JavaScript",
+      "lines": 12,
+      "bytes": 1200,
+      "hash": "ex_5",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    }
+  ],
+  "symbols": [
+    {
+      "id": "lib/express.js",
+      "type": "module",
+      "name": "express.js",
+      "file": "lib/express.js",
+      "line": 1,
+      "end_line": 18,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/express.js::createApplication",
+      "type": "function",
+      "name": "createApplication",
+      "file": "lib/express.js",
+      "line": 8,
+      "end_line": null,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/application.js",
+      "type": "module",
+      "name": "application.js",
+      "file": "lib/application.js",
+      "line": 1,
+      "end_line": 25,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/application.js::init",
+      "type": "function",
+      "name": "init",
+      "file": "lib/application.js",
+      "line": 6,
+      "end_line": null,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/application.js::use",
+      "type": "function",
+      "name": "use",
+      "file": "lib/application.js",
+      "line": 11,
+      "end_line": null,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/application.js::get",
+      "type": "function",
+      "name": "get",
+      "file": "lib/application.js",
+      "line": 16,
+      "end_line": null,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/application.js::post",
+      "type": "function",
+      "name": "post",
+      "file": "lib/application.js",
+      "line": 21,
+      "end_line": null,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/router/index.js",
+      "type": "module",
+      "name": "index.js",
+      "file": "lib/router/index.js",
+      "line": 1,
+      "end_line": 16,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/router/index.js::Router",
+      "type": "function",
+      "name": "Router",
+      "file": "lib/router/index.js",
+      "line": 5,
+      "end_line": null,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/router/index.js::use",
+      "type": "function",
+      "name": "use",
+      "file": "lib/router/index.js",
+      "line": 10,
+      "end_line": null,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/request.js",
+      "type": "module",
+      "name": "request.js",
+      "file": "lib/request.js",
+      "line": 1,
+      "end_line": 10,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "lib/response.js",
+      "type": "module",
+      "name": "response.js",
+      "file": "lib/response.js",
+      "line": 1,
+      "end_line": 12,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    }
+  ],
+  "imports": [
+    {
+      "id": "lib/express.js:import:2:./application",
+      "source": "lib/express.js",
+      "module": "./application",
+      "names": [],
+      "line": 2,
+      "target": "lib/application.js",
+      "external": false
+    },
+    {
+      "id": "lib/express.js:import:3:./router/route",
+      "source": "lib/express.js",
+      "module": "./router/route",
+      "names": [],
+      "line": 3,
+      "target": null,
+      "external": false
+    },
+    {
+      "id": "lib/express.js:import:4:./router",
+      "source": "lib/express.js",
+      "module": "./router",
+      "names": [],
+      "line": 4,
+      "target": "lib/router/index.js",
+      "external": false
+    },
+    {
+      "id": "lib/express.js:import:5:./request",
+      "source": "lib/express.js",
+      "module": "./request",
+      "names": [],
+      "line": 5,
+      "target": "lib/request.js",
+      "external": false
+    },
+    {
+      "id": "lib/express.js:import:6:./response",
+      "source": "lib/express.js",
+      "module": "./response",
+      "names": [],
+      "line": 6,
+      "target": "lib/response.js",
+      "external": false
+    },
+    {
+      "id": "lib/application.js:import:2:./router",
+      "source": "lib/application.js",
+      "module": "./router",
+      "names": [],
+      "line": 2,
+      "target": "lib/router/index.js",
+      "external": false
+    },
+    {
+      "id": "lib/router/index.js:import:2:./route",
+      "source": "lib/router/index.js",
+      "module": "./route",
+      "names": [],
+      "line": 2,
+      "target": null,
+      "external": false
+    },
+    {
+      "id": "lib/router/index.js:import:3:./layer",
+      "source": "lib/router/index.js",
+      "module": "./layer",
+      "names": [],
+      "line": 3,
+      "target": null,
+      "external": false
+    }
+  ],
+  "calls": [
+    {
+      "id": "lib/express.js:call:2:require",
+      "source": "lib/express.js",
+      "callee": "require",
+      "file": "lib/express.js",
+      "line": 2,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/express.js:call:3:require",
+      "source": "lib/express.js",
+      "callee": "require",
+      "file": "lib/express.js",
+      "line": 3,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/express.js:call:4:require",
+      "source": "lib/express.js",
+      "callee": "require",
+      "file": "lib/express.js",
+      "line": 4,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/express.js:call:5:require",
+      "source": "lib/express.js",
+      "callee": "require",
+      "file": "lib/express.js",
+      "line": 5,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/express.js:call:6:require",
+      "source": "lib/express.js",
+      "callee": "require",
+      "file": "lib/express.js",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/express.js::createApplication:call:8:createApplication",
+      "source": "lib/express.js::createApplication",
+      "callee": "createApplication",
+      "file": "lib/express.js",
+      "line": 8,
+      "target": "lib/express.js::createApplication",
+      "confidence": 0.88
+    },
+    {
+      "id": "lib/express.js::createApplication:call:10:app.handle",
+      "source": "lib/express.js::createApplication",
+      "callee": "app.handle",
+      "file": "lib/express.js",
+      "line": 10,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/express.js::createApplication:call:12:Object.assign",
+      "source": "lib/express.js::createApplication",
+      "callee": "Object.assign",
+      "file": "lib/express.js",
+      "line": 12,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/application.js:call:2:require",
+      "source": "lib/application.js",
+      "callee": "require",
+      "file": "lib/application.js",
+      "line": 2,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/application.js::init:call:6:init",
+      "source": "lib/application.js::init",
+      "callee": "init",
+      "file": "lib/application.js",
+      "line": 6,
+      "target": "lib/application.js::init",
+      "confidence": 0.88
+    },
+    {
+      "id": "lib/application.js::init:call:8:Router",
+      "source": "lib/application.js::init",
+      "callee": "Router",
+      "file": "lib/application.js",
+      "line": 8,
+      "target": "lib/router/index.js::Router",
+      "confidence": 0.72
+    },
+    {
+      "id": "lib/application.js::use:call:11:use",
+      "source": "lib/application.js::use",
+      "callee": "use",
+      "file": "lib/application.js",
+      "line": 11,
+      "target": "lib/application.js::use",
+      "confidence": 0.88
+    },
+    {
+      "id": "lib/application.js::use:call:12:this._router.use",
+      "source": "lib/application.js::use",
+      "callee": "this._router.use",
+      "file": "lib/application.js",
+      "line": 12,
+      "target": "lib/router/index.js::use",
+      "confidence": 0.92
+    },
+    {
+      "id": "lib/application.js::get:call:16:get",
+      "source": "lib/application.js::get",
+      "callee": "get",
+      "file": "lib/application.js",
+      "line": 16,
+      "target": "lib/application.js::get",
+      "confidence": 0.88
+    },
+    {
+      "id": "lib/application.js::get:call:17:this._router.get",
+      "source": "lib/application.js::get",
+      "callee": "this._router.get",
+      "file": "lib/application.js",
+      "line": 17,
+      "target": "lib/application.js::get",
+      "confidence": 0.88
+    },
+    {
+      "id": "lib/application.js::post:call:21:post",
+      "source": "lib/application.js::post",
+      "callee": "post",
+      "file": "lib/application.js",
+      "line": 21,
+      "target": "lib/application.js::post",
+      "confidence": 0.88
+    },
+    {
+      "id": "lib/application.js::post:call:22:this._router.post",
+      "source": "lib/application.js::post",
+      "callee": "this._router.post",
+      "file": "lib/application.js",
+      "line": 22,
+      "target": "lib/application.js::post",
+      "confidence": 0.88
+    },
+    {
+      "id": "lib/router/index.js:call:2:require",
+      "source": "lib/router/index.js",
+      "callee": "require",
+      "file": "lib/router/index.js",
+      "line": 2,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/router/index.js:call:3:require",
+      "source": "lib/router/index.js",
+      "callee": "require",
+      "file": "lib/router/index.js",
+      "line": 3,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/router/index.js::Router:call:5:Router",
+      "source": "lib/router/index.js::Router",
+      "callee": "Router",
+      "file": "lib/router/index.js",
+      "line": 5,
+      "target": "lib/router/index.js::Router",
+      "confidence": 0.88
+    },
+    {
+      "id": "lib/router/index.js::use:call:10:use",
+      "source": "lib/router/index.js::use",
+      "callee": "use",
+      "file": "lib/router/index.js",
+      "line": 10,
+      "target": "lib/router/index.js::use",
+      "confidence": 0.88
+    },
+    {
+      "id": "lib/router/index.js::use:call:11:Layer",
+      "source": "lib/router/index.js::use",
+      "callee": "Layer",
+      "file": "lib/router/index.js",
+      "line": 11,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/router/index.js::use:call:12:this.stack.push",
+      "source": "lib/router/index.js::use",
+      "callee": "this.stack.push",
+      "file": "lib/router/index.js",
+      "line": 12,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/request.js:call:3:get",
+      "source": "lib/request.js",
+      "callee": "get",
+      "file": "lib/request.js",
+      "line": 3,
+      "target": "lib/application.js::get",
+      "confidence": 0.72
+    },
+    {
+      "id": "lib/request.js:call:4:header.toLowerCase",
+      "source": "lib/request.js",
+      "callee": "header.toLowerCase",
+      "file": "lib/request.js",
+      "line": 4,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/request.js:call:6:param",
+      "source": "lib/request.js",
+      "callee": "param",
+      "file": "lib/request.js",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/response.js:call:3:status",
+      "source": "lib/response.js",
+      "callee": "status",
+      "file": "lib/response.js",
+      "line": 3,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/response.js:call:7:json",
+      "source": "lib/response.js",
+      "callee": "json",
+      "file": "lib/response.js",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/response.js:call:8:this.setHeader",
+      "source": "lib/response.js",
+      "callee": "this.setHeader",
+      "file": "lib/response.js",
+      "line": 8,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/response.js:call:9:this.end",
+      "source": "lib/response.js",
+      "callee": "this.end",
+      "file": "lib/response.js",
+      "line": 9,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "lib/response.js:call:9:JSON.stringify",
+      "source": "lib/response.js",
+      "callee": "JSON.stringify",
+      "file": "lib/response.js",
+      "line": 9,
+      "target": null,
+      "confidence": 0.55
+    }
+  ],
+  "routes": [],
+  "databases": [],
+  "external_systems": [],
+  "entrypoints": [
+    {
+      "id": "entrypoint:lib/router/index.js",
+      "file": "lib/router/index.js",
+      "kind": "application",
+      "score": 57,
+      "confidence": 0.8300000000000001,
+      "evidence": [
+        "uses a conventional index.js entrypoint filename",
+        "uses the conventional index.js filename"
+      ]
+    }
+  ],
+  "flows": [],
+  "architecture": {
+    "components": [
+      {
+        "id": "configuration",
+        "name": "Configuration",
+        "type": "configuration",
+        "files": [
+          "package.json"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "configuration file"
+        ]
+      },
+      {
+        "id": "other",
+        "name": "Application core",
+        "type": "other",
+        "files": [
+          "lib/application.js",
+          "lib/express.js",
+          "lib/request.js",
+          "lib/response.js",
+          "lib/router/index.js"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "source file outside a recognized layer"
+        ]
+      }
+    ],
+    "connections": []
+  },
+  "important_files": [
+    {
+      "file": "lib/router/index.js",
+      "score": 63,
+      "reasons": [
+        "entrypoint candidate",
+        "imported by 2 file(s)"
+      ]
+    },
+    {
+      "file": "package.json",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    },
+    {
+      "file": "lib/express.js",
+      "score": 8,
+      "reasons": [
+        "imports 4 local file(s)"
+      ]
+    },
+    {
+      "file": "lib/application.js",
+      "score": 5,
+      "reasons": [
+        "imported by 1 file(s)",
+        "imports 1 local file(s)"
+      ]
+    },
+    {
+      "file": "lib/request.js",
+      "score": 3,
+      "reasons": [
+        "imported by 1 file(s)"
+      ]
+    },
+    {
+      "file": "lib/response.js",
+      "score": 3,
+      "reasons": [
+        "imported by 1 file(s)"
+      ]
+    }
+  ],
+  "onboarding": [
+    {
+      "step": 1,
+      "title": "Start at the entry point",
+      "file": "lib/router/index.js",
+      "description": "uses a conventional index.js entrypoint filename; uses the conventional index.js filename"
+    },
+    {
+      "step": 2,
+      "title": "Read a central file",
+      "file": "package.json",
+      "description": "project configuration"
+    },
+    {
+      "step": 3,
+      "title": "Read a central file",
+      "file": "lib/express.js",
+      "description": "imports 4 local file(s)"
+    },
+    {
+      "step": 4,
+      "title": "Read a central file",
+      "file": "lib/application.js",
+      "description": "imported by 1 file(s), imports 1 local file(s)"
+    },
+    {
+      "step": 5,
+      "title": "Read a central file",
+      "file": "lib/request.js",
+      "description": "imported by 1 file(s)"
+    },
+    {
+      "step": 6,
+      "title": "Read a central file",
+      "file": "lib/response.js",
+      "description": "imported by 1 file(s)"
+    }
+  ],
+  "metrics": {
+    "complexityScore": 2,
+    "localDependencies": 5,
+    "externalDependencies": 0,
+    "dependencyCycles": [],
+    "mostConnectedFiles": [
+      {
+        "file": "lib/express.js",
+        "connections": 4
+      },
+      {
+        "file": "lib/application.js",
+        "connections": 2
+      },
+      {
+        "file": "lib/router/index.js",
+        "connections": 2
+      },
+      {
+        "file": "lib/request.js",
+        "connections": 1
+      },
+      {
+        "file": "lib/response.js",
+        "connections": 1
+      },
+      {
+        "file": "package.json",
+        "connections": 0
+      }
+    ],
+    "highCouplingFiles": [],
+    "symbols": 12,
+    "routes": 0,
+    "components": 2,
+    "parseSuccessRate": 0
+  },
+  "diagnostics": [],
+  "metadata": {
+    "analysisMode": "static-typescript",
+    "executedRepositoryCode": false,
+    "limits": {
+      "maxFiles": 10000,
+      "maxFileBytes": 1000000,
+      "maxArchiveBytes": 26214400,
+      "maxTotalExtractedBytes": 104857600
+    },
+    "fileComponents": {
+      "package.json": "configuration",
+      "lib/express.js": "other",
+      "lib/application.js": "other",
+      "lib/router/index.js": "other",
+      "lib/request.js": "other",
+      "lib/response.js": "other"
+    },
+    "cache": {
+      "hits": 0,
+      "misses": 6
+    }
+  }
+}

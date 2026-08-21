@@ -218,14 +218,20 @@ export async function fetchGitHubRepo(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), limits.fetchTimeoutMs);
 
-  const authHeaders: Record<string, string> = accessToken
-    ? { Authorization: `Bearer ${accessToken}` }
+  const effectiveToken =
+    accessToken ||
+    (typeof process !== 'undefined' && process.env
+      ? process.env.GITHUB_TOKEN || process.env.GITHUB_PAT || process.env.GH_TOKEN
+      : undefined);
+
+  const authHeaders: Record<string, string> = effectiveToken
+    ? { Authorization: `Bearer ${effectiveToken}` }
     : {};
 
   let response: Response;
   try {
-    if (accessToken) {
-      // For authenticated / private repository requests, use GitHub API zipball endpoint
+    if (effectiveToken) {
+      // For authenticated / private / token-backed requests, use GitHub API zipball endpoint
       const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
       response = await fetch(apiZipUrl, {
         signal: controller.signal,
@@ -236,7 +242,7 @@ export async function fetchGitHubRepo(
         },
       });
     } else {
-      // Try public codeload zip first
+      // 1. Try public codeload zip first (HEAD)
       const codeloadUrl = `https://codeload.github.com/${owner}/${repo}/zip/HEAD`;
       response = await fetch(codeloadUrl, {
         signal: controller.signal,
@@ -245,7 +251,28 @@ export async function fetchGitHubRepo(
         },
       });
 
-      // Fallback to GitHub API zipball if codeload fails
+      // 2. If codeload HEAD returned 404, try main/master branches before API
+      if (response.status === 404) {
+        const codeloadMain = `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/main`;
+        const resMain = await fetch(codeloadMain, {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'RepoDNA-V1/1.0' },
+        });
+        if (resMain.ok) {
+          response = resMain;
+        } else {
+          const codeloadMaster = `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/master`;
+          const resMaster = await fetch(codeloadMaster, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'RepoDNA-V1/1.0' },
+          });
+          if (resMaster.ok) {
+            response = resMaster;
+          }
+        }
+      }
+
+      // 3. Fallback to GitHub API zipball if codeload fails
       if (!response.ok && response.status !== 404) {
         const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
         response = await fetch(apiZipUrl, {
@@ -278,7 +305,7 @@ export async function fetchGitHubRepo(
   if (response.status === 404) {
     throw new IngestionError(
       'REPO_NOT_FOUND',
-      accessToken
+      effectiveToken
         ? `Repository "${owner}/${repo}" was not found or your GitHub account does not have access.`
         : `Repository "https://github.com/${owner}/${repo}" was not found or is private. Sign in to analyze private repositories.`,
       404
@@ -286,17 +313,18 @@ export async function fetchGitHubRepo(
   }
 
   if (!response.ok) {
+    const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+    if (response.status === 429 || (response.status === 403 && rateLimitRemaining === '0')) {
+      throw new IngestionError(
+        'UPSTREAM_GITHUB_RATE_LIMITED',
+        'GitHub API rate limit reached on server. Client-side browser analysis is available.',
+        429
+      );
+    }
     if (response.status === 403) {
       throw new IngestionError(
         'UPSTREAM_GITHUB_ERROR',
         'GitHub access denied (403). If this is an organization repository, check if OAuth App access is approved in your organization settings.',
-        502
-      );
-    }
-    if (response.status === 429) {
-      throw new IngestionError(
-        'UPSTREAM_GITHUB_ERROR',
-        'GitHub API rate limit exceeded.',
         502
       );
     }

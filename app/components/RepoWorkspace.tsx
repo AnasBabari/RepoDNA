@@ -1130,14 +1130,55 @@ function WorkspaceContent() {
     trackViewChanged(newView);
   }
 
+  const SAMPLE_ARTIFACTS: Record<string, string> = {
+    'https://github.com/pytorch/pytorch': '/samples/pytorch.json',
+    'https://github.com/fastapi/fastapi': '/samples/fastapi.json',
+    'https://github.com/expressjs/express': '/samples/express.json',
+    'https://github.com/yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
+    'pytorch/pytorch': '/samples/pytorch.json',
+    'fastapi/fastapi': '/samples/fastapi.json',
+    'expressjs/express': '/samples/express.json',
+    'yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
+  };
+
   async function handleAnalyzeGitHub(url: string, forceClientOnly = false) {
+    const cleanUrl = url.trim();
     const startTime = Date.now();
     trackAnalysisIntent('github_public');
-    setAnalyzingTarget(url);
+    setAnalyzingTarget(cleanUrl);
     setAnalyzingStep(0);
     setAnalyzingError(null);
     setAnalyzingErrorCode(null);
     setAnalyzingRetryAfter(null);
+
+    // 0. Check pre-cached instant sample artifacts first
+    if (!forceClientOnly) {
+      const samplePath = SAMPLE_ARTIFACTS[cleanUrl] || SAMPLE_ARTIFACTS[cleanUrl.replace(/\/$/, '')];
+      if (samplePath) {
+        try {
+          const sampleRes = await fetch(samplePath);
+          if (sampleRes.ok) {
+            const parsedSample = (await sampleRes.json()) as unknown;
+            if (matchesProject(parsedSample)) {
+              setAnalyzingTarget(null);
+              setProject(parsedSample);
+              setView('overview');
+              setSearch('');
+              setSelectedComponent(
+                parsedSample.architecture.components.find((c) => c.type === 'api') ??
+                  parsedSample.architecture.components[0] ??
+                  null
+              );
+              setSelectedRoute(parsedSample.routes[0] ?? null);
+              trackAnalysisCompleted('demo', Date.now() - startTime, parsedSample.repository.fileCount);
+              return;
+            }
+          }
+        } catch {
+          // Continue with standard fetch if sample load fails
+        }
+      }
+    }
 
     const stepInterval = setInterval(() => {
       setAnalyzingStep((prev) => (prev < 4 ? prev + 1 : prev));
@@ -1151,7 +1192,7 @@ function WorkspaceContent() {
         interface ApiResponse {
           success?: boolean;
           project?: unknown;
-          error?: { code?: string; message?: string; retryAfter?: number };
+          error?: { code?: string; message?: string; retryAfter?: number; fallbackAvailable?: boolean };
         }
 
         let apiData: ApiResponse | null = null;
@@ -1161,7 +1202,7 @@ function WorkspaceContent() {
           const res = await fetch('/api/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url }),
+            body: JSON.stringify({ url: cleanUrl }),
           });
 
           apiData = (await res.json().catch(() => null)) as ApiResponse | null;
@@ -1177,33 +1218,46 @@ function WorkspaceContent() {
 
         if (isServerError) {
           const errObj = apiData && apiData.error ? apiData.error : null;
-          // If rate limited or service unavailable, try in-browser fallback directly
-          if (errObj?.code === 'RATE_LIMITED' || errObj?.code === 'RATE_LIMIT_UNAVAILABLE') {
-            trackFallbackUsed(errObj.code === 'RATE_LIMITED' ? 'rate_limited' : 'service_unavailable');
+          // Automatic client-side in-browser fallback for rate limits or server infrastructure errors
+          const shouldAutoFallback =
+            !errObj ||
+            errObj.code === 'RATE_LIMITED' ||
+            errObj.code === 'RATE_LIMIT_UNAVAILABLE' ||
+            errObj.code === 'UPSTREAM_GITHUB_RATE_LIMITED' ||
+            errObj.code === 'UPSTREAM_GITHUB_ERROR' ||
+            errObj.code === 'FETCH_TIMEOUT' ||
+            errObj.fallbackAvailable;
+
+          if (shouldAutoFallback) {
+            const fallbackReason =
+              errObj?.code === 'RATE_LIMITED' || errObj?.code === 'UPSTREAM_GITHUB_RATE_LIMITED'
+                ? 'rate_limited'
+                : errObj?.code === 'FETCH_TIMEOUT'
+                ? 'timeout'
+                : errObj?.code === 'RATE_LIMIT_UNAVAILABLE'
+                ? 'service_unavailable'
+                : 'network_error';
+            trackFallbackUsed(fallbackReason);
             try {
-              analyzedProject = await analyzeGitHubUrl(url);
+              analyzedProject = await analyzeGitHubUrl(cleanUrl);
             } catch (clientErr) {
-              const code = errObj.code;
-              const msg = errObj.message || 'Server rate limit reached and client fallback failed.';
+              const code = errObj?.code || 'FALLBACK_FAILED';
+              const msg = errObj?.message || 'Server analysis failed and browser analysis could not complete.';
               setAnalyzingErrorCode(code);
-              setAnalyzingRetryAfter(errObj.retryAfter ?? null);
-              trackAnalysisFailed('github_public', code, 'rate_limit');
-              throw new Error(`${msg} (Client fallback error: ${clientErr instanceof Error ? clientErr.message : 'failed'})`);
+              setAnalyzingRetryAfter(errObj?.retryAfter ?? null);
+              trackAnalysisFailed('github_public', code, 'client_fallback');
+              throw new Error(`${msg} (In-browser error: ${clientErr instanceof Error ? clientErr.message : 'failed'})`);
             }
-          } else if (errObj) {
+          } else {
             setAnalyzingErrorCode(errObj.code ?? null);
             setAnalyzingRetryAfter(errObj.retryAfter ?? null);
             trackAnalysisFailed('github_public', errObj.code || 'UNKNOWN', 'server_error');
             throw new Error(errObj.message || 'Analysis failed on server.');
-          } else {
-            // General network failure: try in-browser fallback
-            trackFallbackUsed('network_error');
-            analyzedProject = await analyzeGitHubUrl(url);
           }
         }
       } else {
         // Direct client-side analysis
-        analyzedProject = await analyzeGitHubUrl(url);
+        analyzedProject = await analyzeGitHubUrl(cleanUrl);
       }
 
       if (!analyzedProject) {
