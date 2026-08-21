@@ -160,33 +160,35 @@ def parse_github_url(url: str) -> tuple[str, str]:
 
 
 def _download_archive(owner: str, repo: str, limits: IngestionLimits) -> bytes:
-    errors: list[str] = []
-    for branch in ("main", "master"):
-        url = f"https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
-        request = urllib.request.Request(url, headers={"User-Agent": "RepoDNA/0.1"})
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                content_length = int(response.headers.get("Content-Length", "0") or 0)
-                if content_length > limits.max_archive_bytes:
-                    raise IngestionError("GitHub archive exceeds the configured download limit")
-                payload = response.read(limits.max_archive_bytes + 1)
-                if len(payload) > limits.max_archive_bytes:
-                    raise IngestionError("GitHub archive exceeds the configured download limit")
-                return payload
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
-            errors.append(f"{branch}: {exc}")
-    raise IngestionError(f"Could not download public GitHub repository {owner}/{repo}: {'; '.join(errors)}")
+    url = f"https://codeload.github.com/{owner}/{repo}/zip/HEAD"
+    request = urllib.request.Request(url, headers={"User-Agent": "RepoDNA/0.1"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            content_length = int(response.headers.get("Content-Length", "0") or 0)
+            if content_length > limits.max_archive_bytes:
+                raise IngestionError("GitHub archive exceeds the configured download limit")
+            payload = response.read(limits.max_archive_bytes + 1)
+            if len(payload) > limits.max_archive_bytes:
+                raise IngestionError("GitHub archive exceeds the configured download limit")
+            return payload
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        raise IngestionError(f"Could not download public GitHub repository {owner}/{repo}: {exc}") from exc
 
 
-def _safe_extract_zip(payload: bytes, destination: Path) -> Path:
+def _safe_extract_zip(payload: bytes, destination: Path, limits: IngestionLimits) -> Path:
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
         members = archive.infolist()
+        if sum(member.file_size for member in members) > limits.max_archive_bytes:
+            raise IngestionError("GitHub archive exceeds the configured extracted-size limit")
         roots = {PurePosixPath(member.filename).parts[0] for member in members if member.filename}
         if len(roots) != 1:
             raise IngestionError("GitHub archive has an unexpected directory structure")
         root_name = next(iter(roots))
         destination_resolved = destination.resolve()
         for member in members:
+            member_parts = PurePosixPath(member.filename).parts
+            if ".." in member_parts or PurePosixPath(member.filename).is_absolute():
+                raise IngestionError("GitHub archive contains an unsafe path")
             member_path = destination / member.filename
             resolved = member_path.resolve()
             if destination_resolved not in resolved.parents and resolved != destination_resolved:
@@ -206,11 +208,10 @@ def repository_source(source: str, limits: IngestionLimits | None = None) -> Ite
     if source.startswith(("https://github.com/", "http://github.com/")):
         owner, repo = parse_github_url(source)
         with tempfile.TemporaryDirectory(prefix="repodna-") as temp:
-            root = _safe_extract_zip(_download_archive(owner, repo, limits), Path(temp))
+            root = _safe_extract_zip(_download_archive(owner, repo, limits), Path(temp), limits)
             result = discover_local(root, limits)
             result.name = repo
             result.source = f"github:{owner}/{repo}"
             yield result
         return
     yield discover_local(Path(source), limits)
-

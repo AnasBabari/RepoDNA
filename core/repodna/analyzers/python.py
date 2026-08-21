@@ -197,6 +197,22 @@ class _PythonVisitor(ast.NodeVisitor):
         elif name.endswith(("create_engine", "sessionmaker")):
             self.result.frameworks.add("SQLAlchemy")
             self.result.databases.add("SQL database")
+        elif name.rsplit(".", 1)[-1] in {"path", "re_path"} and node.args:
+            route_path = literal_string(node.args[0])
+            handler_name = dotted_name(node.args[1]) if len(node.args) > 1 else "unknown"
+            if route_path is not None:
+                normalized_path = "/" + route_path.lstrip("/")
+                self.result.frameworks.add("Django")
+                self.result.routes.append(Route(
+                    id=f"route:{self.result.file.path}:{node.lineno}:ANY:{normalized_path}",
+                    method="ANY",
+                    path=normalized_path,
+                    handler=f"{self.result.file.path}::{handler_name}",
+                    file=self.result.file.path,
+                    line=node.lineno,
+                    framework="Django",
+                    confidence=0.88,
+                ))
         self.generic_visit(node)
 
     def visit_If(self, node: ast.If) -> None:
@@ -234,4 +250,3 @@ class PythonAnalyzer(LanguageAnalyzer):
         if "mongodb://" in lowered or "mongodb+srv://" in lowered:
             result.databases.add("MongoDB")
         return result
-

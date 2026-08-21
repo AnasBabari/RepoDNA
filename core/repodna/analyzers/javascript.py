@@ -172,6 +172,25 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
                     confidence=0.94,
                 ))
 
+        if "pages" in path.parts and "api" in path.parts and path.suffix.lower() in self.extensions:
+            api_index = path.parts.index("api")
+            route_parts = list(path.parts[api_index + 1:])
+            if route_parts:
+                route_parts[-1] = PurePosixPath(route_parts[-1]).stem
+            route_path = "/api/" + "/".join(part for part in route_parts if part != "index")
+            result.frameworks.add("Next.js")
+            default_handler = next((symbol.id for symbol in symbols_by_line if symbol.exported), f"{file.path}::default")
+            result.routes.append(Route(
+                id=f"route:{file.path}:1:ANY:{route_path.rstrip('/') or '/api'}",
+                method="ANY",
+                path=route_path.rstrip("/") or "/api",
+                handler=default_handler,
+                file=file.path,
+                line=1,
+                framework="Next.js",
+                confidence=0.9,
+            ))
+
         for match in CALL_RE.finditer(source):
             line = _line_number(source, match.start())
             source_symbol = next((symbol for symbol in reversed(symbols_by_line) if symbol.line <= line), None)
@@ -197,4 +216,3 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
             result.externals.add("Supabase")
             result.databases.add("Supabase")
         return result
-

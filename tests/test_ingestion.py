@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import io
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
-from repodna.ingestion import IngestionError, IngestionLimits, discover_local, parse_github_url
+from repodna.ingestion import IngestionError, IngestionLimits, _safe_extract_zip, discover_local, parse_github_url
 
 
 class IngestionTests(unittest.TestCase):
@@ -23,6 +25,22 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(parse_github_url("https://github.com/openai/openai-python"), ("openai", "openai-python"))
         with self.assertRaises(IngestionError):
             parse_github_url("https://example.com/owner/repo")
+
+    def test_rejects_archive_path_traversal(self) -> None:
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as archive:
+            archive.writestr("repo/../escape.py", "print('unsafe')")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(IngestionError):
+                _safe_extract_zip(payload.getvalue(), Path(directory), IngestionLimits())
+
+    def test_rejects_oversized_extracted_archive(self) -> None:
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as archive:
+            archive.writestr("repo/large.py", "x" * 50)
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(IngestionError):
+                _safe_extract_zip(payload.getvalue(), Path(directory), IngestionLimits(max_archive_bytes=20))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import re
 from collections import Counter, defaultdict
 from pathlib import PurePosixPath
 from typing import Any
@@ -39,22 +41,47 @@ def _file_record(relative: str, source: str, size: int) -> FileRecord:
     )
 
 
-def _manifest_entrypoint_evidence(partial: PartialAnalysis, source: str) -> None:
-    name = PurePosixPath(partial.file.path).name
-    if name == "package.json":
-        import json
-        try:
-            package = json.loads(source)
-        except (json.JSONDecodeError, TypeError):
-            return
-        if package.get("main"):
-            partial.entrypoint_evidence.append(f"package main points to {package['main']}")
-        scripts = package.get("scripts", {})
-        if isinstance(scripts, dict) and any(key in scripts for key in ("start", "dev", "serve")):
-            partial.entrypoint_evidence.append("package scripts expose an application start command")
-    elif name == "Dockerfile":
-        if "CMD" in source or "ENTRYPOINT" in source:
-            partial.entrypoint_evidence.append("container manifest defines CMD or ENTRYPOINT")
+def _resolve_manifest_target(manifest_path: str, candidate: str, available: set[str]) -> str | None:
+    parent = PurePosixPath(manifest_path).parent
+    cleaned = candidate.strip("'\"").lstrip("./")
+    joined = (parent / cleaned).as_posix() if str(parent) != "." else cleaned
+    candidates = [joined]
+    if not PurePosixPath(joined).suffix:
+        candidates.extend(joined + extension for extension in (".js", ".ts", ".tsx", ".py"))
+        candidates.extend(f"{joined}/index{extension}" for extension in (".js", ".ts", ".tsx"))
+    return next((path for path in candidates if path in available), None)
+
+
+def _apply_manifest_entrypoints(partials: list[PartialAnalysis], contents: list[tuple[str, str]]) -> None:
+    by_file = {partial.file.path: partial for partial in partials}
+    available = set(by_file)
+    source_extensions = r"(?:py|js|mjs|cjs|ts|tsx|jsx)"
+    for path, source in contents:
+        name = PurePosixPath(path).name
+        candidates: list[tuple[str, str]] = []
+        if name == "package.json":
+            try:
+                package = json.loads(source)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            for field in ("main", "module"):
+                if isinstance(package.get(field), str):
+                    candidates.append((package[field], f"package {field} points here"))
+            scripts = package.get("scripts", {})
+            if isinstance(scripts, dict):
+                for script_name in ("start", "dev", "serve"):
+                    command = scripts.get(script_name)
+                    if not isinstance(command, str):
+                        continue
+                    for match in re.finditer(rf"(?P<path>[A-Za-z0-9_./-]+\.{source_extensions})", command):
+                        candidates.append((match.group("path"), f"package {script_name} script starts this file"))
+        elif name == "Dockerfile":
+            for match in re.finditer(rf"(?P<path>[A-Za-z0-9_./-]+\.{source_extensions})", source):
+                candidates.append((match.group("path"), "Docker CMD or ENTRYPOINT references this file"))
+        for candidate, reason in candidates:
+            resolved = _resolve_manifest_target(path, candidate, available)
+            if resolved:
+                by_file[resolved].entrypoint_evidence.append(reason)
 
 
 def _technology_records(
@@ -116,11 +143,11 @@ def analyze_repository(
                 partial = analyzer.analyze(file, text)
             else:
                 partial = PartialAnalysis(file=file)
-                _manifest_entrypoint_evidence(partial, text)
             partials.append(partial)
             if file.error:
                 diagnostics.append(Diagnostic("warning", "parse_error", file.error, file.path))
 
+        _apply_manifest_entrypoints(partials, contents)
         symbols = [symbol for partial in partials for symbol in partial.symbols]
         imports = [edge for partial in partials for edge in partial.imports]
         calls = [edge for partial in partials for edge in partial.calls]
@@ -143,6 +170,9 @@ def analyze_repository(
             frameworks.update(partial.frameworks)
             databases.update(partial.databases)
             externals.update(partial.externals)
+        for path, text in contents:
+            if PurePosixPath(path).suffix.lower() == ".sql" or re.search(r"\b(?:SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b", text, re.IGNORECASE):
+                databases.add("SQL database")
         databases.update(name for name in environment if name in {"PostgreSQL", "MongoDB", "Supabase"})
         externals.update(name for name in environment if name not in databases)
         if "SQL database" in databases and databases.intersection({"PostgreSQL", "MySQL", "SQLite"}):

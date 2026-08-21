@@ -821,16 +821,6 @@
         "mounts a React application",
         "uses the conventional main.tsx filename"
       ]
-    },
-    {
-      "id": "entrypoint:package.json",
-      "file": "package.json",
-      "kind": "application",
-      "score": 35,
-      "confidence": 0.6833333333333333,
-      "evidence": [
-        "package scripts expose an application start command"
-      ]
     }
   ],
   "flows": [
@@ -1139,20 +1129,19 @@
       ]
     },
     {
-      "file": "package.json",
-      "score": 47,
-      "reasons": [
-        "entrypoint candidate",
-        "project configuration"
-      ]
-    },
-    {
       "file": "backend/routes/users.py",
       "score": 21,
       "reasons": [
         "defines 2 route(s)",
         "imported by 1 file(s)",
         "imports 1 local file(s)"
+      ]
+    },
+    {
+      "file": "package.json",
+      "score": 12,
+      "reasons": [
+        "project configuration"
       ]
     },
     {
@@ -1308,5 +1297,5 @@
     }
   },
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-08-21T14:09:54.064741+00:00"
+  "generatedAt": "2026-08-21T14:20:31.018471+00:00"
 }

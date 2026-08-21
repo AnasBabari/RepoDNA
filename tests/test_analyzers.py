@@ -36,6 +36,14 @@ def create_user():
         self.assertFalse(result.file.parsed)
         self.assertTrue(result.file.error.startswith("parse_error"))
 
+    def test_extracts_basic_django_url_patterns(self) -> None:
+        source = '''from django.urls import path
+from .views import home
+urlpatterns = [path("home/", home)]
+'''
+        result = PythonAnalyzer().analyze(record("app/urls.py", source), source)
+        self.assertEqual([(route.method, route.path, route.framework) for route in result.routes], [("ANY", "/home/", "Django")])
+
 
 class JavaScriptAnalyzerTests(unittest.TestCase):
     def test_extracts_react_component_express_route_and_external(self) -> None:
@@ -51,6 +59,11 @@ app.post("/checkout", Checkout);
         self.assertIn("Stripe", result.externals)
         self.assertEqual(result.routes[0].path, "/checkout")
         self.assertIn("component", {symbol.type for symbol in result.symbols})
+
+    def test_extracts_next_pages_api_route(self) -> None:
+        source = "export default function handler() { return Response.json({ ok: true }); }"
+        result = JavaScriptAnalyzer().analyze(record("pages/api/health.ts", source), source)
+        self.assertEqual([(route.method, route.path, route.framework) for route in result.routes], [("ANY", "/api/health", "Next.js")])
 
 
 if __name__ == "__main__":
