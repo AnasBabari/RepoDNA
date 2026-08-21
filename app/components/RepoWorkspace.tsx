@@ -131,6 +131,7 @@ function LandingView({
   onAnalyzeZip,
   onLoadDemo,
   onOpenPrivatePicker,
+  onOpenFeedback,
   session,
 }: {
   onAnalyzeGitHub: (url: string) => void;
@@ -138,6 +139,7 @@ function LandingView({
   onAnalyzeZip: (file: File) => void;
   onLoadDemo: () => void;
   onOpenPrivatePicker: () => void;
+  onOpenFeedback: () => void;
   session: { user?: { name?: string; image?: string } } | null;
 }) {
   const [url, setUrl] = useState('');
@@ -160,6 +162,14 @@ function LandingView({
           <span className="version">v1.1 BETA</span>
         </Link>
         <div className="flex items-center gap-3">
+          <button
+            className="chip-button"
+            onClick={onOpenFeedback}
+            type="button"
+            style={{ fontSize: '0.8rem', padding: '4px 10px', color: '#fbbf24', borderColor: 'rgba(251, 191, 36, 0.4)' }}
+          >
+            <span>⭐</span> Feedback
+          </button>
           {session?.user ? (
             <div className="flex items-center gap-2">
               {session.user.image && (
@@ -1475,6 +1485,7 @@ function WorkspaceContent() {
               window.location.href = '/api/auth/signin?callbackUrl=/';
             }
           }}
+          onOpenFeedback={() => setFeedbackModalOpen(true)}
           session={session}
         />
         <PrivateRepoPicker
@@ -1482,6 +1493,10 @@ function WorkspaceContent() {
           onClose={() => setPrivatePickerOpen(false)}
           onSelectRepo={(repoUrl) => handleAnalyzeGitHub(repoUrl)}
           onSignOut={() => setSession(null)}
+        />
+        <FeedbackModal
+          isOpen={feedbackModalOpen}
+          onClose={() => setFeedbackModalOpen(false)}
         />
         <ConsentBanner />
       </>
