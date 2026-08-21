@@ -161,15 +161,30 @@ function LandingView({
           <span className="brand-title">RepoDNA</span>
           <span className="version">v1.1 BETA</span>
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="landing-nav-center">
+          <button className="chip-button" onClick={onLoadDemo} type="button">
+            <span>✨</span> Try Demo Project
+          </button>
           <button
             className="chip-button"
             onClick={onOpenFeedback}
             type="button"
-            style={{ fontSize: '0.8rem', padding: '4px 10px', color: '#fbbf24', borderColor: 'rgba(251, 191, 36, 0.4)' }}
+            style={{ fontSize: '0.8rem', padding: '5px 12px', color: '#fbbf24', borderColor: 'rgba(251, 191, 36, 0.4)' }}
           >
             <span>⭐</span> Feedback
           </button>
+          <a
+            href="https://github.com/AnasBabari/RepoDNA"
+            target="_blank"
+            rel="noreferrer"
+            className="chip-button"
+            style={{ fontSize: '0.8rem', padding: '5px 12px', textDecoration: 'none' }}
+          >
+            <span>★</span> GitHub
+          </a>
+        </div>
+
+        <div className="landing-auth-right">
           {session?.user ? (
             <div className="flex items-center gap-2">
               {session.user.image && (
@@ -187,7 +202,7 @@ function LandingView({
                 className="chip-button"
                 onClick={onOpenPrivatePicker}
                 type="button"
-                style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                style={{ fontSize: '0.8rem', padding: '5px 12px' }}
               >
                 🔒 Your Repos
               </button>
@@ -196,14 +211,11 @@ function LandingView({
             <Link
               href="/api/auth/signin?callbackUrl=/"
               className="chip-button"
-              style={{ fontSize: '0.8rem', padding: '4px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              style={{ fontSize: '0.8rem', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <span>GitHub</span> Sign In (Beta)
             </Link>
           )}
-          <button className="chip-button" onClick={onLoadDemo} type="button">
-            <span>✨</span> Try Demo Project
-          </button>
         </div>
       </header>
 

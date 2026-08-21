@@ -160,9 +160,27 @@ code, kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 36px;
+  gap: 20px;
+  padding: 16px 36px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.landing-nav-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex: 1;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.landing-auth-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .landing-hero {
