@@ -233,8 +233,6 @@ def classify_file(path: str, route_files: set[str], symbol_types: set[str]) -> t
     if path in route_files or parts.intersection({"api", "routes", "routers", "controllers", "endpoints"}):
         evidence.append("contains or groups request handlers")
         return "api", evidence
-    if parts.intersection({"frontend", "client", "components", "pages", "views", "ui", "app"}) or "component" in symbol_types:
-        return "frontend", ["frontend path or component symbols"]
     if parts.intersection({"services", "service", "usecases", "use_cases"}):
         return "services", ["service or use-case path"]
     if parts.intersection({"repositories", "repository", "dao"}):
@@ -243,12 +241,16 @@ def classify_file(path: str, route_files: set[str], symbol_types: set[str]) -> t
         return "database", ["database path or ORM model evidence"]
     if parts.intersection({"workers", "worker", "jobs", "tasks", "queues"}):
         return "workers", ["worker, job, or queue path"]
+    if parts.intersection({"frontend", "client", "components", "pages", "views", "ui"}) or "component" in symbol_types:
+        return "frontend", ["frontend path or component symbols"]
     if parts.intersection({"domain", "core"}):
         return "domain", ["domain or core path"]
     if parts.intersection({"infra", "infrastructure", ".github", "deploy"}) or PurePosixPath(path).name in {"Dockerfile", "docker-compose.yml", "compose.yml"}:
         return "infrastructure", ["infrastructure manifest or path"]
     if PurePosixPath(path).suffix.lower() in {".json", ".toml", ".yaml", ".yml", ".ini", ".cfg"}:
         return "configuration", ["configuration file"]
+    if parts.intersection({"src", "app"}):
+        return "frontend", ["frontend container path"]
     return "other", ["source file outside a recognized layer"]
 
 

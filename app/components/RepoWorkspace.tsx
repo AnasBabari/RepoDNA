@@ -273,13 +273,19 @@ function AnalyzingView({
   target,
   step,
   error,
+  errorCode,
+  retryAfter,
   onRetry,
+  onClientFallback,
   onCancel,
 }: {
   target: string;
   step: number;
   error: string | null;
+  errorCode?: string | null;
+  retryAfter?: number | null;
   onRetry: () => void;
+  onClientFallback?: () => void;
   onCancel: () => void;
 }) {
   const steps = [
@@ -299,11 +305,18 @@ function AnalyzingView({
 
         {error ? (
           <div>
-            <div className="dialog-error" style={{ marginBottom: '20px' }}>
+            <div className="dialog-error" style={{ marginBottom: '20px', textAlign: 'left' }}>
+              <strong>{errorCode ? `Error [${errorCode}]: ` : ''}</strong>
               {error}
+              {retryAfter ? <div style={{ marginTop: '6px', opacity: 0.85 }}>Retry available in {retryAfter}s.</div> : null}
             </div>
-            <div className="flex justify-center gap-3">
-              <button className="primary-button" onClick={onRetry} type="button">
+            <div className="flex flex-wrap justify-center gap-3">
+              {onClientFallback && (
+                <button className="primary-button" onClick={onClientFallback} type="button">
+                  ⚡ Analyze in Browser
+                </button>
+              )}
+              <button className="chip-button" onClick={onRetry} type="button">
                 Try Again
               </button>
               <button className="chip-button" onClick={onCancel} type="button">
@@ -966,6 +979,8 @@ function WorkspaceContent() {
   const [analyzingTarget, setAnalyzingTarget] = useState<string | null>(null);
   const [analyzingStep, setAnalyzingStep] = useState(0);
   const [analyzingError, setAnalyzingError] = useState<string | null>(null);
+  const [analyzingErrorCode, setAnalyzingErrorCode] = useState<string | null>(null);
+  const [analyzingRetryAfter, setAnalyzingRetryAfter] = useState<number | null>(null);
 
   const [view, setView] = useState<View>('overview');
   const [search, setSearch] = useState('');
@@ -1001,33 +1016,78 @@ function WorkspaceContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [dialogOpen]);
 
-  async function handleAnalyzeGitHub(url: string) {
+  async function handleAnalyzeGitHub(url: string, forceClientOnly = false) {
     setAnalyzingTarget(url);
     setAnalyzingStep(0);
     setAnalyzingError(null);
+    setAnalyzingErrorCode(null);
+    setAnalyzingRetryAfter(null);
 
     const stepInterval = setInterval(() => {
       setAnalyzingStep((prev) => (prev < 4 ? prev + 1 : prev));
     }, 400);
 
     try {
-      // 1. Try Next.js serverless API route first
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
-      });
+      let analyzedProject: RepoDNAProject | null = null;
 
-      let analyzedProject: RepoDNAProject;
-      if (res.ok) {
-        const data = (await res.json()) as { success?: boolean; project?: unknown; error?: string };
-        if (!data.success || !matchesProject(data.project)) {
-          throw new Error(data.error || 'Serverless analysis failed.');
+      if (!forceClientOnly) {
+        // 1. Try Next.js serverless API route first
+        interface ApiResponse {
+          success?: boolean;
+          project?: unknown;
+          error?: { code?: string; message?: string; retryAfter?: number };
         }
-        analyzedProject = data.project;
+
+        let apiData: ApiResponse | null = null;
+        let isServerError = false;
+
+        try {
+          const res = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
+          });
+
+          apiData = (await res.json().catch(() => null)) as ApiResponse | null;
+
+          if (res.ok && apiData && apiData.success && matchesProject(apiData.project)) {
+            analyzedProject = apiData.project;
+          } else {
+            isServerError = true;
+          }
+        } catch {
+          isServerError = true;
+        }
+
+        if (isServerError) {
+          const errObj = apiData && apiData.error ? apiData.error : null;
+          // If rate limited or service unavailable, try in-browser fallback directly
+          if (errObj?.code === 'RATE_LIMITED' || errObj?.code === 'RATE_LIMIT_UNAVAILABLE') {
+            try {
+              analyzedProject = await analyzeGitHubUrl(url);
+            } catch (clientErr) {
+              const code = errObj.code;
+              const msg = errObj.message || 'Server rate limit reached and client fallback failed.';
+              setAnalyzingErrorCode(code);
+              setAnalyzingRetryAfter(errObj.retryAfter ?? null);
+              throw new Error(`${msg} (Client fallback error: ${clientErr instanceof Error ? clientErr.message : 'failed'})`);
+            }
+          } else if (errObj) {
+            setAnalyzingErrorCode(errObj.code ?? null);
+            setAnalyzingRetryAfter(errObj.retryAfter ?? null);
+            throw new Error(errObj.message || 'Analysis failed on server.');
+          } else {
+            // General network failure: try in-browser fallback
+            analyzedProject = await analyzeGitHubUrl(url);
+          }
+        }
       } else {
-        // 2. Fallback to client-side direct in-browser analysis
+        // Direct client-side analysis
         analyzedProject = await analyzeGitHubUrl(url);
+      }
+
+      if (!analyzedProject) {
+        throw new Error('Analysis did not produce a valid project.');
       }
 
       clearInterval(stepInterval);
@@ -1169,6 +1229,8 @@ function WorkspaceContent() {
         target={analyzingTarget}
         step={analyzingStep}
         error={analyzingError}
+        errorCode={analyzingErrorCode}
+        retryAfter={analyzingRetryAfter}
         onRetry={() => {
           if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
             handleAnalyzeGitHub(analyzingTarget);
@@ -1176,9 +1238,16 @@ function WorkspaceContent() {
             handleLoadDemo();
           }
         }}
+        onClientFallback={
+          analyzingTarget.startsWith('http') || analyzingTarget.includes('/')
+            ? () => handleAnalyzeGitHub(analyzingTarget, true)
+            : undefined
+        }
         onCancel={() => {
           setAnalyzingTarget(null);
           setAnalyzingError(null);
+          setAnalyzingErrorCode(null);
+          setAnalyzingRetryAfter(null);
         }}
       />
     );

@@ -161,7 +161,13 @@ export type RepoDNAProject = {
   metadata: {
     analysisMode: string;
     executedRepositoryCode: boolean;
-    limits: { maxFiles: number; maxFileBytes: number };
+    limits: {
+      maxFiles: number;
+      maxFileBytes: number;
+      maxArchiveBytes?: number;
+      maxTotalExtractedBytes?: number;
+      fetchTimeoutMs?: number;
+    };
     fileComponents: Record<string, string>;
     cache: { hits: number; misses: number };
   };

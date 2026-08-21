@@ -211,7 +211,12 @@ export function analyzeRepositoryFiles(discovery: {
     metadata: {
       analysisMode: 'static-typescript',
       executedRepositoryCode: false,
-      limits: { maxFiles: 10000, maxFileBytes: 1000000 },
+      limits: {
+        maxFiles: 10000,
+        maxFileBytes: 1000000,
+        maxArchiveBytes: 25 * 1024 * 1024,
+        maxTotalExtractedBytes: 100 * 1024 * 1024,
+      },
       fileComponents,
       cache: { hits: 0, misses: files.length },
     },
@@ -274,17 +279,17 @@ function resolveManifestTarget(manifestPath: string, candidate: string, availabl
   return candidates.find((p) => available.has(p)) ?? null;
 }
 
-export async function analyzeGitHubUrl(url: string): Promise<RepoDNAProject> {
-  const discovery = await fetchGitHubRepo(url);
+export async function analyzeGitHubUrl(url: string, limits?: import('./types').IngestionLimits): Promise<RepoDNAProject> {
+  const discovery = await fetchGitHubRepo(url, limits);
   return analyzeRepositoryFiles(discovery);
 }
 
-export async function analyzeUploadedFiles(files: FileList | File[]): Promise<RepoDNAProject> {
-  const discovery = await extractFromFileList(files);
+export async function analyzeUploadedFiles(files: FileList | File[], limits?: import('./types').IngestionLimits): Promise<RepoDNAProject> {
+  const discovery = await extractFromFileList(files, limits);
   return analyzeRepositoryFiles(discovery);
 }
 
-export async function analyzeZipBuffer(buffer: ArrayBuffer | Uint8Array, name = 'uploaded-repo'): Promise<RepoDNAProject> {
-  const discovery = await extractFromZip(buffer, name);
+export async function analyzeZipBuffer(buffer: ArrayBuffer | Uint8Array, name = 'uploaded-repo', limits?: import('./types').IngestionLimits): Promise<RepoDNAProject> {
+  const discovery = await extractFromZip(buffer, name, limits);
   return analyzeRepositoryFiles({ ...discovery, source: `upload:zip:${name}` });
 }

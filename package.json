@@ -12,9 +12,13 @@
     "build:vercel": "next build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "test": "npm run lint && npm run build"
+    "test:unit": "vitest run",
+    "test:python": "python -c \"import sys, unittest; sys.path.insert(0, 'core'); test_suite = unittest.defaultTestLoader.discover('tests'); runner = unittest.TextTestRunner(verbosity=2); res = runner.run(test_suite); sys.exit(0 if res.wasSuccessful() else 1)\"",
+    "test": "npm run lint && npm run test:unit && npm run build"
   },
   "dependencies": {
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.2",
     "@xyflow/react": "^12.8.4",
     "jszip": "^3.10.1",
     "next": "^16.3.2",
@@ -43,6 +47,7 @@
     "typescript": "5.9.3",
     "vinext": "^1.0.0-beta.8",
     "vite": "^8.2.2",
+    "vitest": "^4.1.11",
     "wrangler": "^4.125.0"
   },
   "type": "module"

@@ -228,9 +228,6 @@ export function classifyFile(path: string, routeFiles: Set<string>, symbolTypes:
   if (routeFiles.has(path) || ['api', 'routes', 'routers', 'controllers', 'endpoints'].some((p) => parts.has(p))) {
     return ['api', ['contains or groups request handlers']];
   }
-  if (['frontend', 'client', 'components', 'pages', 'views', 'ui', 'app', 'src'].some((p) => parts.has(p)) || symbolTypes.has('component')) {
-    return ['frontend', ['frontend path or component symbols']];
-  }
   if (['services', 'service', 'usecases', 'use_cases'].some((p) => parts.has(p))) {
     return ['services', ['service or use-case path']];
   }
@@ -243,6 +240,9 @@ export function classifyFile(path: string, routeFiles: Set<string>, symbolTypes:
   if (['workers', 'worker', 'jobs', 'tasks', 'queues'].some((p) => parts.has(p))) {
     return ['workers', ['worker, job, or queue path']];
   }
+  if (['frontend', 'client', 'components', 'pages', 'views', 'ui'].some((p) => parts.has(p)) || symbolTypes.has('component')) {
+    return ['frontend', ['frontend path or component symbols']];
+  }
   if (['domain', 'core'].some((p) => parts.has(p))) {
     return ['domain', ['domain or core path']];
   }
@@ -251,6 +251,9 @@ export function classifyFile(path: string, routeFiles: Set<string>, symbolTypes:
   }
   if (['.json', '.toml', '.yaml', '.yml', '.ini', '.cfg'].some((ext) => lowered.endsWith(ext))) {
     return ['configuration', ['configuration file']];
+  }
+  if (['src', 'app'].some((p) => parts.has(p))) {
+    return ['frontend', ['frontend container path']];
   }
   return ['other', ['source file outside a recognized layer']];
 }

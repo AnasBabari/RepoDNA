@@ -151,6 +151,7 @@ export function analyzePython(file: DiscoveredFile): PartialAnalysis {
         b.endsWith('DeclarativeBase') ||
         b.includes('models.Model') ||
         b === 'Model' ||
+        b.endsWith('Model') ||
         b === 'SQLModel' ||
         b.endsWith('Document')
       );
