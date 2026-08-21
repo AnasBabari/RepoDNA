@@ -45,6 +45,17 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# RepoDNA local cache
+# RepoDNA local cache & exports
 public/cache.json
 .repodna/
+repodna.json
+repodna-*.json
+*.local.json
+/scratch/
+/benchmark_results/
+
+# Internal campaign artifacts & runbooks
+LAUNCH_POSTS.md
+launch_posts.md
+launch_*.md
+LAUNCH_*.md
