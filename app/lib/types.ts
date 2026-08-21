@@ -163,6 +163,6 @@ export type RepoDNAProject = {
     executedRepositoryCode: boolean;
     limits: { maxFiles: number; maxFileBytes: number };
     fileComponents: Record<string, string>;
+    cache: { hits: number; misses: number };
   };
 };
-

@@ -4,10 +4,12 @@ import hashlib
 import json
 import re
 from collections import Counter, defaultdict
+from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any
 
 from repodna.analyzers import JavaScriptAnalyzer, PythonAnalyzer
+from repodna.cache import AnalysisCache
 from repodna.detection import environment_evidence, fingerprint, language_for
 from repodna.graph import (
     build_architecture,
@@ -80,7 +82,7 @@ def _apply_manifest_entrypoints(partials: list[PartialAnalysis], contents: list[
                 candidates.append((match.group("path"), "Docker CMD or ENTRYPOINT references this file"))
         for candidate, reason in candidates:
             resolved = _resolve_manifest_target(path, candidate, available)
-            if resolved:
+            if resolved and reason not in by_file[resolved].entrypoint_evidence:
                 by_file[resolved].entrypoint_evidence.append(reason)
 
 
@@ -112,8 +114,10 @@ def analyze_repository(
     *,
     max_files: int = 10_000,
     max_file_bytes: int = 1_000_000,
+    cache_path: Path | None = None,
 ) -> AnalysisResult:
     limits = IngestionLimits(max_files=max_files, max_file_bytes=max_file_bytes)
+    cache = AnalysisCache(cache_path)
     with repository_source(source, limits) as discovery:
         fingerprint_data = fingerprint(discovery)
         files: list[FileRecord] = []
@@ -138,16 +142,19 @@ def analyze_repository(
             file = _file_record(discovered.relative_path, text, discovered.size)
             files.append(file)
             contents.append((discovered.relative_path, text))
-            analyzer = next((candidate for candidate in ANALYZERS if candidate.supports(discovered.absolute_path)), None)
-            if analyzer:
-                partial = analyzer.analyze(file, text)
-            else:
-                partial = PartialAnalysis(file=file)
+            partial = cache.restore(file)
+            if partial is None:
+                analyzer = next((candidate for candidate in ANALYZERS if candidate.supports(discovered.absolute_path)), None)
+                if analyzer:
+                    partial = analyzer.analyze(file, text)
+                else:
+                    partial = PartialAnalysis(file=file)
             partials.append(partial)
             if file.error:
                 diagnostics.append(Diagnostic("warning", "parse_error", file.error, file.path))
 
         _apply_manifest_entrypoints(partials, contents)
+        cache.store(partials)
         symbols = [symbol for partial in partials for symbol in partial.symbols]
         imports = [edge for partial in partials for edge in partial.imports]
         calls = [edge for partial in partials for edge in partial.calls]
@@ -237,5 +244,6 @@ def analyze_repository(
                 "executedRepositoryCode": False,
                 "limits": {"maxFiles": max_files, "maxFileBytes": max_file_bytes},
                 "fileComponents": file_components,
+                "cache": {"hits": cache.hits, "misses": cache.misses},
             },
         )

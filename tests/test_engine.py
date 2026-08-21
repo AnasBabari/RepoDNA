@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -54,6 +55,21 @@ class EngineTests(unittest.TestCase):
             self.result.write_json(target)
             payload = json.loads(target.read_text(encoding="utf-8"))
             self.assertEqual(payload["schemaVersion"], "1.0.0")
+
+    def test_reuses_unchanged_files_from_incremental_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            repository = temporary / "repository"
+            shutil.copytree(FIXTURE, repository)
+            cache = temporary / "cache.json"
+            first = analyze_repository(str(repository), cache_path=cache)
+            second = analyze_repository(str(repository), cache_path=cache)
+            self.assertEqual(first.metadata["cache"]["hits"], 0)
+            self.assertEqual(second.metadata["cache"]["hits"], second.repository["fileCount"])
+            changed_file = repository / "backend" / "main.py"
+            changed_file.write_text(changed_file.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
+            third = analyze_repository(str(repository), cache_path=cache)
+            self.assertEqual(third.metadata["cache"]["misses"], 1)
 
 
 if __name__ == "__main__":

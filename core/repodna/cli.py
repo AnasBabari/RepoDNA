@@ -21,15 +21,16 @@ def _load_project(path: Path) -> dict:
 
 def _analyse(args: argparse.Namespace) -> int:
     try:
+        target = Path(args.output)
         result = analyze_repository(
             args.source,
             max_files=args.max_files,
             max_file_bytes=args.max_file_bytes,
+            cache_path=target.parent / "cache.json",
         )
     except IngestionError as exc:
         print(f"RepoDNA could not analyse the repository: {exc}", file=sys.stderr)
         return 2
-    target = Path(args.output)
     result.write_json(target)
     repository = result.repository
     print(f"✓ {repository['fileCount']} files discovered")
@@ -38,6 +39,9 @@ def _analyse(args: argparse.Namespace) -> int:
     print(f"✓ {result.metrics['localDependencies']} dependencies mapped")
     print(f"✓ {len(result.routes)} routes discovered")
     print(f"✓ {len(result.architecture['components'])} architecture components generated")
+    cache = result.metadata.get("cache", {})
+    if cache.get("hits"):
+        print(f"✓ {cache['hits']} unchanged files reused from cache")
     if result.diagnostics:
         print(f"! {len(result.diagnostics)} file diagnostics recorded")
     print(f"\nOutput: {target.resolve()}")
@@ -96,4 +100,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
