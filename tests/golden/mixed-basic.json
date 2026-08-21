@@ -1,0 +1,10 @@
+{
+  "repository": {
+    "name": "mixed-basic",
+    "languages": ["Python", "TypeScript"]
+  },
+  "technologies": ["Express", "FastAPI", "PostgreSQL", "React", "SQLAlchemy", "Stripe", "Vite", "Vitest"],
+  "routes": ["GET /users/{user_id}", "POST /checkout", "POST /users"],
+  "components": ["api", "database", "frontend", "repositories", "services"],
+  "entrypoints": ["backend/main.py", "frontend/main.tsx", "package.json", "server/index.ts"]
+}

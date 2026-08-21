@@ -1,0 +1,13 @@
+{
+  "name": "mixed-basic",
+  "scripts": { "dev": "vite" },
+  "dependencies": {
+    "react": "latest",
+    "express": "latest",
+    "stripe": "latest"
+  },
+  "devDependencies": {
+    "vite": "latest",
+    "vitest": "latest"
+  }
+}
