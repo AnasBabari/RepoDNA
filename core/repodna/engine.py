@@ -145,6 +145,8 @@ def analyze_repository(
             externals.update(partial.externals)
         databases.update(name for name in environment if name in {"PostgreSQL", "MongoDB", "Supabase"})
         externals.update(name for name in environment if name not in databases)
+        if "SQL database" in databases and databases.intersection({"PostgreSQL", "MySQL", "SQLite"}):
+            databases.remove("SQL database")
 
         language_lines = Counter()
         for file in files:
@@ -207,4 +209,3 @@ def analyze_repository(
                 "fileComponents": file_components,
             },
         )
-
