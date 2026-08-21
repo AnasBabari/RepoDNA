@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repodna"
+version = "0.1.0"
+description = "Local-first static architecture analysis for Python and JavaScript/TypeScript repositories"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "RepoDNA contributors" }]
+dependencies = []
+
+[project.scripts]
+repodna = "repodna.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "core" }
+
+[tool.setuptools.packages.find]
+where = ["core"]
+
