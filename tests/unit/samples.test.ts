@@ -7,546 +7,521 @@ import type { DiscoveredFile } from '../../app/lib/analyzer/types';
 describe('Pre-cached Golden Sample Artifacts', () => {
   const samplesDir = path.resolve(process.cwd(), 'public/samples');
 
-  it('generates and validates all featured samples (FastAPI, Express, PyTorch, Twitter Sentiment)', async () => {
+  it('generates and validates featured user repository samples (Strix, nanoGPT, Full-Stack FastAPI)', async () => {
     if (!fs.existsSync(samplesDir)) {
       fs.mkdirSync(samplesDir, { recursive: true });
     }
 
-    // 1. FastAPI Sample
-    const fastapiFiles: DiscoveredFile[] = [
+    // 1. Strix (usestrix/strix) Sample
+    const strixFiles: DiscoveredFile[] = [
       {
         path: 'pyproject.toml',
-        size: 250,
-        hash: 'fa_p1',
-        content: `[project]\nname = "fastapi"\nversion = "0.115.0"\ndependencies = ["starlette", "pydantic", "typing-extensions"]\n`,
+        size: 350,
+        hash: 'strix_p1',
+        content: `[project]\nname = "strix"\nversion = "0.1.0"\ndescription = "Open-source AI penetration testing tool"\ndependencies = ["fastapi", "pydantic", "langchain", "httpx", "rich"]\n`,
       },
-      {
-        path: 'requirements.txt',
-        size: 80,
-        hash: 'fa_p2',
-        content: 'fastapi>=0.115.0\npydantic>=2.0\nuvicorn>=0.30.0\nsqlalchemy>=2.0\npytest>=8.0\n',
-      },
-      {
-        path: 'fastapi/applications.py',
-        size: 1500,
-        hash: 'fa_1',
-        content: `
-from fastapi.routing import APIRouter
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
-
-class FastAPI:
-    def __init__(self, title: str = "FastAPI"):
-        self.router = APIRouter()
-    
-    def include_router(self, router: APIRouter, prefix: str = ""):
-        pass
-    
-    def add_middleware(self, middleware_class, **options):
-        pass
-
-    def get(self, path: str):
-        def decorator(func):
-            return func
-        return decorator
-
-    def post(self, path: str):
-        def decorator(func):
-            return func
-        return decorator
-`,
-      },
-      {
-        path: 'fastapi/routing.py',
-        size: 1200,
-        hash: 'fa_2',
-        content: `
-from fastapi.params import Depends
-
-class APIRouter:
-    def __init__(self, prefix: str = "", tags: list = None):
-        self.prefix = prefix
-        self.routes = []
-
-    def get(self, path: str, response_model=None):
-        def decorator(func):
-            return func
-        return decorator
-
-    def post(self, path: str, status_code: int = 200):
-        def decorator(func):
-            return func
-        return decorator
-
-    def delete(self, path: str):
-        def decorator(func):
-            return func
-        return decorator
-`,
-      },
-      {
-        path: 'fastapi/params.py',
-        size: 800,
-        hash: 'fa_3',
-        content: `
-class Param:
-    def __init__(self, default=None):
-        self.default = default
-
-class Query(Param): pass
-class Header(Param): pass
-class Body(Param): pass
-class Depends:
-    def __init__(self, dependency=None):
-        self.dependency = dependency
-`,
-      },
-      {
-        path: 'fastapi/encoders.py',
-        size: 600,
-        hash: 'fa_4',
-        content: `
-from pydantic import BaseModel
-
-def jsonable_encoder(obj):
-    if isinstance(obj, BaseModel):
-        return obj.dict()
-    return obj
-`,
-      },
-      {
-        path: 'app/api/v1/endpoints/items.py',
-        size: 700,
-        hash: 'fa_5',
-        content: `
-from fastapi import APIRouter, Depends
-from app.models.item import Item
-from app.services.items import ItemService
-
-router = APIRouter(prefix="/items", tags=["items"])
-
-@router.get("/")
-def read_items(service: ItemService = Depends()):
-    return service.get_all()
-
-@router.post("/", status_code=201)
-def create_item(item: Item, service: ItemService = Depends()):
-    return service.create(item)
-`,
-      },
-      {
-        path: 'app/models/item.py',
-        size: 500,
-        hash: 'fa_6',
-        content: `
-from pydantic import BaseModel
-from typing import Optional
-
-class Item(BaseModel):
-    id: Optional[int] = None
-    title: str
-    description: Optional[str] = None
-    price: float
-`,
-      },
-      {
-        path: 'app/services/items.py',
-        size: 600,
-        hash: 'fa_7',
-        content: `
-from app.models.item import Item
-
-class ItemService:
-    def get_all(self):
-        return []
-
-    def create(self, item: Item):
-        return item
-`,
-      },
-    ];
-
-    // 2. Express Sample
-    const expressFiles: DiscoveredFile[] = [
       {
         path: 'package.json',
-        size: 400,
-        hash: 'ex_p1',
+        size: 350,
+        hash: 'strix_p2',
         content: JSON.stringify({
-          name: 'express',
-          version: '4.21.0',
-          description: 'Fast, unopinionated, minimalist web framework for node.',
+          name: 'strix-ui',
+          version: '0.1.0',
           dependencies: {
-            accepts: '~1.3.8',
-            'body-parser': '1.20.3',
-            cookie: '0.7.1',
-            debug: '2.6.9',
-            'http-errors': '2.0.0',
-            methods: '~1.1.2',
-            qs: '6.13.0',
-            send: '0.19.0',
+            next: '^15.0.0',
+            react: '^19.0.0',
+            'react-dom': '^19.0.0',
+            'lucide-react': '^0.400.0',
+            tailwindcss: '^3.4.0',
           },
         }),
       },
       {
-        path: 'lib/express.js',
-        size: 1100,
-        hash: 'ex_1',
-        content: `
-const proto = require('./application');
-const Route = require('./router/route');
-const Router = require('./router');
-const req = require('./request');
-const res = require('./response');
-
-function createApplication() {
-  const app = function(req, res, next) {
-    app.handle(req, res, next);
-  };
-  return Object.assign(app, proto);
-}
-
-exports = module.exports = createApplication;
-exports.Router = Router;
-exports.Route = Route;
-`,
-      },
-      {
-        path: 'lib/application.js',
-        size: 1800,
-        hash: 'ex_2',
-        content: `
-const Router = require('./router');
-
-const app = exports = module.exports = {};
-
-app.init = function init() {
-  this.settings = {};
-  this._router = new Router();
-};
-
-app.use = function use(fn) {
-  this._router.use(fn);
-  return this;
-};
-
-app.get = function get(path, handler) {
-  this._router.get(path, handler);
-  return this;
-};
-
-app.post = function post(path, handler) {
-  this._router.post(path, handler);
-  return this;
-};
-`,
-      },
-      {
-        path: 'lib/router/index.js',
-        size: 1400,
-        hash: 'ex_3',
-        content: `
-const Route = require('./route');
-const Layer = require('./layer');
-
-function Router(options) {
-  this.params = {};
-  this.stack = [];
-}
-
-Router.prototype.use = function use(path, fn) {
-  const layer = new Layer(path, fn);
-  this.stack.push(layer);
-};
-
-module.exports = Router;
-`,
-      },
-      {
-        path: 'lib/request.js',
+        path: 'strix/main.py',
         size: 900,
-        hash: 'ex_4',
+        hash: 'strix_1',
         content: `
-const req = exports = module.exports = {
-  get(header) {
-    return this.headers[header.toLowerCase()];
-  },
-  param(name, defaultValue) {
-    return this.params[name] || this.query[name] || defaultValue;
-  }
-};
+from fastapi import FastAPI
+from strix.api.routes import scan_router, target_router
+from strix.core.scanner import SecurityScanner
+
+app = FastAPI(title="Strix Security Agent")
+app.include_router(scan_router, prefix="/api/v1/scans")
+app.include_router(target_router, prefix="/api/v1/targets")
 `,
       },
       {
-        path: 'lib/response.js',
+        path: 'strix/api/routes.py',
+        size: 1100,
+        hash: 'strix_2',
+        content: `
+from fastapi import APIRouter
+from strix.models.scan import ScanRequest, ScanResult
+from strix.services.agent import PentestAgent
+
+scan_router = APIRouter(tags=["scans"])
+target_router = APIRouter(tags=["targets"])
+
+@scan_router.post("/start", response_model=ScanResult)
+def start_security_scan(request: ScanRequest):
+    agent = PentestAgent()
+    return agent.run_audit(request.target_url)
+
+@scan_router.get("/{scan_id}")
+def get_scan_report(scan_id: str):
+    agent = PentestAgent()
+    return agent.get_report(scan_id)
+`,
+      },
+      {
+        path: 'strix/core/scanner.py',
         size: 1200,
-        hash: 'ex_5',
+        hash: 'strix_3',
         content: `
-const res = exports = module.exports = {
-  status(code) {
-    this.statusCode = code;
-    return this;
-  },
-  json(body) {
-    this.setHeader('Content-Type', 'application/json');
-    this.end(JSON.stringify(body));
-  }
-};
-`,
-      },
-    ];
+from strix.tools.crawler import WebCrawler
+from strix.tools.fuzzer import ApiFuzzer
+from strix.models.scan import VulnerabilityReport
 
-    // 3. PyTorch Sample
-    const pytorchFiles: DiscoveredFile[] = [
-      {
-        path: 'pyproject.toml',
-        size: 300,
-        hash: 'pt_p1',
-        content: `[project]\nname = "torch"\nversion = "2.5.0"\ndescription = "Tensors and Dynamic neural networks in Python with strong GPU acceleration"\n`,
-      },
-      {
-        path: 'torch/__init__.py',
-        size: 1500,
-        hash: 'pt_1',
-        content: `
-import torch.nn as nn
-import torch.autograd as autograd
-import torch.optim as optim
-import torch.cuda as cuda
-from torch.tensor import Tensor
+class SecurityScanner:
+    def __init__(self, target_url: str):
+        self.crawler = WebCrawler(target_url)
+        self.fuzzer = ApiFuzzer(target_url)
 
-__version__ = "2.5.0"
-
-def zeros(*size, dtype=None):
-    return Tensor(*size)
-
-def ones(*size, dtype=None):
-    return Tensor(*size)
+    def scan_endpoints(self) -> VulnerabilityReport:
+        endpoints = self.crawler.discover_endpoints()
+        return self.fuzzer.audit_routes(endpoints)
 `,
       },
       {
-        path: 'torch/tensor.py',
-        size: 1100,
-        hash: 'pt_2',
+        path: 'strix/services/agent.py',
+        size: 950,
+        hash: 'strix_4',
         content: `
-class Tensor:
-    def __init__(self, *shape):
-        self.shape = shape
-        self.grad = None
-        self.requires_grad = False
+from strix.core.scanner import SecurityScanner
+from strix.models.scan import ScanResult
 
-    def backward(self, gradient=None):
-        pass
+class PentestAgent:
+    def run_audit(self, target_url: str) -> ScanResult:
+        scanner = SecurityScanner(target_url)
+        report = scanner.scan_endpoints()
+        return ScanResult(target=target_url, status="completed", vulnerabilities=report.items)
 
-    def to(self, device):
-        return self
-
-    def cuda(self):
-        return self
-
-    def cpu(self):
-        return self
+    def get_report(self, scan_id: str):
+        return {"scan_id": scan_id, "status": "completed"}
 `,
       },
       {
-        path: 'torch/nn/modules/module.py',
-        size: 1600,
-        hash: 'pt_3',
+        path: 'strix/models/scan.py',
+        size: 650,
+        hash: 'strix_5',
         content: `
-from torch.tensor import Tensor
+from pydantic import BaseModel
+from typing import List, Optional
 
-class Module:
-    def __init__(self):
-        self._parameters = {}
-        self._modules = {}
-        self.training = True
+class ScanRequest(BaseModel):
+    target_url: str
+    deep_scan: bool = True
 
-    def forward(self, *input):
-        raise NotImplementedError
+class VulnerabilityReport(BaseModel):
+    items: List[str] = []
+    severity: str = "medium"
 
-    def __call__(self, *input):
-        return self.forward(*input)
-
-    def parameters(self):
-        return list(self._parameters.values())
-
-    def train(self, mode: bool = True):
-        self.training = mode
-        return self
-
-    def eval(self):
-        return self.train(False)
+class ScanResult(BaseModel):
+    target: str
+    status: str
+    vulnerabilities: List[str]
 `,
       },
       {
-        path: 'torch/nn/modules/linear.py',
+        path: 'strix/tools/crawler.py',
+        size: 750,
+        hash: 'strix_6',
+        content: `
+class WebCrawler:
+    def __init__(self, base_url: str):
+        self.base_url = base_url
+
+    def discover_endpoints(self) -> list:
+        return ["/login", "/api/user", "/admin"]
+`,
+      },
+      {
+        path: 'strix/tools/fuzzer.py',
         size: 800,
-        hash: 'pt_4',
+        hash: 'strix_7',
         content: `
-from torch.nn.modules.module import Module
-from torch.tensor import Tensor
+from strix.models.scan import VulnerabilityReport
 
-class Linear(Module):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True):
-        super().__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.weight = Tensor(out_features, in_features)
+class ApiFuzzer:
+    def __init__(self, base_url: str):
+        self.base_url = base_url
 
-    def forward(self, input: Tensor) -> Tensor:
-        return input
+    def audit_routes(self, routes: list) -> VulnerabilityReport:
+        return VulnerabilityReport(items=["SQLi detected on /login", "CORS misconfiguration on /api/user"])
 `,
       },
       {
-        path: 'torch/nn/modules/conv.py',
+        path: 'app/page.tsx',
         size: 900,
-        hash: 'pt_5',
+        hash: 'strix_8',
         content: `
-from torch.nn.modules.module import Module
-from torch.tensor import Tensor
+import React from 'react';
 
-class Conv2d(Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int):
-        super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.kernel_size = kernel_size
-
-    def forward(self, input: Tensor) -> Tensor:
-        return input
-`,
-      },
-      {
-        path: 'torch/optim/adam.py',
-        size: 700,
-        hash: 'pt_6',
-        content: `
-class Adam:
-    def __init__(self, params, lr: float = 1e-3, betas=(0.9, 0.999)):
-        self.params = list(params)
-        self.lr = lr
-
-    def step(self):
-        pass
-
-    def zero_grad(self):
-        for p in self.params:
-            p.grad = None
-`,
-      },
-      {
-        path: 'torch/autograd/engine.py',
-        size: 850,
-        hash: 'pt_7',
-        content: `
-class ExecutionEngine:
-    def run_backward(self, tensors, grad_tensors):
-        pass
+export default function Dashboard() {
+  return (
+    <div className="p-8">
+      <h1>Strix Security Audit Console</h1>
+      <p>Autonomous AI Penetration Testing & Vulnerability Scanner</p>
+    </div>
+  );
+}
 `,
       },
     ];
 
-    // 4. Twitter Sentiment Sample
-    const twitterFiles: DiscoveredFile[] = [
+    // 2. nanoGPT (karpathy/nanoGPT) Sample
+    const nanogptFiles: DiscoveredFile[] = [
       {
         path: 'requirements.txt',
-        size: 150,
-        hash: 'tw_p1',
-        content: 'Flask==2.3.2\nscikit-learn==1.3.0\nnltk==3.8.1\npandas==2.0.3\nnumpy==1.24.3\ngunicorn==20.1.0\n',
+        size: 120,
+        hash: 'ng_p1',
+        content: 'torch>=2.0.0\nnumpy>=1.24.0\ntransformers>=4.30.0\ndatasets>=2.14.0\ntiktoken>=0.4.0\nwandb>=0.15.0\n',
       },
       {
-        path: 'app.py',
-        size: 1200,
-        hash: 'tw_1',
+        path: 'model.py',
+        size: 2400,
+        hash: 'ng_1',
         content: `
-from flask import Flask, render_template, request, jsonify
-from model.predictor import SentimentPredictor
-from utils.preprocessor import clean_tweet
+import math
+import torch
+import torch.nn as nn
+from torch.nn import functional as F
 
-app = Flask(__name__)
-predictor = SentimentPredictor()
+class GPTConfig:
+    block_size: int = 1024
+    vocab_size: int = 50304
+    n_layer: int = 12
+    n_head: int = 12
+    n_embd: int = 768
+    dropout: float = 0.0
+    bias: bool = True
 
-@app.route('/')
-def home():
-    return render_template('index.html')
+class CausalSelfAttention(nn.Module):
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.attn_dropout = nn.Dropout(config.dropout)
+        self.resid_dropout = nn.Dropout(config.dropout)
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    data = request.get_json()
-    tweet = data.get('tweet', '')
-    cleaned = clean_tweet(tweet)
-    prediction, confidence = predictor.predict(cleaned)
-    return jsonify({'sentiment': prediction, 'confidence': confidence})
+    def forward(self, x):
+        B, T, C = x.size()
+        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        y = torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)
+        return self.resid_dropout(self.c_proj(y))
+
+class MLP(nn.Module):
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.gelu = nn.GELU()
+        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x):
+        return self.dropout(self.c_proj(self.gelu(self.c_fc(x))))
+
+class Block(nn.Module):
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.attn = CausalSelfAttention(config)
+        self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.mlp = MLP(config)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+        return x
+
+class GPT(nn.Module):
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        self.config = config
+        self.transformer = nn.ModuleDict(dict(
+            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            wpe = nn.Embedding(config.block_size, config.n_embd),
+            drop = nn.Dropout(config.dropout),
+            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            ln_f = nn.LayerNorm(config.n_embd, bias=config.bias),
+        ))
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+
+    def forward(self, idx, targets=None):
+        tok_emb = self.transformer.wte(idx)
+        return self.lm_head(tok_emb)
+`,
+      },
+      {
+        path: 'train.py',
+        size: 1400,
+        hash: 'ng_2',
+        content: `
+import os
+import time
+import torch
+from model import GPT, GPTConfig
+
+def train_gpt():
+    config = GPTConfig()
+    model = GPT(config)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=6e-4)
+    return model, optimizer
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    train_gpt()
 `,
       },
       {
-        path: 'model/predictor.py',
+        path: 'sample.py',
         size: 800,
-        hash: 'tw_2',
+        hash: 'ng_3',
         content: `
-class SentimentPredictor:
-    def __init__(self, model_path='model/model.pkl'):
-        self.model_path = model_path
-        self.model = None
+import torch
+from model import GPT, GPTConfig
 
-    def predict(self, text: str):
-        return 'Positive', 0.92
-`,
-      },
-      {
-        path: 'utils/preprocessor.py',
-        size: 600,
-        hash: 'tw_3',
-        content: `
-import re
-
-def clean_tweet(tweet: str) -> str:
-    tweet = re.sub(r'http\\S+|www\\S+|https\\S+', '', tweet, flags=re.MULTILINE)
-    tweet = re.sub(r'\\@\\w+|\\#', '', tweet)
-    return tweet.lower().strip()
+def generate_sample(prompt: str = "Hello, I am a language model,"):
+    config = GPTConfig()
+    model = GPT(config)
+    model.eval()
+    return f"{prompt} trained with nanoGPT."
 `,
       },
     ];
 
-    const fastapiProject = await analyzeRepositoryFiles(
-      { name: 'fastapi', source: 'https://github.com/fastapi/fastapi', files: fastapiFiles, skipped: [] },
+    // 3. Full-Stack FastAPI Template (tiangolo/full-stack-fastapi-template) Sample
+    const templateFiles: DiscoveredFile[] = [
+      {
+        path: 'pyproject.toml',
+        size: 400,
+        hash: 'fst_p1',
+        content: `[project]\nname = "full-stack-fastapi-template"\nversion = "0.1.0"\ndependencies = ["fastapi", "sqlmodel", "pydantic", "alembic", "psycopg2-binary", "celery"]\n`,
+      },
+      {
+        path: 'frontend/package.json',
+        size: 400,
+        hash: 'fst_p2',
+        content: JSON.stringify({
+          name: 'frontend',
+          version: '0.1.0',
+          dependencies: {
+            react: '^18.3.0',
+            'react-dom': '^18.3.0',
+            '@tanstack/react-query': '^5.0.0',
+            '@chakra-ui/react': '^2.8.0',
+            vite: '^5.0.0',
+          },
+        }),
+      },
+      {
+        path: 'backend/app/main.py',
+        size: 900,
+        hash: 'fst_1',
+        content: `
+from fastapi import FastAPI
+from app.api.main import api_router
+from app.core.config import settings
+
+app = FastAPI(title=settings.PROJECT_NAME)
+app.include_router(api_router, prefix=settings.API_V1_STR)
+`,
+      },
+      {
+        path: 'backend/app/api/main.py',
+        size: 700,
+        hash: 'fst_2',
+        content: `
+from fastapi import APIRouter
+from app.api.routes import items, users, login
+
+api_router = APIRouter()
+api_router.include_router(login.router, tags=["login"])
+api_router.include_router(users.router, prefix="/users", tags=["users"])
+api_router.include_router(items.router, prefix="/items", tags=["items"])
+`,
+      },
+      {
+        path: 'backend/app/api/routes/users.py',
+        size: 1100,
+        hash: 'fst_3',
+        content: `
+from fastapi import APIRouter, Depends
+from app.models.user import User, UserCreate, UserPublic
+from app.crud.crud_user import user_crud
+
+router = APIRouter()
+
+@router.get("/", response_model=list[UserPublic])
+def read_users():
+    return user_crud.get_multi()
+
+@router.post("/", response_model=UserPublic)
+def create_user(user_in: UserCreate):
+    return user_crud.create(user_in)
+`,
+      },
+      {
+        path: 'backend/app/api/routes/items.py',
+        size: 900,
+        hash: 'fst_4',
+        content: `
+from fastapi import APIRouter, Depends
+from app.models.item import Item, ItemCreate, ItemPublic
+from app.crud.crud_item import item_crud
+
+router = APIRouter()
+
+@router.get("/", response_model=list[ItemPublic])
+def read_items():
+    return item_crud.get_multi()
+
+@router.post("/", response_model=ItemPublic)
+def create_item(item_in: ItemCreate):
+    return item_crud.create(item_in)
+`,
+      },
+      {
+        path: 'backend/app/models/user.py',
+        size: 700,
+        hash: 'fst_5',
+        content: `
+from sqlmodel import Field, SQLModel
+from typing import Optional
+
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(unique=True, index=True)
+    hashed_password: str
+    is_active: bool = True
+    is_superuser: bool = False
+
+class UserCreate(SQLModel):
+    email: str
+    password: str
+
+class UserPublic(SQLModel):
+    id: int
+    email: str
+    is_active: bool
+`,
+      },
+      {
+        path: 'backend/app/models/item.py',
+        size: 600,
+        hash: 'fst_6',
+        content: `
+from sqlmodel import Field, SQLModel
+from typing import Optional
+
+class Item(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str
+    description: Optional[str] = None
+    owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+
+class ItemCreate(SQLModel):
+    title: str
+    description: Optional[str] = None
+
+class ItemPublic(SQLModel):
+    id: int
+    title: str
+    description: Optional[str]
+`,
+      },
+      {
+        path: 'backend/app/crud/crud_user.py',
+        size: 700,
+        hash: 'fst_7',
+        content: `
+from app.models.user import User, UserCreate
+
+class CRUDUser:
+    def get_multi(self):
+        return []
+    def create(self, obj_in: UserCreate):
+        return User(id=1, email=obj_in.email, hashed_password="***", is_active=True)
+
+user_crud = CRUDUser()
+`,
+      },
+      {
+        path: 'backend/app/crud/crud_item.py',
+        size: 700,
+        hash: 'fst_8',
+        content: `
+from app.models.item import Item, ItemCreate
+
+class CRUDItem:
+    def get_multi(self):
+        return []
+    def create(self, obj_in: ItemCreate):
+        return Item(id=1, title=obj_in.title, description=obj_in.description)
+
+item_crud = CRUDItem()
+`,
+      },
+      {
+        path: 'frontend/src/App.tsx',
+        size: 600,
+        hash: 'fst_9',
+        content: `
+import React from 'react';
+
+export function App() {
+  return (
+    <div>
+      <h1>Full Stack FastAPI Dashboard</h1>
+    </div>
+  );
+}
+`,
+      },
+    ];
+
+    // Generate Strix Artifact
+    const strixProject = await analyzeRepositoryFiles(
+      { name: 'strix', source: 'https://github.com/usestrix/strix', files: strixFiles, skipped: [] },
       {}
     );
-    fs.writeFileSync(path.join(samplesDir, 'fastapi.json'), JSON.stringify(fastapiProject, null, 2));
+    fs.writeFileSync(path.join(samplesDir, 'strix.json'), JSON.stringify(strixProject, null, 2));
 
-    const expressProject = await analyzeRepositoryFiles(
-      { name: 'express', source: 'https://github.com/expressjs/express', files: expressFiles, skipped: [] },
+    // Generate nanoGPT Artifact
+    const nanogptProject = await analyzeRepositoryFiles(
+      { name: 'nanoGPT', source: 'https://github.com/karpathy/nanoGPT', files: nanogptFiles, skipped: [] },
       {}
     );
-    fs.writeFileSync(path.join(samplesDir, 'express.json'), JSON.stringify(expressProject, null, 2));
+    fs.writeFileSync(path.join(samplesDir, 'nanogpt.json'), JSON.stringify(nanogptProject, null, 2));
 
-    const pytorchProject = await analyzeRepositoryFiles(
-      { name: 'pytorch', source: 'https://github.com/pytorch/pytorch', files: pytorchFiles, skipped: [] },
+    // Generate Full-Stack FastAPI Template Artifact
+    const templateProject = await analyzeRepositoryFiles(
+      { name: 'full-stack-fastapi-template', source: 'https://github.com/tiangolo/full-stack-fastapi-template', files: templateFiles, skipped: [] },
       {}
     );
-    fs.writeFileSync(path.join(samplesDir, 'pytorch.json'), JSON.stringify(pytorchProject, null, 2));
+    fs.writeFileSync(path.join(samplesDir, 'full-stack-fastapi-template.json'), JSON.stringify(templateProject, null, 2));
 
-    const twitterProject = await analyzeRepositoryFiles(
-      { name: 'Twitter-Sentiment-Analysis', source: 'https://github.com/yusrababari/Twitter-Sentiment-Analysis', files: twitterFiles, skipped: [] },
-      {}
-    );
-    fs.writeFileSync(path.join(samplesDir, 'twitter-sentiment.json'), JSON.stringify(twitterProject, null, 2));
+    // Verify generated artifacts
+    expect(strixProject.repository.name).toBe('strix');
+    expect(strixProject.architecture.components.length).toBeGreaterThan(0);
+    expect(strixProject.routes.length).toBeGreaterThan(0);
 
-    // Verify all generated sample artifacts
-    expect(fastapiProject.repository.name).toBe('fastapi');
-    expect(fastapiProject.architecture.components.length).toBeGreaterThan(0);
-    expect(fastapiProject.routes.length).toBeGreaterThan(0);
+    expect(nanogptProject.repository.name).toBe('nanoGPT');
+    expect(nanogptProject.symbols.length).toBeGreaterThan(0);
 
-    expect(expressProject.repository.name).toBe('express');
-    expect(expressProject.architecture.components.length).toBeGreaterThan(0);
-
-    expect(pytorchProject.repository.name).toBe('pytorch');
-    expect(pytorchProject.symbols.length).toBeGreaterThan(0);
-
-    expect(twitterProject.repository.name).toBe('Twitter-Sentiment-Analysis');
-    expect(twitterProject.routes.length).toBeGreaterThan(0);
+    expect(templateProject.repository.name).toBe('full-stack-fastapi-template');
+    expect(templateProject.architecture.components.length).toBeGreaterThan(0);
+    expect(templateProject.routes.length).toBeGreaterThan(0);
   });
 });

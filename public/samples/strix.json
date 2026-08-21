@@ -1,0 +1,1365 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-08-21T21:05:04.664Z",
+  "repository": {
+    "name": "strix",
+    "source": "https://github.com/usestrix/strix",
+    "languages": {
+      "Python": 88.1,
+      "TypeScript": 11.9
+    },
+    "fileCount": 10,
+    "sourceFileCount": 8,
+    "parsedFileCount": 0,
+    "lines": 108,
+    "fingerprint": {
+      "languages": [
+        "Python",
+        "TypeScript"
+      ],
+      "languageFileCounts": {
+        "Python": 7,
+        "TypeScript": 1
+      },
+      "frameworks": [
+        "FastAPI",
+        "Next.js",
+        "React"
+      ],
+      "infrastructure": [],
+      "databases": [],
+      "externalSystems": [
+        "HTTPX"
+      ],
+      "testing": [],
+      "buildTools": [],
+      "tooling": [
+        "Tailwind CSS"
+      ]
+    }
+  },
+  "technologies": [
+    "FastAPI",
+    "HTTPX",
+    "Next.js",
+    "React",
+    "SQL database",
+    "SQLAlchemy"
+  ],
+  "files": [
+    {
+      "id": "file:pyproject.toml",
+      "path": "pyproject.toml",
+      "language": "Configuration",
+      "lines": 6,
+      "bytes": 350,
+      "hash": "strix_p1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:package.json",
+      "path": "package.json",
+      "language": "Configuration",
+      "lines": 1,
+      "bytes": 350,
+      "hash": "strix_p2",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:strix/main.py",
+      "path": "strix/main.py",
+      "language": "Python",
+      "lines": 9,
+      "bytes": 900,
+      "hash": "strix_1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:strix/api/routes.py",
+      "path": "strix/api/routes.py",
+      "language": "Python",
+      "lines": 18,
+      "bytes": 1100,
+      "hash": "strix_2",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:strix/core/scanner.py",
+      "path": "strix/core/scanner.py",
+      "language": "Python",
+      "lines": 14,
+      "bytes": 1200,
+      "hash": "strix_3",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:strix/services/agent.py",
+      "path": "strix/services/agent.py",
+      "language": "Python",
+      "lines": 13,
+      "bytes": 950,
+      "hash": "strix_4",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:strix/models/scan.py",
+      "path": "strix/models/scan.py",
+      "language": "Python",
+      "lines": 17,
+      "bytes": 650,
+      "hash": "strix_5",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:strix/tools/crawler.py",
+      "path": "strix/tools/crawler.py",
+      "language": "Python",
+      "lines": 8,
+      "bytes": 750,
+      "hash": "strix_6",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:strix/tools/fuzzer.py",
+      "path": "strix/tools/fuzzer.py",
+      "language": "Python",
+      "lines": 10,
+      "bytes": 800,
+      "hash": "strix_7",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:app/page.tsx",
+      "path": "app/page.tsx",
+      "language": "TypeScript",
+      "lines": 12,
+      "bytes": 900,
+      "hash": "strix_8",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    }
+  ],
+  "symbols": [
+    {
+      "id": "strix/main.py",
+      "type": "module",
+      "name": "main.py",
+      "file": "strix/main.py",
+      "line": 1,
+      "end_line": 9,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "strix/api/routes.py",
+      "type": "module",
+      "name": "routes.py",
+      "file": "strix/api/routes.py",
+      "line": 1,
+      "end_line": 18,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "strix/api/routes.py::start_security_scan",
+      "type": "function",
+      "name": "start_security_scan",
+      "file": "strix/api/routes.py",
+      "line": 10,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/api/routes.py::get_scan_report",
+      "type": "function",
+      "name": "get_scan_report",
+      "file": "strix/api/routes.py",
+      "line": 15,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/core/scanner.py",
+      "type": "module",
+      "name": "scanner.py",
+      "file": "strix/core/scanner.py",
+      "line": 1,
+      "end_line": 14,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "strix/core/scanner.py::SecurityScanner",
+      "type": "class",
+      "name": "SecurityScanner",
+      "file": "strix/core/scanner.py",
+      "line": 6,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/core/scanner.py::SecurityScanner::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "strix/core/scanner.py",
+      "line": 7,
+      "end_line": null,
+      "parent": "strix/core/scanner.py::SecurityScanner",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/core/scanner.py::SecurityScanner::scan_endpoints",
+      "type": "method",
+      "name": "scan_endpoints",
+      "file": "strix/core/scanner.py",
+      "line": 11,
+      "end_line": null,
+      "parent": "strix/core/scanner.py::SecurityScanner",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/services/agent.py",
+      "type": "module",
+      "name": "agent.py",
+      "file": "strix/services/agent.py",
+      "line": 1,
+      "end_line": 13,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "strix/services/agent.py::PentestAgent",
+      "type": "class",
+      "name": "PentestAgent",
+      "file": "strix/services/agent.py",
+      "line": 5,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/services/agent.py::PentestAgent::run_audit",
+      "type": "method",
+      "name": "run_audit",
+      "file": "strix/services/agent.py",
+      "line": 6,
+      "end_line": null,
+      "parent": "strix/services/agent.py::PentestAgent",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/services/agent.py::PentestAgent::get_report",
+      "type": "method",
+      "name": "get_report",
+      "file": "strix/services/agent.py",
+      "line": 11,
+      "end_line": null,
+      "parent": "strix/services/agent.py::PentestAgent",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/models/scan.py",
+      "type": "module",
+      "name": "scan.py",
+      "file": "strix/models/scan.py",
+      "line": 1,
+      "end_line": 17,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "strix/models/scan.py::ScanRequest",
+      "type": "database_model",
+      "name": "ScanRequest",
+      "file": "strix/models/scan.py",
+      "line": 5,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "inherits from an ORM model base"
+      ]
+    },
+    {
+      "id": "strix/models/scan.py::VulnerabilityReport",
+      "type": "database_model",
+      "name": "VulnerabilityReport",
+      "file": "strix/models/scan.py",
+      "line": 9,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "inherits from an ORM model base"
+      ]
+    },
+    {
+      "id": "strix/models/scan.py::ScanResult",
+      "type": "database_model",
+      "name": "ScanResult",
+      "file": "strix/models/scan.py",
+      "line": 13,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "inherits from an ORM model base"
+      ]
+    },
+    {
+      "id": "strix/tools/crawler.py",
+      "type": "module",
+      "name": "crawler.py",
+      "file": "strix/tools/crawler.py",
+      "line": 1,
+      "end_line": 8,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "strix/tools/crawler.py::WebCrawler",
+      "type": "class",
+      "name": "WebCrawler",
+      "file": "strix/tools/crawler.py",
+      "line": 2,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/tools/crawler.py::WebCrawler::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "strix/tools/crawler.py",
+      "line": 3,
+      "end_line": null,
+      "parent": "strix/tools/crawler.py::WebCrawler",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/tools/crawler.py::WebCrawler::discover_endpoints",
+      "type": "method",
+      "name": "discover_endpoints",
+      "file": "strix/tools/crawler.py",
+      "line": 6,
+      "end_line": null,
+      "parent": "strix/tools/crawler.py::WebCrawler",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/tools/fuzzer.py",
+      "type": "module",
+      "name": "fuzzer.py",
+      "file": "strix/tools/fuzzer.py",
+      "line": 1,
+      "end_line": 10,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "strix/tools/fuzzer.py::ApiFuzzer",
+      "type": "class",
+      "name": "ApiFuzzer",
+      "file": "strix/tools/fuzzer.py",
+      "line": 4,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/tools/fuzzer.py::ApiFuzzer::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "strix/tools/fuzzer.py",
+      "line": 5,
+      "end_line": null,
+      "parent": "strix/tools/fuzzer.py::ApiFuzzer",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "strix/tools/fuzzer.py::ApiFuzzer::audit_routes",
+      "type": "method",
+      "name": "audit_routes",
+      "file": "strix/tools/fuzzer.py",
+      "line": 8,
+      "end_line": null,
+      "parent": "strix/tools/fuzzer.py::ApiFuzzer",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "app/page.tsx",
+      "type": "module",
+      "name": "page.tsx",
+      "file": "app/page.tsx",
+      "line": 1,
+      "end_line": 12,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "app/page.tsx::Dashboard",
+      "type": "component",
+      "name": "Dashboard",
+      "file": "app/page.tsx",
+      "line": 4,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "capitalized JSX/TSX function"
+      ]
+    }
+  ],
+  "imports": [
+    {
+      "id": "strix/main.py:import:2:fastapi",
+      "source": "strix/main.py",
+      "module": "fastapi",
+      "names": [
+        "FastAPI"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "strix/main.py:import:3:strix.api.routes",
+      "source": "strix/main.py",
+      "module": "strix.api.routes",
+      "names": [
+        "scan_router",
+        "target_router"
+      ],
+      "line": 3,
+      "target": "strix/api/routes.py",
+      "external": false
+    },
+    {
+      "id": "strix/main.py:import:4:strix.core.scanner",
+      "source": "strix/main.py",
+      "module": "strix.core.scanner",
+      "names": [
+        "SecurityScanner"
+      ],
+      "line": 4,
+      "target": "strix/core/scanner.py",
+      "external": false
+    },
+    {
+      "id": "strix/api/routes.py:import:2:fastapi",
+      "source": "strix/api/routes.py",
+      "module": "fastapi",
+      "names": [
+        "APIRouter"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "strix/api/routes.py:import:3:strix.models.scan",
+      "source": "strix/api/routes.py",
+      "module": "strix.models.scan",
+      "names": [
+        "ScanRequest",
+        "ScanResult"
+      ],
+      "line": 3,
+      "target": "strix/models/scan.py",
+      "external": false
+    },
+    {
+      "id": "strix/api/routes.py:import:4:strix.services.agent",
+      "source": "strix/api/routes.py",
+      "module": "strix.services.agent",
+      "names": [
+        "PentestAgent"
+      ],
+      "line": 4,
+      "target": "strix/services/agent.py",
+      "external": false
+    },
+    {
+      "id": "strix/core/scanner.py:import:2:strix.tools.crawler",
+      "source": "strix/core/scanner.py",
+      "module": "strix.tools.crawler",
+      "names": [
+        "WebCrawler"
+      ],
+      "line": 2,
+      "target": "strix/tools/crawler.py",
+      "external": false
+    },
+    {
+      "id": "strix/core/scanner.py:import:3:strix.tools.fuzzer",
+      "source": "strix/core/scanner.py",
+      "module": "strix.tools.fuzzer",
+      "names": [
+        "ApiFuzzer"
+      ],
+      "line": 3,
+      "target": "strix/tools/fuzzer.py",
+      "external": false
+    },
+    {
+      "id": "strix/core/scanner.py:import:4:strix.models.scan",
+      "source": "strix/core/scanner.py",
+      "module": "strix.models.scan",
+      "names": [
+        "VulnerabilityReport"
+      ],
+      "line": 4,
+      "target": "strix/models/scan.py",
+      "external": false
+    },
+    {
+      "id": "strix/services/agent.py:import:2:strix.core.scanner",
+      "source": "strix/services/agent.py",
+      "module": "strix.core.scanner",
+      "names": [
+        "SecurityScanner"
+      ],
+      "line": 2,
+      "target": "strix/core/scanner.py",
+      "external": false
+    },
+    {
+      "id": "strix/services/agent.py:import:3:strix.models.scan",
+      "source": "strix/services/agent.py",
+      "module": "strix.models.scan",
+      "names": [
+        "ScanResult"
+      ],
+      "line": 3,
+      "target": "strix/models/scan.py",
+      "external": false
+    },
+    {
+      "id": "strix/models/scan.py:import:2:pydantic",
+      "source": "strix/models/scan.py",
+      "module": "pydantic",
+      "names": [
+        "BaseModel"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "strix/models/scan.py:import:3:typing",
+      "source": "strix/models/scan.py",
+      "module": "typing",
+      "names": [
+        "List",
+        "Optional"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "strix/tools/fuzzer.py:import:2:strix.models.scan",
+      "source": "strix/tools/fuzzer.py",
+      "module": "strix.models.scan",
+      "names": [
+        "VulnerabilityReport"
+      ],
+      "line": 2,
+      "target": "strix/models/scan.py",
+      "external": false
+    },
+    {
+      "id": "app/page.tsx:import:2:react",
+      "source": "app/page.tsx",
+      "module": "react",
+      "names": [
+        "React"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    }
+  ],
+  "calls": [
+    {
+      "id": "strix/main.py:call:6:FastAPI",
+      "source": "strix/main.py",
+      "callee": "FastAPI",
+      "file": "strix/main.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "strix/main.py:call:7:app.include_router",
+      "source": "strix/main.py",
+      "callee": "app.include_router",
+      "file": "strix/main.py",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "strix/main.py:call:8:app.include_router",
+      "source": "strix/main.py",
+      "callee": "app.include_router",
+      "file": "strix/main.py",
+      "line": 8,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "strix/api/routes.py:call:6:APIRouter",
+      "source": "strix/api/routes.py",
+      "callee": "APIRouter",
+      "file": "strix/api/routes.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "strix/api/routes.py:call:7:APIRouter",
+      "source": "strix/api/routes.py",
+      "callee": "APIRouter",
+      "file": "strix/api/routes.py",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "strix/api/routes.py::start_security_scan:call:11:PentestAgent",
+      "source": "strix/api/routes.py::start_security_scan",
+      "callee": "PentestAgent",
+      "file": "strix/api/routes.py",
+      "line": 11,
+      "target": "strix/services/agent.py::PentestAgent",
+      "confidence": 0.72
+    },
+    {
+      "id": "strix/api/routes.py::start_security_scan:call:12:agent.run_audit",
+      "source": "strix/api/routes.py::start_security_scan",
+      "callee": "agent.run_audit",
+      "file": "strix/api/routes.py",
+      "line": 12,
+      "target": "strix/services/agent.py::PentestAgent::run_audit",
+      "confidence": 0.92
+    },
+    {
+      "id": "strix/api/routes.py::get_scan_report:call:16:PentestAgent",
+      "source": "strix/api/routes.py::get_scan_report",
+      "callee": "PentestAgent",
+      "file": "strix/api/routes.py",
+      "line": 16,
+      "target": "strix/services/agent.py::PentestAgent",
+      "confidence": 0.72
+    },
+    {
+      "id": "strix/api/routes.py::get_scan_report:call:17:agent.get_report",
+      "source": "strix/api/routes.py::get_scan_report",
+      "callee": "agent.get_report",
+      "file": "strix/api/routes.py",
+      "line": 17,
+      "target": "strix/services/agent.py::PentestAgent::get_report",
+      "confidence": 0.92
+    },
+    {
+      "id": "strix/core/scanner.py::SecurityScanner::__init__:call:8:WebCrawler",
+      "source": "strix/core/scanner.py::SecurityScanner::__init__",
+      "callee": "WebCrawler",
+      "file": "strix/core/scanner.py",
+      "line": 8,
+      "target": "strix/tools/crawler.py::WebCrawler",
+      "confidence": 0.72
+    },
+    {
+      "id": "strix/core/scanner.py::SecurityScanner::__init__:call:9:ApiFuzzer",
+      "source": "strix/core/scanner.py::SecurityScanner::__init__",
+      "callee": "ApiFuzzer",
+      "file": "strix/core/scanner.py",
+      "line": 9,
+      "target": "strix/tools/fuzzer.py::ApiFuzzer",
+      "confidence": 0.72
+    },
+    {
+      "id": "strix/core/scanner.py::SecurityScanner::scan_endpoints:call:12:self.crawler.discover_endpoints",
+      "source": "strix/core/scanner.py::SecurityScanner::scan_endpoints",
+      "callee": "self.crawler.discover_endpoints",
+      "file": "strix/core/scanner.py",
+      "line": 12,
+      "target": "strix/tools/crawler.py::WebCrawler::discover_endpoints",
+      "confidence": 0.92
+    },
+    {
+      "id": "strix/core/scanner.py::SecurityScanner::scan_endpoints:call:13:self.fuzzer.audit_routes",
+      "source": "strix/core/scanner.py::SecurityScanner::scan_endpoints",
+      "callee": "self.fuzzer.audit_routes",
+      "file": "strix/core/scanner.py",
+      "line": 13,
+      "target": "strix/tools/fuzzer.py::ApiFuzzer::audit_routes",
+      "confidence": 0.92
+    },
+    {
+      "id": "strix/services/agent.py::PentestAgent::run_audit:call:7:SecurityScanner",
+      "source": "strix/services/agent.py::PentestAgent::run_audit",
+      "callee": "SecurityScanner",
+      "file": "strix/services/agent.py",
+      "line": 7,
+      "target": "strix/core/scanner.py::SecurityScanner",
+      "confidence": 0.72
+    },
+    {
+      "id": "strix/services/agent.py::PentestAgent::run_audit:call:8:scanner.scan_endpoints",
+      "source": "strix/services/agent.py::PentestAgent::run_audit",
+      "callee": "scanner.scan_endpoints",
+      "file": "strix/services/agent.py",
+      "line": 8,
+      "target": "strix/core/scanner.py::SecurityScanner::scan_endpoints",
+      "confidence": 0.92
+    },
+    {
+      "id": "strix/services/agent.py::PentestAgent::run_audit:call:9:ScanResult",
+      "source": "strix/services/agent.py::PentestAgent::run_audit",
+      "callee": "ScanResult",
+      "file": "strix/services/agent.py",
+      "line": 9,
+      "target": "strix/models/scan.py::ScanResult",
+      "confidence": 0.72
+    },
+    {
+      "id": "strix/tools/fuzzer.py::ApiFuzzer::audit_routes:call:9:VulnerabilityReport",
+      "source": "strix/tools/fuzzer.py::ApiFuzzer::audit_routes",
+      "callee": "VulnerabilityReport",
+      "file": "strix/tools/fuzzer.py",
+      "line": 9,
+      "target": "strix/models/scan.py::VulnerabilityReport",
+      "confidence": 0.72
+    },
+    {
+      "id": "app/page.tsx::Dashboard:call:4:Dashboard",
+      "source": "app/page.tsx::Dashboard",
+      "callee": "Dashboard",
+      "file": "app/page.tsx",
+      "line": 4,
+      "target": "app/page.tsx::Dashboard",
+      "confidence": 0.88
+    }
+  ],
+  "routes": [
+    {
+      "id": "route:strix/api/routes.py:10:POST:/start",
+      "method": "POST",
+      "path": "/start",
+      "handler": "strix/api/routes.py::start_security_scan",
+      "file": "strix/api/routes.py",
+      "line": 10,
+      "framework": "FastAPI",
+      "confidence": 0.98
+    },
+    {
+      "id": "route:strix/api/routes.py:15:GET:/{scan_id}",
+      "method": "GET",
+      "path": "/{scan_id}",
+      "handler": "strix/api/routes.py::get_scan_report",
+      "file": "strix/api/routes.py",
+      "line": 15,
+      "framework": "FastAPI",
+      "confidence": 0.98
+    }
+  ],
+  "databases": [
+    {
+      "name": "SQL database",
+      "type": "database",
+      "confidence": 0.72,
+      "evidence": []
+    }
+  ],
+  "external_systems": [
+    {
+      "name": "HTTPX",
+      "type": "external_system",
+      "confidence": 0.72,
+      "evidence": []
+    }
+  ],
+  "entrypoints": [
+    {
+      "id": "entrypoint:strix/main.py",
+      "file": "strix/main.py",
+      "kind": "application",
+      "score": 65,
+      "confidence": 0.8833333333333333,
+      "evidence": [
+        "creates a FastAPI application",
+        "uses the conventional main.py filename"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow:route:strix/api/routes.py:10:POST:/start",
+      "name": "POST /start",
+      "confidence": 0.86,
+      "nodes": [
+        {
+          "id": "route:strix/api/routes.py:10:POST:/start",
+          "type": "route",
+          "label": "POST /start",
+          "file": "strix/api/routes.py",
+          "line": 10
+        },
+        {
+          "id": "strix/api/routes.py::start_security_scan",
+          "type": "function",
+          "label": "start_security_scan",
+          "file": "strix/api/routes.py",
+          "line": 10
+        },
+        {
+          "id": "strix/services/agent.py::PentestAgent",
+          "type": "class",
+          "label": "PentestAgent",
+          "file": "strix/services/agent.py",
+          "line": 5
+        },
+        {
+          "id": "strix/services/agent.py::PentestAgent::run_audit",
+          "type": "method",
+          "label": "run_audit",
+          "file": "strix/services/agent.py",
+          "line": 6
+        },
+        {
+          "id": "strix/core/scanner.py::SecurityScanner",
+          "type": "class",
+          "label": "SecurityScanner",
+          "file": "strix/core/scanner.py",
+          "line": 6
+        },
+        {
+          "id": "strix/core/scanner.py::SecurityScanner::scan_endpoints",
+          "type": "method",
+          "label": "scan_endpoints",
+          "file": "strix/core/scanner.py",
+          "line": 11
+        },
+        {
+          "id": "strix/models/scan.py::ScanResult",
+          "type": "database_model",
+          "label": "ScanResult",
+          "file": "strix/models/scan.py",
+          "line": 13
+        },
+        {
+          "id": "strix/tools/crawler.py::WebCrawler::discover_endpoints",
+          "type": "method",
+          "label": "discover_endpoints",
+          "file": "strix/tools/crawler.py",
+          "line": 6
+        },
+        {
+          "id": "strix/tools/fuzzer.py::ApiFuzzer::audit_routes",
+          "type": "method",
+          "label": "audit_routes",
+          "file": "strix/tools/fuzzer.py",
+          "line": 8
+        },
+        {
+          "id": "strix/models/scan.py::VulnerabilityReport",
+          "type": "database_model",
+          "label": "VulnerabilityReport",
+          "file": "strix/models/scan.py",
+          "line": 9
+        }
+      ],
+      "edges": [
+        {
+          "source": "route:strix/api/routes.py:10:POST:/start",
+          "target": "strix/api/routes.py::start_security_scan",
+          "type": "handles"
+        },
+        {
+          "source": "strix/api/routes.py::start_security_scan",
+          "target": "strix/services/agent.py::PentestAgent",
+          "type": "calls"
+        },
+        {
+          "source": "strix/api/routes.py::start_security_scan",
+          "target": "strix/services/agent.py::PentestAgent::run_audit",
+          "type": "calls"
+        },
+        {
+          "source": "strix/services/agent.py::PentestAgent::run_audit",
+          "target": "strix/core/scanner.py::SecurityScanner",
+          "type": "calls"
+        },
+        {
+          "source": "strix/services/agent.py::PentestAgent::run_audit",
+          "target": "strix/core/scanner.py::SecurityScanner::scan_endpoints",
+          "type": "calls"
+        },
+        {
+          "source": "strix/services/agent.py::PentestAgent::run_audit",
+          "target": "strix/models/scan.py::ScanResult",
+          "type": "calls"
+        },
+        {
+          "source": "strix/core/scanner.py::SecurityScanner::scan_endpoints",
+          "target": "strix/tools/crawler.py::WebCrawler::discover_endpoints",
+          "type": "calls"
+        },
+        {
+          "source": "strix/core/scanner.py::SecurityScanner::scan_endpoints",
+          "target": "strix/tools/fuzzer.py::ApiFuzzer::audit_routes",
+          "type": "calls"
+        },
+        {
+          "source": "strix/tools/fuzzer.py::ApiFuzzer::audit_routes",
+          "target": "strix/models/scan.py::VulnerabilityReport",
+          "type": "calls"
+        }
+      ]
+    },
+    {
+      "id": "flow:route:strix/api/routes.py:15:GET:/{scan_id}",
+      "name": "GET /{scan_id}",
+      "confidence": 0.86,
+      "nodes": [
+        {
+          "id": "route:strix/api/routes.py:15:GET:/{scan_id}",
+          "type": "route",
+          "label": "GET /{scan_id}",
+          "file": "strix/api/routes.py",
+          "line": 15
+        },
+        {
+          "id": "strix/api/routes.py::get_scan_report",
+          "type": "function",
+          "label": "get_scan_report",
+          "file": "strix/api/routes.py",
+          "line": 15
+        },
+        {
+          "id": "strix/services/agent.py::PentestAgent",
+          "type": "class",
+          "label": "PentestAgent",
+          "file": "strix/services/agent.py",
+          "line": 5
+        },
+        {
+          "id": "strix/services/agent.py::PentestAgent::get_report",
+          "type": "method",
+          "label": "get_report",
+          "file": "strix/services/agent.py",
+          "line": 11
+        }
+      ],
+      "edges": [
+        {
+          "source": "route:strix/api/routes.py:15:GET:/{scan_id}",
+          "target": "strix/api/routes.py::get_scan_report",
+          "type": "handles"
+        },
+        {
+          "source": "strix/api/routes.py::get_scan_report",
+          "target": "strix/services/agent.py::PentestAgent",
+          "type": "calls"
+        },
+        {
+          "source": "strix/api/routes.py::get_scan_report",
+          "target": "strix/services/agent.py::PentestAgent::get_report",
+          "type": "calls"
+        }
+      ]
+    }
+  ],
+  "architecture": {
+    "components": [
+      {
+        "id": "frontend",
+        "name": "Frontend",
+        "type": "frontend",
+        "files": [
+          "app/page.tsx"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "frontend path or component symbols"
+        ]
+      },
+      {
+        "id": "api",
+        "name": "API layer",
+        "type": "api",
+        "files": [
+          "strix/api/routes.py"
+        ],
+        "confidence": 0.94,
+        "evidence": [
+          "contains or groups request handlers"
+        ]
+      },
+      {
+        "id": "services",
+        "name": "Services",
+        "type": "services",
+        "files": [
+          "strix/services/agent.py"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "service or use-case path"
+        ]
+      },
+      {
+        "id": "domain",
+        "name": "Domain",
+        "type": "domain",
+        "files": [
+          "strix/core/scanner.py"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "domain or core path"
+        ]
+      },
+      {
+        "id": "database",
+        "name": "Database",
+        "type": "database",
+        "files": [
+          "strix/models/scan.py"
+        ],
+        "confidence": 0.94,
+        "evidence": [
+          "database path or ORM model evidence"
+        ]
+      },
+      {
+        "id": "configuration",
+        "name": "Configuration",
+        "type": "configuration",
+        "files": [
+          "package.json",
+          "pyproject.toml"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "configuration file"
+        ]
+      },
+      {
+        "id": "other",
+        "name": "Application core",
+        "type": "other",
+        "files": [
+          "strix/main.py",
+          "strix/tools/crawler.py",
+          "strix/tools/fuzzer.py"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "source file outside a recognized layer"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "component:api:database",
+        "source": "api",
+        "target": "database",
+        "type": "imports",
+        "weight": 1
+      },
+      {
+        "id": "component:api:services",
+        "source": "api",
+        "target": "services",
+        "type": "imports",
+        "weight": 1
+      },
+      {
+        "id": "component:domain:database",
+        "source": "domain",
+        "target": "database",
+        "type": "imports",
+        "weight": 1
+      },
+      {
+        "id": "component:domain:other",
+        "source": "domain",
+        "target": "other",
+        "type": "imports",
+        "weight": 2
+      },
+      {
+        "id": "component:other:api",
+        "source": "other",
+        "target": "api",
+        "type": "imports",
+        "weight": 1
+      },
+      {
+        "id": "component:other:database",
+        "source": "other",
+        "target": "database",
+        "type": "imports",
+        "weight": 1
+      },
+      {
+        "id": "component:other:domain",
+        "source": "other",
+        "target": "domain",
+        "type": "imports",
+        "weight": 1
+      },
+      {
+        "id": "component:services:database",
+        "source": "services",
+        "target": "database",
+        "type": "imports",
+        "weight": 1
+      },
+      {
+        "id": "component:services:domain",
+        "source": "services",
+        "target": "domain",
+        "type": "imports",
+        "weight": 1
+      }
+    ]
+  },
+  "important_files": [
+    {
+      "file": "strix/main.py",
+      "score": 69,
+      "reasons": [
+        "entrypoint candidate",
+        "imports 2 local file(s)"
+      ]
+    },
+    {
+      "file": "strix/api/routes.py",
+      "score": 23,
+      "reasons": [
+        "defines 2 route(s)",
+        "imported by 1 file(s)",
+        "imports 2 local file(s)"
+      ]
+    },
+    {
+      "file": "package.json",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    },
+    {
+      "file": "pyproject.toml",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    },
+    {
+      "file": "strix/core/scanner.py",
+      "score": 12,
+      "reasons": [
+        "imported by 2 file(s)",
+        "imports 3 local file(s)"
+      ]
+    },
+    {
+      "file": "strix/models/scan.py",
+      "score": 12,
+      "reasons": [
+        "imported by 4 file(s)"
+      ]
+    },
+    {
+      "file": "strix/services/agent.py",
+      "score": 7,
+      "reasons": [
+        "imported by 1 file(s)",
+        "imports 2 local file(s)"
+      ]
+    },
+    {
+      "file": "strix/tools/fuzzer.py",
+      "score": 5,
+      "reasons": [
+        "imported by 1 file(s)",
+        "imports 1 local file(s)"
+      ]
+    },
+    {
+      "file": "strix/tools/crawler.py",
+      "score": 3,
+      "reasons": [
+        "imported by 1 file(s)"
+      ]
+    }
+  ],
+  "onboarding": [
+    {
+      "step": 1,
+      "title": "Start at the entry point",
+      "file": "strix/main.py",
+      "description": "creates a FastAPI application; uses the conventional main.py filename"
+    },
+    {
+      "step": 2,
+      "title": "Explore API layer",
+      "file": "strix/api/routes.py",
+      "description": "Requests enter the application through these handlers."
+    },
+    {
+      "step": 3,
+      "title": "Explore Services",
+      "file": "strix/services/agent.py",
+      "description": "Business behavior is coordinated in this layer."
+    },
+    {
+      "step": 4,
+      "title": "Explore Domain",
+      "file": "strix/core/scanner.py",
+      "description": "Core concepts and rules live here."
+    },
+    {
+      "step": 5,
+      "title": "Explore Database",
+      "file": "strix/models/scan.py",
+      "description": "Models, schema, and database wiring live here."
+    },
+    {
+      "step": 6,
+      "title": "Read a central file",
+      "file": "package.json",
+      "description": "project configuration"
+    }
+  ],
+  "metrics": {
+    "complexityScore": 4,
+    "localDependencies": 10,
+    "externalDependencies": 5,
+    "dependencyCycles": [],
+    "mostConnectedFiles": [
+      {
+        "file": "strix/core/scanner.py",
+        "connections": 5
+      },
+      {
+        "file": "strix/models/scan.py",
+        "connections": 4
+      },
+      {
+        "file": "strix/api/routes.py",
+        "connections": 3
+      },
+      {
+        "file": "strix/services/agent.py",
+        "connections": 3
+      },
+      {
+        "file": "strix/main.py",
+        "connections": 2
+      },
+      {
+        "file": "strix/tools/fuzzer.py",
+        "connections": 2
+      },
+      {
+        "file": "strix/tools/crawler.py",
+        "connections": 1
+      },
+      {
+        "file": "app/page.tsx",
+        "connections": 0
+      },
+      {
+        "file": "package.json",
+        "connections": 0
+      },
+      {
+        "file": "pyproject.toml",
+        "connections": 0
+      }
+    ],
+    "highCouplingFiles": [],
+    "symbols": 26,
+    "routes": 2,
+    "components": 7,
+    "parseSuccessRate": 0
+  },
+  "diagnostics": [],
+  "metadata": {
+    "analysisMode": "static-typescript",
+    "executedRepositoryCode": false,
+    "limits": {
+      "maxFiles": 10000,
+      "maxFileBytes": 1000000,
+      "maxArchiveBytes": 26214400,
+      "maxTotalExtractedBytes": 104857600
+    },
+    "fileComponents": {
+      "pyproject.toml": "configuration",
+      "package.json": "configuration",
+      "strix/main.py": "other",
+      "strix/api/routes.py": "api",
+      "strix/core/scanner.py": "domain",
+      "strix/services/agent.py": "services",
+      "strix/models/scan.py": "database",
+      "strix/tools/crawler.py": "other",
+      "strix/tools/fuzzer.py": "other",
+      "app/page.tsx": "frontend"
+    },
+    "cache": {
+      "hits": 0,
+      "misses": 10
+    }
+  }
+}

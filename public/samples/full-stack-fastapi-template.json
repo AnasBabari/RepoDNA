@@ -1,0 +1,1308 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-08-21T21:05:04.673Z",
+  "repository": {
+    "name": "full-stack-fastapi-template",
+    "source": "https://github.com/tiangolo/full-stack-fastapi-template",
+    "languages": {
+      "Python": 90.8,
+      "TypeScript": 9.2
+    },
+    "fileCount": 11,
+    "sourceFileCount": 9,
+    "parsedFileCount": 0,
+    "lines": 125,
+    "fingerprint": {
+      "languages": [
+        "Python",
+        "TypeScript"
+      ],
+      "languageFileCounts": {
+        "Python": 8,
+        "TypeScript": 1
+      },
+      "frameworks": [
+        "FastAPI"
+      ],
+      "infrastructure": [],
+      "databases": [
+        "Alembic",
+        "PostgreSQL",
+        "SQLModel"
+      ],
+      "externalSystems": [
+        "Celery"
+      ],
+      "testing": [],
+      "buildTools": [],
+      "tooling": []
+    }
+  },
+  "technologies": [
+    "Alembic",
+    "Celery",
+    "FastAPI",
+    "PostgreSQL",
+    "React",
+    "SQLModel"
+  ],
+  "files": [
+    {
+      "id": "file:pyproject.toml",
+      "path": "pyproject.toml",
+      "language": "Configuration",
+      "lines": 5,
+      "bytes": 400,
+      "hash": "fst_p1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:frontend/package.json",
+      "path": "frontend/package.json",
+      "language": "Configuration",
+      "lines": 1,
+      "bytes": 400,
+      "hash": "fst_p2",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:backend/app/main.py",
+      "path": "backend/app/main.py",
+      "language": "Python",
+      "lines": 8,
+      "bytes": 900,
+      "hash": "fst_1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:backend/app/api/main.py",
+      "path": "backend/app/api/main.py",
+      "language": "Python",
+      "lines": 9,
+      "bytes": 700,
+      "hash": "fst_2",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:backend/app/api/routes/users.py",
+      "path": "backend/app/api/routes/users.py",
+      "language": "Python",
+      "lines": 15,
+      "bytes": 1100,
+      "hash": "fst_3",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:backend/app/api/routes/items.py",
+      "path": "backend/app/api/routes/items.py",
+      "language": "Python",
+      "lines": 15,
+      "bytes": 900,
+      "hash": "fst_4",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:backend/app/models/user.py",
+      "path": "backend/app/models/user.py",
+      "language": "Python",
+      "lines": 20,
+      "bytes": 700,
+      "hash": "fst_5",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:backend/app/models/item.py",
+      "path": "backend/app/models/item.py",
+      "language": "Python",
+      "lines": 19,
+      "bytes": 600,
+      "hash": "fst_6",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:backend/app/crud/crud_user.py",
+      "path": "backend/app/crud/crud_user.py",
+      "language": "Python",
+      "lines": 11,
+      "bytes": 700,
+      "hash": "fst_7",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:backend/app/crud/crud_item.py",
+      "path": "backend/app/crud/crud_item.py",
+      "language": "Python",
+      "lines": 11,
+      "bytes": 700,
+      "hash": "fst_8",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:frontend/src/App.tsx",
+      "path": "frontend/src/App.tsx",
+      "language": "TypeScript",
+      "lines": 11,
+      "bytes": 600,
+      "hash": "fst_9",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    }
+  ],
+  "symbols": [
+    {
+      "id": "backend/app/main.py",
+      "type": "module",
+      "name": "main.py",
+      "file": "backend/app/main.py",
+      "line": 1,
+      "end_line": 8,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/api/main.py",
+      "type": "module",
+      "name": "main.py",
+      "file": "backend/app/api/main.py",
+      "line": 1,
+      "end_line": 9,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/api/routes/users.py",
+      "type": "module",
+      "name": "users.py",
+      "file": "backend/app/api/routes/users.py",
+      "line": 1,
+      "end_line": 15,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/api/routes/users.py::read_users",
+      "type": "function",
+      "name": "read_users",
+      "file": "backend/app/api/routes/users.py",
+      "line": 9,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/api/routes/users.py::create_user",
+      "type": "function",
+      "name": "create_user",
+      "file": "backend/app/api/routes/users.py",
+      "line": 13,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/api/routes/items.py",
+      "type": "module",
+      "name": "items.py",
+      "file": "backend/app/api/routes/items.py",
+      "line": 1,
+      "end_line": 15,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/api/routes/items.py::read_items",
+      "type": "function",
+      "name": "read_items",
+      "file": "backend/app/api/routes/items.py",
+      "line": 9,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/api/routes/items.py::create_item",
+      "type": "function",
+      "name": "create_item",
+      "file": "backend/app/api/routes/items.py",
+      "line": 13,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/models/user.py",
+      "type": "module",
+      "name": "user.py",
+      "file": "backend/app/models/user.py",
+      "line": 1,
+      "end_line": 20,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/models/user.py::User",
+      "type": "database_model",
+      "name": "User",
+      "file": "backend/app/models/user.py",
+      "line": 5,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "inherits from SQLModel"
+      ]
+    },
+    {
+      "id": "backend/app/models/user.py::UserCreate",
+      "type": "database_model",
+      "name": "UserCreate",
+      "file": "backend/app/models/user.py",
+      "line": 12,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "inherits from SQLModel"
+      ]
+    },
+    {
+      "id": "backend/app/models/user.py::UserPublic",
+      "type": "database_model",
+      "name": "UserPublic",
+      "file": "backend/app/models/user.py",
+      "line": 16,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "inherits from SQLModel"
+      ]
+    },
+    {
+      "id": "backend/app/models/item.py",
+      "type": "module",
+      "name": "item.py",
+      "file": "backend/app/models/item.py",
+      "line": 1,
+      "end_line": 19,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/models/item.py::Item",
+      "type": "database_model",
+      "name": "Item",
+      "file": "backend/app/models/item.py",
+      "line": 5,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "inherits from SQLModel"
+      ]
+    },
+    {
+      "id": "backend/app/models/item.py::ItemCreate",
+      "type": "database_model",
+      "name": "ItemCreate",
+      "file": "backend/app/models/item.py",
+      "line": 11,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "inherits from SQLModel"
+      ]
+    },
+    {
+      "id": "backend/app/models/item.py::ItemPublic",
+      "type": "database_model",
+      "name": "ItemPublic",
+      "file": "backend/app/models/item.py",
+      "line": 15,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "inherits from SQLModel"
+      ]
+    },
+    {
+      "id": "backend/app/crud/crud_user.py",
+      "type": "module",
+      "name": "crud_user.py",
+      "file": "backend/app/crud/crud_user.py",
+      "line": 1,
+      "end_line": 11,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/crud/crud_user.py::CRUDUser",
+      "type": "class",
+      "name": "CRUDUser",
+      "file": "backend/app/crud/crud_user.py",
+      "line": 4,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/crud/crud_user.py::CRUDUser::get_multi",
+      "type": "method",
+      "name": "get_multi",
+      "file": "backend/app/crud/crud_user.py",
+      "line": 5,
+      "end_line": null,
+      "parent": "backend/app/crud/crud_user.py::CRUDUser",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/crud/crud_user.py::CRUDUser::create",
+      "type": "method",
+      "name": "create",
+      "file": "backend/app/crud/crud_user.py",
+      "line": 7,
+      "end_line": null,
+      "parent": "backend/app/crud/crud_user.py::CRUDUser",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/crud/crud_item.py",
+      "type": "module",
+      "name": "crud_item.py",
+      "file": "backend/app/crud/crud_item.py",
+      "line": 1,
+      "end_line": 11,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/crud/crud_item.py::CRUDItem",
+      "type": "class",
+      "name": "CRUDItem",
+      "file": "backend/app/crud/crud_item.py",
+      "line": 4,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/crud/crud_item.py::CRUDItem::get_multi",
+      "type": "method",
+      "name": "get_multi",
+      "file": "backend/app/crud/crud_item.py",
+      "line": 5,
+      "end_line": null,
+      "parent": "backend/app/crud/crud_item.py::CRUDItem",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "backend/app/crud/crud_item.py::CRUDItem::create",
+      "type": "method",
+      "name": "create",
+      "file": "backend/app/crud/crud_item.py",
+      "line": 7,
+      "end_line": null,
+      "parent": "backend/app/crud/crud_item.py::CRUDItem",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "frontend/src/App.tsx",
+      "type": "module",
+      "name": "App.tsx",
+      "file": "frontend/src/App.tsx",
+      "line": 1,
+      "end_line": 11,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "frontend/src/App.tsx::App",
+      "type": "component",
+      "name": "App",
+      "file": "frontend/src/App.tsx",
+      "line": 4,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": [
+        "capitalized JSX/TSX function"
+      ]
+    }
+  ],
+  "imports": [
+    {
+      "id": "backend/app/main.py:import:2:fastapi",
+      "source": "backend/app/main.py",
+      "module": "fastapi",
+      "names": [
+        "FastAPI"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/main.py:import:3:app.api.main",
+      "source": "backend/app/main.py",
+      "module": "app.api.main",
+      "names": [
+        "api_router"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/main.py:import:4:app.core.config",
+      "source": "backend/app/main.py",
+      "module": "app.core.config",
+      "names": [
+        "settings"
+      ],
+      "line": 4,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/api/main.py:import:2:fastapi",
+      "source": "backend/app/api/main.py",
+      "module": "fastapi",
+      "names": [
+        "APIRouter"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/api/main.py:import:3:app.api.routes",
+      "source": "backend/app/api/main.py",
+      "module": "app.api.routes",
+      "names": [
+        "items",
+        "users",
+        "login"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/api/routes/users.py:import:2:fastapi",
+      "source": "backend/app/api/routes/users.py",
+      "module": "fastapi",
+      "names": [
+        "APIRouter",
+        "Depends"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/api/routes/users.py:import:3:app.models.user",
+      "source": "backend/app/api/routes/users.py",
+      "module": "app.models.user",
+      "names": [
+        "User",
+        "UserCreate",
+        "UserPublic"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/api/routes/users.py:import:4:app.crud.crud_user",
+      "source": "backend/app/api/routes/users.py",
+      "module": "app.crud.crud_user",
+      "names": [
+        "user_crud"
+      ],
+      "line": 4,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/api/routes/items.py:import:2:fastapi",
+      "source": "backend/app/api/routes/items.py",
+      "module": "fastapi",
+      "names": [
+        "APIRouter",
+        "Depends"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/api/routes/items.py:import:3:app.models.item",
+      "source": "backend/app/api/routes/items.py",
+      "module": "app.models.item",
+      "names": [
+        "Item",
+        "ItemCreate",
+        "ItemPublic"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/api/routes/items.py:import:4:app.crud.crud_item",
+      "source": "backend/app/api/routes/items.py",
+      "module": "app.crud.crud_item",
+      "names": [
+        "item_crud"
+      ],
+      "line": 4,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/models/user.py:import:2:sqlmodel",
+      "source": "backend/app/models/user.py",
+      "module": "sqlmodel",
+      "names": [
+        "Field",
+        "SQLModel"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/models/user.py:import:3:typing",
+      "source": "backend/app/models/user.py",
+      "module": "typing",
+      "names": [
+        "Optional"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/models/item.py:import:2:sqlmodel",
+      "source": "backend/app/models/item.py",
+      "module": "sqlmodel",
+      "names": [
+        "Field",
+        "SQLModel"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/models/item.py:import:3:typing",
+      "source": "backend/app/models/item.py",
+      "module": "typing",
+      "names": [
+        "Optional"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/crud/crud_user.py:import:2:app.models.user",
+      "source": "backend/app/crud/crud_user.py",
+      "module": "app.models.user",
+      "names": [
+        "User",
+        "UserCreate"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "backend/app/crud/crud_item.py:import:2:app.models.item",
+      "source": "backend/app/crud/crud_item.py",
+      "module": "app.models.item",
+      "names": [
+        "Item",
+        "ItemCreate"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "frontend/src/App.tsx:import:2:react",
+      "source": "frontend/src/App.tsx",
+      "module": "react",
+      "names": [
+        "React"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    }
+  ],
+  "calls": [
+    {
+      "id": "backend/app/main.py:call:6:FastAPI",
+      "source": "backend/app/main.py",
+      "callee": "FastAPI",
+      "file": "backend/app/main.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/main.py:call:7:app.include_router",
+      "source": "backend/app/main.py",
+      "callee": "app.include_router",
+      "file": "backend/app/main.py",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/main.py:call:5:APIRouter",
+      "source": "backend/app/api/main.py",
+      "callee": "APIRouter",
+      "file": "backend/app/api/main.py",
+      "line": 5,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/main.py:call:6:api_router.include_router",
+      "source": "backend/app/api/main.py",
+      "callee": "api_router.include_router",
+      "file": "backend/app/api/main.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/main.py:call:7:api_router.include_router",
+      "source": "backend/app/api/main.py",
+      "callee": "api_router.include_router",
+      "file": "backend/app/api/main.py",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/main.py:call:8:api_router.include_router",
+      "source": "backend/app/api/main.py",
+      "callee": "api_router.include_router",
+      "file": "backend/app/api/main.py",
+      "line": 8,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/routes/users.py:call:6:APIRouter",
+      "source": "backend/app/api/routes/users.py",
+      "callee": "APIRouter",
+      "file": "backend/app/api/routes/users.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/routes/users.py::read_users:call:10:user_crud.get_multi",
+      "source": "backend/app/api/routes/users.py::read_users",
+      "callee": "user_crud.get_multi",
+      "file": "backend/app/api/routes/users.py",
+      "line": 10,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/routes/users.py::create_user:call:14:user_crud.create",
+      "source": "backend/app/api/routes/users.py::create_user",
+      "callee": "user_crud.create",
+      "file": "backend/app/api/routes/users.py",
+      "line": 14,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/routes/items.py:call:6:APIRouter",
+      "source": "backend/app/api/routes/items.py",
+      "callee": "APIRouter",
+      "file": "backend/app/api/routes/items.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/routes/items.py::read_items:call:10:item_crud.get_multi",
+      "source": "backend/app/api/routes/items.py::read_items",
+      "callee": "item_crud.get_multi",
+      "file": "backend/app/api/routes/items.py",
+      "line": 10,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/api/routes/items.py::create_item:call:14:item_crud.create",
+      "source": "backend/app/api/routes/items.py::create_item",
+      "callee": "item_crud.create",
+      "file": "backend/app/api/routes/items.py",
+      "line": 14,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/models/user.py::User:call:6:Field",
+      "source": "backend/app/models/user.py::User",
+      "callee": "Field",
+      "file": "backend/app/models/user.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/models/user.py::User:call:7:Field",
+      "source": "backend/app/models/user.py::User",
+      "callee": "Field",
+      "file": "backend/app/models/user.py",
+      "line": 7,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/models/item.py::Item:call:6:Field",
+      "source": "backend/app/models/item.py::Item",
+      "callee": "Field",
+      "file": "backend/app/models/item.py",
+      "line": 6,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/models/item.py::Item:call:9:Field",
+      "source": "backend/app/models/item.py::Item",
+      "callee": "Field",
+      "file": "backend/app/models/item.py",
+      "line": 9,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "backend/app/crud/crud_user.py::CRUDUser::create:call:8:User",
+      "source": "backend/app/crud/crud_user.py::CRUDUser::create",
+      "callee": "User",
+      "file": "backend/app/crud/crud_user.py",
+      "line": 8,
+      "target": "backend/app/models/user.py::User",
+      "confidence": 0.72
+    },
+    {
+      "id": "backend/app/crud/crud_user.py::CRUDUser::create:call:10:CRUDUser",
+      "source": "backend/app/crud/crud_user.py::CRUDUser::create",
+      "callee": "CRUDUser",
+      "file": "backend/app/crud/crud_user.py",
+      "line": 10,
+      "target": "backend/app/crud/crud_user.py::CRUDUser",
+      "confidence": 0.88
+    },
+    {
+      "id": "backend/app/crud/crud_item.py::CRUDItem::create:call:8:Item",
+      "source": "backend/app/crud/crud_item.py::CRUDItem::create",
+      "callee": "Item",
+      "file": "backend/app/crud/crud_item.py",
+      "line": 8,
+      "target": "backend/app/models/item.py::Item",
+      "confidence": 0.72
+    },
+    {
+      "id": "backend/app/crud/crud_item.py::CRUDItem::create:call:10:CRUDItem",
+      "source": "backend/app/crud/crud_item.py::CRUDItem::create",
+      "callee": "CRUDItem",
+      "file": "backend/app/crud/crud_item.py",
+      "line": 10,
+      "target": "backend/app/crud/crud_item.py::CRUDItem",
+      "confidence": 0.88
+    },
+    {
+      "id": "frontend/src/App.tsx::App:call:4:App",
+      "source": "frontend/src/App.tsx::App",
+      "callee": "App",
+      "file": "frontend/src/App.tsx",
+      "line": 4,
+      "target": "frontend/src/App.tsx::App",
+      "confidence": 0.88
+    }
+  ],
+  "routes": [
+    {
+      "id": "route:backend/app/api/routes/users.py:9:GET:/",
+      "method": "GET",
+      "path": "/",
+      "handler": "backend/app/api/routes/users.py::read_users",
+      "file": "backend/app/api/routes/users.py",
+      "line": 9,
+      "framework": "FastAPI",
+      "confidence": 0.98
+    },
+    {
+      "id": "route:backend/app/api/routes/users.py:13:POST:/",
+      "method": "POST",
+      "path": "/",
+      "handler": "backend/app/api/routes/users.py::create_user",
+      "file": "backend/app/api/routes/users.py",
+      "line": 13,
+      "framework": "FastAPI",
+      "confidence": 0.98
+    },
+    {
+      "id": "route:backend/app/api/routes/items.py:9:GET:/",
+      "method": "GET",
+      "path": "/",
+      "handler": "backend/app/api/routes/items.py::read_items",
+      "file": "backend/app/api/routes/items.py",
+      "line": 9,
+      "framework": "FastAPI",
+      "confidence": 0.98
+    },
+    {
+      "id": "route:backend/app/api/routes/items.py:13:POST:/",
+      "method": "POST",
+      "path": "/",
+      "handler": "backend/app/api/routes/items.py::create_item",
+      "file": "backend/app/api/routes/items.py",
+      "line": 13,
+      "framework": "FastAPI",
+      "confidence": 0.98
+    }
+  ],
+  "databases": [
+    {
+      "name": "Alembic",
+      "type": "database",
+      "confidence": 0.72,
+      "evidence": []
+    },
+    {
+      "name": "PostgreSQL",
+      "type": "database",
+      "confidence": 0.72,
+      "evidence": []
+    },
+    {
+      "name": "SQLModel",
+      "type": "database",
+      "confidence": 0.72,
+      "evidence": []
+    }
+  ],
+  "external_systems": [
+    {
+      "name": "Celery",
+      "type": "external_system",
+      "confidence": 0.72,
+      "evidence": []
+    }
+  ],
+  "entrypoints": [
+    {
+      "id": "entrypoint:backend/app/main.py",
+      "file": "backend/app/main.py",
+      "kind": "application",
+      "score": 65,
+      "confidence": 0.8833333333333333,
+      "evidence": [
+        "creates a FastAPI application",
+        "uses the conventional main.py filename"
+      ]
+    },
+    {
+      "id": "entrypoint:backend/app/api/main.py",
+      "file": "backend/app/api/main.py",
+      "kind": "application",
+      "score": 30,
+      "confidence": 0.65,
+      "evidence": [
+        "uses the conventional main.py filename"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow:route:backend/app/api/routes/users.py:9:GET:/",
+      "name": "GET /",
+      "confidence": 0.86,
+      "nodes": [
+        {
+          "id": "route:backend/app/api/routes/users.py:9:GET:/",
+          "type": "route",
+          "label": "GET /",
+          "file": "backend/app/api/routes/users.py",
+          "line": 9
+        },
+        {
+          "id": "backend/app/api/routes/users.py::read_users",
+          "type": "function",
+          "label": "read_users",
+          "file": "backend/app/api/routes/users.py",
+          "line": 9
+        }
+      ],
+      "edges": [
+        {
+          "source": "route:backend/app/api/routes/users.py:9:GET:/",
+          "target": "backend/app/api/routes/users.py::read_users",
+          "type": "handles"
+        }
+      ]
+    },
+    {
+      "id": "flow:route:backend/app/api/routes/users.py:13:POST:/",
+      "name": "POST /",
+      "confidence": 0.86,
+      "nodes": [
+        {
+          "id": "route:backend/app/api/routes/users.py:13:POST:/",
+          "type": "route",
+          "label": "POST /",
+          "file": "backend/app/api/routes/users.py",
+          "line": 13
+        },
+        {
+          "id": "backend/app/api/routes/users.py::create_user",
+          "type": "function",
+          "label": "create_user",
+          "file": "backend/app/api/routes/users.py",
+          "line": 13
+        }
+      ],
+      "edges": [
+        {
+          "source": "route:backend/app/api/routes/users.py:13:POST:/",
+          "target": "backend/app/api/routes/users.py::create_user",
+          "type": "handles"
+        }
+      ]
+    },
+    {
+      "id": "flow:route:backend/app/api/routes/items.py:9:GET:/",
+      "name": "GET /",
+      "confidence": 0.86,
+      "nodes": [
+        {
+          "id": "route:backend/app/api/routes/items.py:9:GET:/",
+          "type": "route",
+          "label": "GET /",
+          "file": "backend/app/api/routes/items.py",
+          "line": 9
+        },
+        {
+          "id": "backend/app/api/routes/items.py::read_items",
+          "type": "function",
+          "label": "read_items",
+          "file": "backend/app/api/routes/items.py",
+          "line": 9
+        }
+      ],
+      "edges": [
+        {
+          "source": "route:backend/app/api/routes/items.py:9:GET:/",
+          "target": "backend/app/api/routes/items.py::read_items",
+          "type": "handles"
+        }
+      ]
+    },
+    {
+      "id": "flow:route:backend/app/api/routes/items.py:13:POST:/",
+      "name": "POST /",
+      "confidence": 0.86,
+      "nodes": [
+        {
+          "id": "route:backend/app/api/routes/items.py:13:POST:/",
+          "type": "route",
+          "label": "POST /",
+          "file": "backend/app/api/routes/items.py",
+          "line": 13
+        },
+        {
+          "id": "backend/app/api/routes/items.py::create_item",
+          "type": "function",
+          "label": "create_item",
+          "file": "backend/app/api/routes/items.py",
+          "line": 13
+        }
+      ],
+      "edges": [
+        {
+          "source": "route:backend/app/api/routes/items.py:13:POST:/",
+          "target": "backend/app/api/routes/items.py::create_item",
+          "type": "handles"
+        }
+      ]
+    }
+  ],
+  "architecture": {
+    "components": [
+      {
+        "id": "frontend",
+        "name": "Frontend",
+        "type": "frontend",
+        "files": [
+          "backend/app/crud/crud_item.py",
+          "backend/app/crud/crud_user.py",
+          "backend/app/main.py",
+          "frontend/package.json",
+          "frontend/src/App.tsx"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "frontend container path",
+          "frontend path or component symbols"
+        ]
+      },
+      {
+        "id": "api",
+        "name": "API layer",
+        "type": "api",
+        "files": [
+          "backend/app/api/main.py",
+          "backend/app/api/routes/items.py",
+          "backend/app/api/routes/users.py"
+        ],
+        "confidence": 0.94,
+        "evidence": [
+          "contains or groups request handlers"
+        ]
+      },
+      {
+        "id": "database",
+        "name": "Database",
+        "type": "database",
+        "files": [
+          "backend/app/models/item.py",
+          "backend/app/models/user.py"
+        ],
+        "confidence": 0.94,
+        "evidence": [
+          "database path or ORM model evidence"
+        ]
+      },
+      {
+        "id": "configuration",
+        "name": "Configuration",
+        "type": "configuration",
+        "files": [
+          "pyproject.toml"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "configuration file"
+        ]
+      }
+    ],
+    "connections": []
+  },
+  "important_files": [
+    {
+      "file": "backend/app/main.py",
+      "score": 65,
+      "reasons": [
+        "entrypoint candidate"
+      ]
+    },
+    {
+      "file": "backend/app/api/main.py",
+      "score": 30,
+      "reasons": [
+        "entrypoint candidate"
+      ]
+    },
+    {
+      "file": "backend/app/api/routes/items.py",
+      "score": 16,
+      "reasons": [
+        "defines 2 route(s)"
+      ]
+    },
+    {
+      "file": "backend/app/api/routes/users.py",
+      "score": 16,
+      "reasons": [
+        "defines 2 route(s)"
+      ]
+    },
+    {
+      "file": "frontend/package.json",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    },
+    {
+      "file": "pyproject.toml",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    }
+  ],
+  "onboarding": [
+    {
+      "step": 1,
+      "title": "Start at the entry point",
+      "file": "backend/app/main.py",
+      "description": "creates a FastAPI application; uses the conventional main.py filename"
+    },
+    {
+      "step": 2,
+      "title": "Explore API layer",
+      "file": "backend/app/api/main.py",
+      "description": "Requests enter the application through these handlers."
+    },
+    {
+      "step": 3,
+      "title": "Explore Database",
+      "file": "backend/app/models/item.py",
+      "description": "Models, schema, and database wiring live here."
+    },
+    {
+      "step": 4,
+      "title": "Read a central file",
+      "file": "backend/app/api/routes/items.py",
+      "description": "defines 2 route(s)"
+    },
+    {
+      "step": 5,
+      "title": "Read a central file",
+      "file": "backend/app/api/routes/users.py",
+      "description": "defines 2 route(s)"
+    },
+    {
+      "step": 6,
+      "title": "Read a central file",
+      "file": "frontend/package.json",
+      "description": "project configuration"
+    }
+  ],
+  "metrics": {
+    "complexityScore": 3,
+    "localDependencies": 0,
+    "externalDependencies": 18,
+    "dependencyCycles": [],
+    "mostConnectedFiles": [
+      {
+        "file": "backend/app/api/main.py",
+        "connections": 0
+      },
+      {
+        "file": "backend/app/api/routes/items.py",
+        "connections": 0
+      },
+      {
+        "file": "backend/app/api/routes/users.py",
+        "connections": 0
+      },
+      {
+        "file": "backend/app/crud/crud_item.py",
+        "connections": 0
+      },
+      {
+        "file": "backend/app/crud/crud_user.py",
+        "connections": 0
+      },
+      {
+        "file": "backend/app/main.py",
+        "connections": 0
+      },
+      {
+        "file": "backend/app/models/item.py",
+        "connections": 0
+      },
+      {
+        "file": "backend/app/models/user.py",
+        "connections": 0
+      },
+      {
+        "file": "frontend/package.json",
+        "connections": 0
+      },
+      {
+        "file": "frontend/src/App.tsx",
+        "connections": 0
+      }
+    ],
+    "highCouplingFiles": [],
+    "symbols": 26,
+    "routes": 4,
+    "components": 4,
+    "parseSuccessRate": 0
+  },
+  "diagnostics": [],
+  "metadata": {
+    "analysisMode": "static-typescript",
+    "executedRepositoryCode": false,
+    "limits": {
+      "maxFiles": 10000,
+      "maxFileBytes": 1000000,
+      "maxArchiveBytes": 26214400,
+      "maxTotalExtractedBytes": 104857600
+    },
+    "fileComponents": {
+      "pyproject.toml": "configuration",
+      "frontend/package.json": "frontend",
+      "backend/app/main.py": "frontend",
+      "backend/app/api/main.py": "api",
+      "backend/app/api/routes/users.py": "api",
+      "backend/app/api/routes/items.py": "api",
+      "backend/app/models/user.py": "database",
+      "backend/app/models/item.py": "database",
+      "backend/app/crud/crud_user.py": "frontend",
+      "backend/app/crud/crud_item.py": "frontend",
+      "frontend/src/App.tsx": "frontend"
+    },
+    "cache": {
+      "hits": 0,
+      "misses": 11
+    }
+  }
+}

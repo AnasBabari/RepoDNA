@@ -223,27 +223,27 @@ function LandingView({
         </form>
 
         <div className="landing-chips-row">
-          <span className="label">Quick samples:</span>
+          <span className="label">Featured repos:</span>
           <button
             className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/pytorch/pytorch')}
+            onClick={() => onAnalyzeGitHub('https://github.com/usestrix/strix')}
             type="button"
           >
-            pytorch/pytorch
+            usestrix/strix
           </button>
           <button
             className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/fastapi/fastapi')}
+            onClick={() => onAnalyzeGitHub('https://github.com/karpathy/nanoGPT')}
             type="button"
           >
-            fastapi/fastapi
+            karpathy/nanoGPT
           </button>
           <button
             className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/expressjs/express')}
+            onClick={() => onAnalyzeGitHub('https://github.com/tiangolo/full-stack-fastapi-template')}
             type="button"
           >
-            expressjs/express
+            tiangolo/full-stack-fastapi-template
           </button>
           <button
             className="chip-button"
@@ -1131,10 +1131,18 @@ function WorkspaceContent() {
   }
 
   const SAMPLE_ARTIFACTS: Record<string, string> = {
+    'https://github.com/usestrix/strix': '/samples/strix.json',
+    'https://github.com/karpathy/nanoGPT': '/samples/nanogpt.json',
+    'https://github.com/karpathy/nanogpt': '/samples/nanogpt.json',
+    'https://github.com/tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
     'https://github.com/pytorch/pytorch': '/samples/pytorch.json',
     'https://github.com/fastapi/fastapi': '/samples/fastapi.json',
     'https://github.com/expressjs/express': '/samples/express.json',
     'https://github.com/yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
+    'usestrix/strix': '/samples/strix.json',
+    'karpathy/nanoGPT': '/samples/nanogpt.json',
+    'karpathy/nanogpt': '/samples/nanogpt.json',
+    'tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
     'pytorch/pytorch': '/samples/pytorch.json',
     'fastapi/fastapi': '/samples/fastapi.json',
     'expressjs/express': '/samples/express.json',

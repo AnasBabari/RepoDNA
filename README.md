@@ -29,7 +29,7 @@ It is deterministic, local-first, and does not use an LLM. The analyzer reads so
 ## Web App & Analysis Options
 
 ### 1. Public GitHub Repositories
-Paste any public GitHub repository link (e.g. `https://github.com/pytorch/pytorch` or `https://github.com/fastapi/fastapi`) to decode architecture layers, execution traces, dependency graphs, and entry points in seconds.
+Paste any public GitHub repository link (e.g. `https://github.com/usestrix/strix`, `https://github.com/karpathy/nanoGPT`, or `https://github.com/tiangolo/full-stack-fastapi-template`) to decode architecture layers, execution traces, dependency graphs, and entry points in seconds.
 
 ### 2. Private Repositories (Beta)
 Sign in with GitHub to access your private repositories:

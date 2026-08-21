@@ -1,0 +1,1009 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-08-21T21:05:04.669Z",
+  "repository": {
+    "name": "nanoGPT",
+    "source": "https://github.com/karpathy/nanoGPT",
+    "languages": {
+      "Python": 100
+    },
+    "fileCount": 4,
+    "sourceFileCount": 3,
+    "parsedFileCount": 0,
+    "lines": 104,
+    "fingerprint": {
+      "languages": [
+        "Python"
+      ],
+      "languageFileCounts": {
+        "Python": 3
+      },
+      "frameworks": [],
+      "infrastructure": [],
+      "databases": [],
+      "externalSystems": [],
+      "testing": [],
+      "buildTools": [],
+      "tooling": []
+    }
+  },
+  "technologies": [],
+  "files": [
+    {
+      "id": "file:requirements.txt",
+      "path": "requirements.txt",
+      "language": "Configuration",
+      "lines": 7,
+      "bytes": 120,
+      "hash": "ng_p1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:model.py",
+      "path": "model.py",
+      "language": "Python",
+      "lines": 72,
+      "bytes": 2400,
+      "hash": "ng_1",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:train.py",
+      "path": "train.py",
+      "language": "Python",
+      "lines": 15,
+      "bytes": 1400,
+      "hash": "ng_2",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    },
+    {
+      "id": "file:sample.py",
+      "path": "sample.py",
+      "language": "Python",
+      "lines": 10,
+      "bytes": 800,
+      "hash": "ng_3",
+      "role": "source",
+      "parsed": false,
+      "error": null
+    }
+  ],
+  "symbols": [
+    {
+      "id": "model.py",
+      "type": "module",
+      "name": "model.py",
+      "file": "model.py",
+      "line": 1,
+      "end_line": 72,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "model.py::GPTConfig",
+      "type": "class",
+      "name": "GPTConfig",
+      "file": "model.py",
+      "line": 7,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::CausalSelfAttention",
+      "type": "class",
+      "name": "CausalSelfAttention",
+      "file": "model.py",
+      "line": 16,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::CausalSelfAttention::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "model.py",
+      "line": 17,
+      "end_line": null,
+      "parent": "model.py::CausalSelfAttention",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::CausalSelfAttention::forward",
+      "type": "method",
+      "name": "forward",
+      "file": "model.py",
+      "line": 26,
+      "end_line": null,
+      "parent": "model.py::CausalSelfAttention",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::MLP",
+      "type": "class",
+      "name": "MLP",
+      "file": "model.py",
+      "line": 32,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::MLP::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "model.py",
+      "line": 33,
+      "end_line": null,
+      "parent": "model.py::MLP",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::MLP::forward",
+      "type": "method",
+      "name": "forward",
+      "file": "model.py",
+      "line": 40,
+      "end_line": null,
+      "parent": "model.py::MLP",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::Block",
+      "type": "class",
+      "name": "Block",
+      "file": "model.py",
+      "line": 43,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::Block::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "model.py",
+      "line": 44,
+      "end_line": null,
+      "parent": "model.py::Block",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::Block::forward",
+      "type": "method",
+      "name": "forward",
+      "file": "model.py",
+      "line": 51,
+      "end_line": null,
+      "parent": "model.py::Block",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::GPT",
+      "type": "class",
+      "name": "GPT",
+      "file": "model.py",
+      "line": 56,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::GPT::__init__",
+      "type": "method",
+      "name": "__init__",
+      "file": "model.py",
+      "line": 57,
+      "end_line": null,
+      "parent": "model.py::GPT",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "model.py::GPT::forward",
+      "type": "method",
+      "name": "forward",
+      "file": "model.py",
+      "line": 69,
+      "end_line": null,
+      "parent": "model.py::GPT",
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "train.py",
+      "type": "module",
+      "name": "train.py",
+      "file": "train.py",
+      "line": 1,
+      "end_line": 15,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "train.py::train_gpt",
+      "type": "function",
+      "name": "train_gpt",
+      "file": "train.py",
+      "line": 7,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    },
+    {
+      "id": "sample.py",
+      "type": "module",
+      "name": "sample.py",
+      "file": "sample.py",
+      "line": 1,
+      "end_line": 10,
+      "parent": null,
+      "exported": false,
+      "evidence": []
+    },
+    {
+      "id": "sample.py::generate_sample",
+      "type": "function",
+      "name": "generate_sample",
+      "file": "sample.py",
+      "line": 5,
+      "end_line": null,
+      "parent": null,
+      "exported": true,
+      "evidence": []
+    }
+  ],
+  "imports": [
+    {
+      "id": "model.py:import:2:math",
+      "source": "model.py",
+      "module": "math",
+      "names": [
+        "math"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "model.py:import:3:torch",
+      "source": "model.py",
+      "module": "torch",
+      "names": [
+        "torch"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "model.py:import:4:torch.nn",
+      "source": "model.py",
+      "module": "torch.nn",
+      "names": [
+        "torch.nn"
+      ],
+      "line": 4,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "model.py:import:5:torch.nn",
+      "source": "model.py",
+      "module": "torch.nn",
+      "names": [
+        "functional"
+      ],
+      "line": 5,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "train.py:import:2:os",
+      "source": "train.py",
+      "module": "os",
+      "names": [
+        "os"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "train.py:import:3:time",
+      "source": "train.py",
+      "module": "time",
+      "names": [
+        "time"
+      ],
+      "line": 3,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "train.py:import:4:torch",
+      "source": "train.py",
+      "module": "torch",
+      "names": [
+        "torch"
+      ],
+      "line": 4,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "train.py:import:5:model",
+      "source": "train.py",
+      "module": "model",
+      "names": [
+        "GPT",
+        "GPTConfig"
+      ],
+      "line": 5,
+      "target": "model.py",
+      "external": false
+    },
+    {
+      "id": "sample.py:import:2:torch",
+      "source": "sample.py",
+      "module": "torch",
+      "names": [
+        "torch"
+      ],
+      "line": 2,
+      "target": null,
+      "external": true
+    },
+    {
+      "id": "sample.py:import:3:model",
+      "source": "sample.py",
+      "module": "model",
+      "names": [
+        "GPT",
+        "GPTConfig"
+      ],
+      "line": 3,
+      "target": "model.py",
+      "external": false
+    }
+  ],
+  "calls": [
+    {
+      "id": "model.py::CausalSelfAttention::__init__:call:18:super",
+      "source": "model.py::CausalSelfAttention::__init__",
+      "callee": "super",
+      "file": "model.py",
+      "line": 18,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::__init__:call:18:__init__",
+      "source": "model.py::CausalSelfAttention::__init__",
+      "callee": "__init__",
+      "file": "model.py",
+      "line": 18,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::__init__:call:19:nn.Linear",
+      "source": "model.py::CausalSelfAttention::__init__",
+      "callee": "nn.Linear",
+      "file": "model.py",
+      "line": 19,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::__init__:call:20:nn.Linear",
+      "source": "model.py::CausalSelfAttention::__init__",
+      "callee": "nn.Linear",
+      "file": "model.py",
+      "line": 20,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::__init__:call:21:nn.Dropout",
+      "source": "model.py::CausalSelfAttention::__init__",
+      "callee": "nn.Dropout",
+      "file": "model.py",
+      "line": 21,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::__init__:call:22:nn.Dropout",
+      "source": "model.py::CausalSelfAttention::__init__",
+      "callee": "nn.Dropout",
+      "file": "model.py",
+      "line": 22,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::forward:call:27:x.size",
+      "source": "model.py::CausalSelfAttention::forward",
+      "callee": "x.size",
+      "file": "model.py",
+      "line": 27,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::forward:call:28:self.c_attn",
+      "source": "model.py::CausalSelfAttention::forward",
+      "callee": "self.c_attn",
+      "file": "model.py",
+      "line": 28,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::forward:call:28:split",
+      "source": "model.py::CausalSelfAttention::forward",
+      "callee": "split",
+      "file": "model.py",
+      "line": 28,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::forward:call:29:torch.nn.functional.scaled_dot_product_attention",
+      "source": "model.py::CausalSelfAttention::forward",
+      "callee": "torch.nn.functional.scaled_dot_product_attention",
+      "file": "model.py",
+      "line": 29,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::forward:call:30:self.resid_dropout",
+      "source": "model.py::CausalSelfAttention::forward",
+      "callee": "self.resid_dropout",
+      "file": "model.py",
+      "line": 30,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::CausalSelfAttention::forward:call:30:self.c_proj",
+      "source": "model.py::CausalSelfAttention::forward",
+      "callee": "self.c_proj",
+      "file": "model.py",
+      "line": 30,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::__init__:call:34:super",
+      "source": "model.py::MLP::__init__",
+      "callee": "super",
+      "file": "model.py",
+      "line": 34,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::__init__:call:34:__init__",
+      "source": "model.py::MLP::__init__",
+      "callee": "__init__",
+      "file": "model.py",
+      "line": 34,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::__init__:call:35:nn.Linear",
+      "source": "model.py::MLP::__init__",
+      "callee": "nn.Linear",
+      "file": "model.py",
+      "line": 35,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::__init__:call:36:nn.GELU",
+      "source": "model.py::MLP::__init__",
+      "callee": "nn.GELU",
+      "file": "model.py",
+      "line": 36,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::__init__:call:37:nn.Linear",
+      "source": "model.py::MLP::__init__",
+      "callee": "nn.Linear",
+      "file": "model.py",
+      "line": 37,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::__init__:call:38:nn.Dropout",
+      "source": "model.py::MLP::__init__",
+      "callee": "nn.Dropout",
+      "file": "model.py",
+      "line": 38,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::forward:call:41:self.dropout",
+      "source": "model.py::MLP::forward",
+      "callee": "self.dropout",
+      "file": "model.py",
+      "line": 41,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::forward:call:41:self.c_proj",
+      "source": "model.py::MLP::forward",
+      "callee": "self.c_proj",
+      "file": "model.py",
+      "line": 41,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::forward:call:41:self.gelu",
+      "source": "model.py::MLP::forward",
+      "callee": "self.gelu",
+      "file": "model.py",
+      "line": 41,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::MLP::forward:call:41:self.c_fc",
+      "source": "model.py::MLP::forward",
+      "callee": "self.c_fc",
+      "file": "model.py",
+      "line": 41,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::Block::__init__:call:45:super",
+      "source": "model.py::Block::__init__",
+      "callee": "super",
+      "file": "model.py",
+      "line": 45,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::Block::__init__:call:45:__init__",
+      "source": "model.py::Block::__init__",
+      "callee": "__init__",
+      "file": "model.py",
+      "line": 45,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::Block::__init__:call:46:nn.LayerNorm",
+      "source": "model.py::Block::__init__",
+      "callee": "nn.LayerNorm",
+      "file": "model.py",
+      "line": 46,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::Block::__init__:call:47:CausalSelfAttention",
+      "source": "model.py::Block::__init__",
+      "callee": "CausalSelfAttention",
+      "file": "model.py",
+      "line": 47,
+      "target": "model.py::CausalSelfAttention",
+      "confidence": 0.88
+    },
+    {
+      "id": "model.py::Block::__init__:call:48:nn.LayerNorm",
+      "source": "model.py::Block::__init__",
+      "callee": "nn.LayerNorm",
+      "file": "model.py",
+      "line": 48,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::Block::__init__:call:49:MLP",
+      "source": "model.py::Block::__init__",
+      "callee": "MLP",
+      "file": "model.py",
+      "line": 49,
+      "target": "model.py::MLP",
+      "confidence": 0.88
+    },
+    {
+      "id": "model.py::Block::forward:call:52:self.attn",
+      "source": "model.py::Block::forward",
+      "callee": "self.attn",
+      "file": "model.py",
+      "line": 52,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::Block::forward:call:52:self.ln_1",
+      "source": "model.py::Block::forward",
+      "callee": "self.ln_1",
+      "file": "model.py",
+      "line": 52,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::Block::forward:call:53:self.mlp",
+      "source": "model.py::Block::forward",
+      "callee": "self.mlp",
+      "file": "model.py",
+      "line": 53,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::Block::forward:call:53:self.ln_2",
+      "source": "model.py::Block::forward",
+      "callee": "self.ln_2",
+      "file": "model.py",
+      "line": 53,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:58:super",
+      "source": "model.py::GPT::__init__",
+      "callee": "super",
+      "file": "model.py",
+      "line": 58,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:58:__init__",
+      "source": "model.py::GPT::__init__",
+      "callee": "__init__",
+      "file": "model.py",
+      "line": 58,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:60:nn.ModuleDict",
+      "source": "model.py::GPT::__init__",
+      "callee": "nn.ModuleDict",
+      "file": "model.py",
+      "line": 60,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:60:dict",
+      "source": "model.py::GPT::__init__",
+      "callee": "dict",
+      "file": "model.py",
+      "line": 60,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:61:nn.Embedding",
+      "source": "model.py::GPT::__init__",
+      "callee": "nn.Embedding",
+      "file": "model.py",
+      "line": 61,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:62:nn.Embedding",
+      "source": "model.py::GPT::__init__",
+      "callee": "nn.Embedding",
+      "file": "model.py",
+      "line": 62,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:63:nn.Dropout",
+      "source": "model.py::GPT::__init__",
+      "callee": "nn.Dropout",
+      "file": "model.py",
+      "line": 63,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:64:nn.ModuleList",
+      "source": "model.py::GPT::__init__",
+      "callee": "nn.ModuleList",
+      "file": "model.py",
+      "line": 64,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:64:Block",
+      "source": "model.py::GPT::__init__",
+      "callee": "Block",
+      "file": "model.py",
+      "line": 64,
+      "target": "model.py::Block",
+      "confidence": 0.88
+    },
+    {
+      "id": "model.py::GPT::__init__:call:64:range",
+      "source": "model.py::GPT::__init__",
+      "callee": "range",
+      "file": "model.py",
+      "line": 64,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:65:nn.LayerNorm",
+      "source": "model.py::GPT::__init__",
+      "callee": "nn.LayerNorm",
+      "file": "model.py",
+      "line": 65,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::__init__:call:67:nn.Linear",
+      "source": "model.py::GPT::__init__",
+      "callee": "nn.Linear",
+      "file": "model.py",
+      "line": 67,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::forward:call:70:self.transformer.wte",
+      "source": "model.py::GPT::forward",
+      "callee": "self.transformer.wte",
+      "file": "model.py",
+      "line": 70,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "model.py::GPT::forward:call:71:self.lm_head",
+      "source": "model.py::GPT::forward",
+      "callee": "self.lm_head",
+      "file": "model.py",
+      "line": 71,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "train.py::train_gpt:call:8:GPTConfig",
+      "source": "train.py::train_gpt",
+      "callee": "GPTConfig",
+      "file": "train.py",
+      "line": 8,
+      "target": "model.py::GPTConfig",
+      "confidence": 0.72
+    },
+    {
+      "id": "train.py::train_gpt:call:9:GPT",
+      "source": "train.py::train_gpt",
+      "callee": "GPT",
+      "file": "train.py",
+      "line": 9,
+      "target": "model.py::GPT",
+      "confidence": 0.72
+    },
+    {
+      "id": "train.py::train_gpt:call:10:torch.optim.AdamW",
+      "source": "train.py::train_gpt",
+      "callee": "torch.optim.AdamW",
+      "file": "train.py",
+      "line": 10,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "train.py::train_gpt:call:10:model.parameters",
+      "source": "train.py::train_gpt",
+      "callee": "model.parameters",
+      "file": "train.py",
+      "line": 10,
+      "target": null,
+      "confidence": 0.55
+    },
+    {
+      "id": "train.py::train_gpt:call:14:train_gpt",
+      "source": "train.py::train_gpt",
+      "callee": "train_gpt",
+      "file": "train.py",
+      "line": 14,
+      "target": "train.py::train_gpt",
+      "confidence": 0.88
+    },
+    {
+      "id": "sample.py::generate_sample:call:6:GPTConfig",
+      "source": "sample.py::generate_sample",
+      "callee": "GPTConfig",
+      "file": "sample.py",
+      "line": 6,
+      "target": "model.py::GPTConfig",
+      "confidence": 0.72
+    },
+    {
+      "id": "sample.py::generate_sample:call:7:GPT",
+      "source": "sample.py::generate_sample",
+      "callee": "GPT",
+      "file": "sample.py",
+      "line": 7,
+      "target": "model.py::GPT",
+      "confidence": 0.72
+    },
+    {
+      "id": "sample.py::generate_sample:call:8:model.eval",
+      "source": "sample.py::generate_sample",
+      "callee": "model.eval",
+      "file": "sample.py",
+      "line": 8,
+      "target": null,
+      "confidence": 0.55
+    }
+  ],
+  "routes": [],
+  "databases": [],
+  "external_systems": [],
+  "entrypoints": [
+    {
+      "id": "entrypoint:train.py",
+      "file": "train.py",
+      "kind": "application",
+      "score": 35,
+      "confidence": 0.6833333333333333,
+      "evidence": [
+        "contains a __main__ execution guard"
+      ]
+    }
+  ],
+  "flows": [],
+  "architecture": {
+    "components": [
+      {
+        "id": "other",
+        "name": "Application core",
+        "type": "other",
+        "files": [
+          "model.py",
+          "requirements.txt",
+          "sample.py",
+          "train.py"
+        ],
+        "confidence": 0.82,
+        "evidence": [
+          "source file outside a recognized layer"
+        ]
+      }
+    ],
+    "connections": []
+  },
+  "important_files": [
+    {
+      "file": "train.py",
+      "score": 37,
+      "reasons": [
+        "entrypoint candidate",
+        "imports 1 local file(s)"
+      ]
+    },
+    {
+      "file": "model.py",
+      "score": 6,
+      "reasons": [
+        "imported by 2 file(s)"
+      ]
+    },
+    {
+      "file": "sample.py",
+      "score": 2,
+      "reasons": [
+        "imports 1 local file(s)"
+      ]
+    }
+  ],
+  "onboarding": [
+    {
+      "step": 1,
+      "title": "Start at the entry point",
+      "file": "train.py",
+      "description": "contains a __main__ execution guard"
+    },
+    {
+      "step": 2,
+      "title": "Read a central file",
+      "file": "model.py",
+      "description": "imported by 2 file(s)"
+    },
+    {
+      "step": 3,
+      "title": "Read a central file",
+      "file": "sample.py",
+      "description": "imports 1 local file(s)"
+    }
+  ],
+  "metrics": {
+    "complexityScore": 2,
+    "localDependencies": 2,
+    "externalDependencies": 8,
+    "dependencyCycles": [],
+    "mostConnectedFiles": [
+      {
+        "file": "model.py",
+        "connections": 2
+      },
+      {
+        "file": "sample.py",
+        "connections": 1
+      },
+      {
+        "file": "train.py",
+        "connections": 1
+      },
+      {
+        "file": "requirements.txt",
+        "connections": 0
+      }
+    ],
+    "highCouplingFiles": [],
+    "symbols": 18,
+    "routes": 0,
+    "components": 1,
+    "parseSuccessRate": 0
+  },
+  "diagnostics": [],
+  "metadata": {
+    "analysisMode": "static-typescript",
+    "executedRepositoryCode": false,
+    "limits": {
+      "maxFiles": 10000,
+      "maxFileBytes": 1000000,
+      "maxArchiveBytes": 26214400,
+      "maxTotalExtractedBytes": 104857600
+    },
+    "fileComponents": {
+      "requirements.txt": "other",
+      "model.py": "other",
+      "train.py": "other",
+      "sample.py": "other"
+    },
+    "cache": {
+      "hits": 0,
+      "misses": 4
+    }
+  }
+}
