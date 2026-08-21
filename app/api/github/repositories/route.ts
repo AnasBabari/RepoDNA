@@ -1,0 +1,181 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import { auth } from '../../../lib/auth';
+
+export const dynamic = 'force-dynamic';
+
+export interface SafeRepositoryItem {
+  id: number;
+  fullName: string;
+  name: string;
+  owner: string;
+  isPrivate: boolean;
+  defaultBranch: string;
+  updatedAt: string;
+  description: string | null;
+  language: string | null;
+  stars: number;
+}
+
+export async function GET(request: NextRequest) {
+  let session = null;
+  let accessToken: string | undefined;
+
+  try {
+    session = await auth();
+    const token = await getToken({
+      req: request,
+      secret: process.env.AUTH_SECRET,
+    });
+    accessToken = (token?.accessToken as string) || (session as unknown as { accessToken?: string })?.accessToken;
+  } catch {}
+
+  if (!session?.user || !accessToken) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'You must be signed in with GitHub to view your private repositories.',
+        },
+      },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const query = searchParams.get('query')?.trim() || '';
+    const perPage = 15;
+
+    let githubUrl: string;
+    if (query) {
+      // Search user's repositories
+      githubUrl = `https://api.github.com/user/repos?sort=updated&direction=desc&per_page=100&affiliation=owner,collaborator,organization_member`;
+    } else {
+      githubUrl = `https://api.github.com/user/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}&affiliation=owner,collaborator,organization_member`;
+    }
+
+    const ghResponse = await fetch(githubUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'RepoDNA-V1.1',
+      },
+    });
+
+    if (ghResponse.status === 401) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'GitHub OAuth token expired or was revoked. Please sign in again.',
+          },
+        },
+        { status: 401 }
+      );
+    }
+
+    if (ghResponse.status === 403) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Access denied by GitHub. If accessing organization repositories, ensure OAuth App access is granted in organization settings.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    if (ghResponse.status === 429) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'RATE_LIMITED',
+            message: 'GitHub API rate limit reached. Please try again in a few minutes.',
+          },
+        },
+        { status: 429 }
+      );
+    }
+
+    if (!ghResponse.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'UPSTREAM_GITHUB_ERROR',
+            message: `GitHub returned status ${ghResponse.status}: ${ghResponse.statusText}`,
+          },
+        },
+        { status: 502 }
+      );
+    }
+
+    const rawRepos = (await ghResponse.json()) as Array<{
+      id: number;
+      full_name: string;
+      name: string;
+      owner: { login: string };
+      private: boolean;
+      default_branch: string;
+      updated_at: string;
+      description: string | null;
+      language: string | null;
+      stargazers_count: number;
+    }>;
+
+    let filtered = rawRepos;
+    if (query) {
+      const qLower = query.toLowerCase();
+      filtered = rawRepos.filter(
+        (r) =>
+          r.name.toLowerCase().includes(qLower) ||
+          r.full_name.toLowerCase().includes(qLower) ||
+          (r.description && r.description.toLowerCase().includes(qLower))
+      );
+      // Slice for pagination when doing client query filtering
+      const startIndex = (page - 1) * perPage;
+      filtered = filtered.slice(startIndex, startIndex + perPage);
+    }
+
+    // Map strictly to safe subset (no sensitive metadata)
+    const repositories: SafeRepositoryItem[] = filtered.map((r) => ({
+      id: r.id,
+      fullName: r.full_name,
+      name: r.name,
+      owner: r.owner.login,
+      isPrivate: r.private,
+      defaultBranch: r.default_branch || 'main',
+      updatedAt: r.updated_at,
+      description: r.description ?? null,
+      language: r.language ?? null,
+      stars: r.stargazers_count || 0,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      page,
+      perPage,
+      hasMore: repositories.length === perPage,
+      repositories,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Network error connecting to GitHub';
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message,
+        },
+      },
+      { status: 503 }
+    );
+  }
+}

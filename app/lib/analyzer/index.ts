@@ -279,8 +279,12 @@ function resolveManifestTarget(manifestPath: string, candidate: string, availabl
   return candidates.find((p) => available.has(p)) ?? null;
 }
 
-export async function analyzeGitHubUrl(url: string, limits?: import('./types').IngestionLimits): Promise<RepoDNAProject> {
-  const discovery = await fetchGitHubRepo(url, limits);
+export async function analyzeGitHubUrl(
+  url: string,
+  limits?: import('./types').IngestionLimits,
+  accessToken?: string
+): Promise<RepoDNAProject> {
+  const discovery = await fetchGitHubRepo(url, limits, accessToken);
   return analyzeRepositoryFiles(discovery);
 }
 

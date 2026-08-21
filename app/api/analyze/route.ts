@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 import { analyzeGitHubUrl } from '../../lib/analyzer';
 import { IngestionError } from '../../lib/analyzer/types';
-import { checkRateLimit } from '../../lib/ratelimit';
+import { auth } from '../../lib/auth';
+import { checkAnalysisRateLimit } from '../../lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +13,7 @@ interface StructuredLog {
   method: string;
   repo: string | null;
   clientIp: string;
+  userType: 'authenticated' | 'public';
   durationMs: number;
   fileCount: number | null;
   status: number;
@@ -59,9 +62,32 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
   const rawClientIp = getClientIp(request);
   const clientIp = maskIp(rawClientIp);
 
-  // 1. Check Rate Limit
+  // Check Authentication
+  let session = null;
+  let accessToken: string | undefined;
   try {
-    const rateLimit = await checkRateLimit(rawClientIp);
+    session = await auth();
+    const token = await getToken({
+      req: request,
+      secret: process.env.AUTH_SECRET,
+    });
+    if (token?.accessToken) {
+      accessToken = token.accessToken as string;
+    }
+  } catch {
+    // Graceful unauthenticated fallback
+  }
+
+  const userId = session?.user?.id;
+  const userType: 'authenticated' | 'public' = userId && userId !== 'anonymous' ? 'authenticated' : 'public';
+
+  // 1. Check Rate Limit (Public 5/10m vs Authenticated 20/10m)
+  try {
+    const rateLimit = await checkAnalysisRateLimit({
+      ip: rawClientIp,
+      userId,
+    });
+
     if (!rateLimit.allowed) {
       const durationMs = Date.now() - startTime;
       logStructured({
@@ -70,6 +96,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
         method,
         repo: url,
         clientIp,
+        userType,
         durationMs,
         fileCount: null,
         status: 429,
@@ -83,7 +110,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
           success: false,
           error: {
             code: 'RATE_LIMITED',
-            message: `Too many repository analysis requests. Please wait ${retryAfter} seconds before trying again.`,
+            message: `Too many repository analysis requests (${rateLimit.quotaType} quota). Please wait ${retryAfter} seconds before trying again.`,
             retryAfter,
           },
         },
@@ -106,6 +133,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       method,
       repo: url,
       clientIp,
+      userType,
       durationMs,
       fileCount: null,
       status: 503,
@@ -134,6 +162,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       method,
       repo: null,
       clientIp,
+      userType,
       durationMs,
       fileCount: null,
       status: 400,
@@ -146,16 +175,16 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
         success: false,
         error: {
           code: 'INVALID_REQUEST',
-          message: 'Missing or empty "url" parameter. Must provide a valid public GitHub repository URL.',
+          message: 'Missing or empty "url" parameter. Must provide a valid public or private GitHub repository URL.',
         },
       },
       { status: 400 }
     );
   }
 
-  // 3. Execute Analysis
+  // 3. Execute Static Analysis
   try {
-    const project = await analyzeGitHubUrl(url.trim());
+    const project = await analyzeGitHubUrl(url.trim(), undefined, accessToken);
     const durationMs = Date.now() - startTime;
 
     logStructured({
@@ -164,6 +193,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       method,
       repo: project.repository.name,
       clientIp,
+      userType,
       durationMs,
       fileCount: project.repository.fileCount,
       status: 200,
@@ -182,6 +212,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
         method,
         repo: url,
         clientIp,
+        userType,
         durationMs,
         fileCount: null,
         status: error.status,
@@ -208,6 +239,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       method,
       repo: url,
       clientIp,
+      userType,
       durationMs,
       fileCount: null,
       status: 500,

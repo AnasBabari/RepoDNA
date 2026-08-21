@@ -201,7 +201,8 @@ export async function extractFromZip(
 
 export async function fetchGitHubRepo(
   urlOrOwnerRepo: string,
-  limits: IngestionLimits = DEFAULT_INGESTION_LIMITS
+  limits: IngestionLimits = DEFAULT_INGESTION_LIMITS,
+  accessToken?: string
 ): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string }> {
   const parsed = parseGitHubUrl(urlOrOwnerRepo);
   if (!parsed) {
@@ -217,27 +218,44 @@ export async function fetchGitHubRepo(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), limits.fetchTimeoutMs);
 
+  const authHeaders: Record<string, string> = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
+    : {};
+
   let response: Response;
   try {
-    // Try codeload zip first
-    const codeloadUrl = `https://codeload.github.com/${owner}/${repo}/zip/HEAD`;
-    response = await fetch(codeloadUrl, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'RepoDNA-V1/1.0',
-      },
-    });
-
-    // Fallback to GitHub API zipball if codeload fails
-    if (!response.ok && response.status !== 404) {
+    if (accessToken) {
+      // For authenticated / private repository requests, use GitHub API zipball endpoint
       const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
       response = await fetch(apiZipUrl, {
         signal: controller.signal,
         headers: {
           'User-Agent': 'RepoDNA-V1/1.0',
           Accept: 'application/vnd.github.v3+json',
+          ...authHeaders,
         },
       });
+    } else {
+      // Try public codeload zip first
+      const codeloadUrl = `https://codeload.github.com/${owner}/${repo}/zip/HEAD`;
+      response = await fetch(codeloadUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'RepoDNA-V1/1.0',
+        },
+      });
+
+      // Fallback to GitHub API zipball if codeload fails
+      if (!response.ok && response.status !== 404) {
+        const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
+        response = await fetch(apiZipUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'RepoDNA-V1/1.0',
+            Accept: 'application/vnd.github.v3+json',
+          },
+        });
+      }
     }
   } catch (err: unknown) {
     clearTimeout(timeoutId);
@@ -260,16 +278,25 @@ export async function fetchGitHubRepo(
   if (response.status === 404) {
     throw new IngestionError(
       'REPO_NOT_FOUND',
-      `Repository "https://github.com/${owner}/${repo}" was not found or is private`,
+      accessToken
+        ? `Repository "${owner}/${repo}" was not found or your GitHub account does not have access.`
+        : `Repository "https://github.com/${owner}/${repo}" was not found or is private. Sign in to analyze private repositories.`,
       404
     );
   }
 
   if (!response.ok) {
-    if (response.status === 403 || response.status === 429) {
+    if (response.status === 403) {
       throw new IngestionError(
         'UPSTREAM_GITHUB_ERROR',
-        `GitHub API rate limit exceeded or access denied (${response.status})`,
+        'GitHub access denied (403). If this is an organization repository, check if OAuth App access is approved in your organization settings.',
+        502
+      );
+    }
+    if (response.status === 429) {
+      throw new IngestionError(
+        'UPSTREAM_GITHUB_ERROR',
+        'GitHub API rate limit exceeded.',
         502
       );
     }

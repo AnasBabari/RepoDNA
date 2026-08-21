@@ -7,15 +7,17 @@ export interface RateLimitResult {
   remaining: number;
   reset: number;
   retryAfter?: number;
+  quotaType: 'public' | 'authenticated';
 }
 
 let redisInstance: Redis | null = null;
-let ratelimitInstance: Ratelimit | null = null;
+let publicRatelimit: Ratelimit | null = null;
+let authRatelimit: Ratelimit | null = null;
 
 // In-memory fallback for local development when Upstash env vars are missing
-const memoryWindow = new Map<string, number[]>();
+const memoryWindows = new Map<string, number[]>();
 
-function getUpstashRatelimit(): Ratelimit | null {
+function getRedis(): Redis | null {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
@@ -23,25 +25,44 @@ function getUpstashRatelimit(): Ratelimit | null {
     return null;
   }
 
-  if (!ratelimitInstance) {
+  if (!redisInstance) {
     redisInstance = new Redis({ url, token });
-    ratelimitInstance = new Ratelimit({
-      redis: redisInstance,
-      limiter: Ratelimit.slidingWindow(5, '10 m'),
-      analytics: true,
-      prefix: 'repodna:ratelimit',
-    });
   }
-
-  return ratelimitInstance;
+  return redisInstance;
 }
 
-function checkMemoryRateLimit(identifier: string): RateLimitResult {
+function getRatelimiter(type: 'public' | 'authenticated'): Ratelimit | null {
+  const redis = getRedis();
+  if (!redis) return null;
+
+  if (type === 'public') {
+    if (!publicRatelimit) {
+      publicRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, '10 m'), // 5 req / 10 min
+        analytics: true,
+        prefix: 'repodna:ratelimit:public',
+      });
+    }
+    return publicRatelimit;
+  }
+
+  if (!authRatelimit) {
+    authRatelimit = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(20, '10 m'), // 20 req / 10 min
+      analytics: true,
+      prefix: 'repodna:ratelimit:auth',
+    });
+  }
+  return authRatelimit;
+}
+
+function checkMemoryRateLimit(identifier: string, limit: number, quotaType: 'public' | 'authenticated'): RateLimitResult {
   const now = Date.now();
   const windowMs = 10 * 60 * 1000; // 10 minutes
-  const limit = 5;
 
-  const timestamps = (memoryWindow.get(identifier) || []).filter((t) => now - t < windowMs);
+  const timestamps = (memoryWindows.get(identifier) || []).filter((t) => now - t < windowMs);
 
   if (timestamps.length >= limit) {
     const oldest = timestamps[0];
@@ -53,26 +74,39 @@ function checkMemoryRateLimit(identifier: string): RateLimitResult {
       remaining: 0,
       reset,
       retryAfter,
+      quotaType,
     };
   }
 
   timestamps.push(now);
-  memoryWindow.set(identifier, timestamps);
+  memoryWindows.set(identifier, timestamps);
 
   return {
     allowed: true,
     limit,
     remaining: limit - timestamps.length,
     reset: now + windowMs,
+    quotaType,
   };
 }
 
-export async function checkRateLimit(ip: string): Promise<RateLimitResult> {
-  const ratelimiter = getUpstashRatelimit();
+export async function checkAnalysisRateLimit({
+  ip,
+  userId,
+}: {
+  ip: string;
+  userId?: string | null;
+}): Promise<RateLimitResult> {
+  const isAuthenticated = Boolean(userId && userId !== 'anonymous');
+  const quotaType = isAuthenticated ? 'authenticated' : 'public';
+  const limit = isAuthenticated ? 20 : 5;
+  const identifier = isAuthenticated ? `user_${userId}` : `ip_${ip}`;
+
+  const ratelimiter = getRatelimiter(quotaType);
 
   if (ratelimiter) {
     try {
-      const result = await ratelimiter.limit(ip);
+      const result = await ratelimiter.limit(identifier);
       const retryAfter = result.success
         ? undefined
         : Math.max(1, Math.ceil((result.reset - Date.now()) / 1000));
@@ -83,6 +117,7 @@ export async function checkRateLimit(ip: string): Promise<RateLimitResult> {
         remaining: result.remaining,
         reset: result.reset,
         retryAfter,
+        quotaType,
       };
     } catch (err) {
       console.error('[RateLimit] Upstash Redis infrastructure failure:', err);
@@ -94,5 +129,10 @@ export async function checkRateLimit(ip: string): Promise<RateLimitResult> {
   }
 
   // Fallback to in-memory window when Upstash is not configured (e.g. dev)
-  return checkMemoryRateLimit(ip);
+  return checkMemoryRateLimit(identifier, limit, quotaType);
+}
+
+// Backwards-compatible public rate limit check
+export async function checkRateLimit(ip: string): Promise<RateLimitResult> {
+  return checkAnalysisRateLimit({ ip });
 }

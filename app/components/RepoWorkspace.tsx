@@ -5,7 +5,20 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { ArchitectureGraph } from './ArchitectureGraph';
+import { ConsentBanner } from './ConsentBanner';
+import { FeedbackModal } from './FeedbackModal';
+import { PrivateRepoPicker } from './PrivateRepoPicker';
 import { analyzeGitHubUrl, analyzeUploadedFiles, analyzeZipBuffer } from '../lib/analyzer';
+import {
+  initAnalytics,
+  identifyUser,
+  trackAnalysisCompleted,
+  trackAnalysisFailed,
+  trackAnalysisIntent,
+  trackArtifactExported,
+  trackFallbackUsed,
+  trackViewChanged,
+} from '../lib/analytics';
 import type {
   ArchitectureComponent,
   FileRecord,
@@ -117,11 +130,15 @@ function LandingView({
   onAnalyzeFolder,
   onAnalyzeZip,
   onLoadDemo,
+  onOpenPrivatePicker,
+  session,
 }: {
   onAnalyzeGitHub: (url: string) => void;
   onAnalyzeFolder: (files: FileList) => void;
   onAnalyzeZip: (file: File) => void;
   onLoadDemo: () => void;
+  onOpenPrivatePicker: () => void;
+  session: { user?: { name?: string; image?: string } } | null;
 }) {
   const [url, setUrl] = useState('');
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -140,9 +157,40 @@ function LandingView({
         <Link className="brand" href="/" aria-label="RepoDNA">
           <span className="brand-mark">R</span>
           <span className="brand-title">RepoDNA</span>
-          <span className="version">WEB v1.0</span>
+          <span className="version">v1.1 BETA</span>
         </Link>
         <div className="flex items-center gap-3">
+          {session?.user ? (
+            <div className="flex items-center gap-2">
+              {session.user.image && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={session.user.image}
+                  alt={session.user.name || 'User avatar'}
+                  style={{ width: '26px', height: '26px', borderRadius: '50%', border: '1px solid var(--cyan-border)' }}
+                />
+              )}
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-bright)' }}>
+                {session.user.name || 'Developer'}
+              </span>
+              <button
+                className="chip-button"
+                onClick={onOpenPrivatePicker}
+                type="button"
+                style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+              >
+                🔒 Your Repos
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/api/auth/signin?callbackUrl=/"
+              className="chip-button"
+              style={{ fontSize: '0.8rem', padding: '4px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span>GitHub</span> Sign In (Beta)
+            </Link>
+          )}
           <button className="chip-button" onClick={onLoadDemo} type="button">
             <span>✨</span> Try Demo Project
           </button>
@@ -178,10 +226,17 @@ function LandingView({
           <span className="label">Quick samples:</span>
           <button
             className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/yusrababari/Twitter-Sentiment-Analysis')}
+            onClick={() => onAnalyzeGitHub('https://github.com/pytorch/pytorch')}
             type="button"
           >
-            yusrababari/Twitter-Sentiment-Analysis
+            pytorch/pytorch
+          </button>
+          <button
+            className="chip-button"
+            onClick={() => onAnalyzeGitHub('https://github.com/fastapi/fastapi')}
+            type="button"
+          >
+            fastapi/fastapi
           </button>
           <button
             className="chip-button"
@@ -200,6 +255,16 @@ function LandingView({
         </div>
 
         <div className="landing-dropzones-grid">
+          <button
+            className="dropzone-card"
+            onClick={onOpenPrivatePicker}
+            type="button"
+          >
+            <span className="icon">🔒</span>
+            <strong>Private Repositories (Beta)</strong>
+            <p>Select from your authorized GitHub private & public repositories</p>
+          </button>
+
           <button
             className="dropzone-card"
             onClick={() => folderInputRef.current?.click()}
@@ -974,7 +1039,42 @@ function AnalyseDialog({
   );
 }
 
+interface UserSession {
+  user?: {
+    id?: string;
+    name?: string;
+    image?: string;
+  };
+}
+
+function useAuthSession() {
+  const [session, setSession] = useState<UserSession | null>(null);
+
+  useEffect(() => {
+    async function loadSession() {
+      try {
+        const res = await fetch('/api/auth/session');
+        if (res.ok) {
+          const data = (await res.json()) as UserSession;
+          if (data && Object.keys(data).length > 0 && data.user) {
+            setSession(data);
+            if (data.user.id) {
+              identifyUser(data.user.id);
+            }
+          }
+        }
+      } catch {
+        setSession(null);
+      }
+    }
+    loadSession();
+  }, []);
+
+  return { session, setSession };
+}
+
 function WorkspaceContent() {
+  const { session, setSession } = useAuthSession();
   const [project, setProject] = useState<RepoDNAProject | null>(null);
   const [analyzingTarget, setAnalyzingTarget] = useState<string | null>(null);
   const [analyzingStep, setAnalyzingStep] = useState(0);
@@ -989,7 +1089,13 @@ function WorkspaceContent() {
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copiedMermaid, setCopiedMermaid] = useState(false);
+  const [privatePickerOpen, setPrivatePickerOpen] = useState(false);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    initAnalytics();
+  }, []);
 
   // Check URL query parameters (e.g. ?repo=https://github.com/owner/repo)
   useEffect(() => {
@@ -997,9 +1103,10 @@ function WorkspaceContent() {
       const params = new URLSearchParams(window.location.search);
       const repoParam = params.get('repo') || params.get('url');
       if (repoParam) {
-        handleAnalyzeGitHub(repoParam);
+        void handleAnalyzeGitHub(repoParam);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1008,15 +1115,24 @@ function WorkspaceContent() {
         event.preventDefault();
         searchInputRef.current?.focus();
       }
-      if (event.key === 'Escape' && dialogOpen) {
-        setDialogOpen(false);
+      if (event.key === 'Escape') {
+        if (dialogOpen) setDialogOpen(false);
+        if (privatePickerOpen) setPrivatePickerOpen(false);
+        if (feedbackModalOpen) setFeedbackModalOpen(false);
       }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dialogOpen]);
+  }, [dialogOpen, privatePickerOpen, feedbackModalOpen]);
+
+  function handleSwitchView(newView: View) {
+    setView(newView);
+    trackViewChanged(newView);
+  }
 
   async function handleAnalyzeGitHub(url: string, forceClientOnly = false) {
+    const startTime = Date.now();
+    trackAnalysisIntent('github_public');
     setAnalyzingTarget(url);
     setAnalyzingStep(0);
     setAnalyzingError(null);
@@ -1063,6 +1179,7 @@ function WorkspaceContent() {
           const errObj = apiData && apiData.error ? apiData.error : null;
           // If rate limited or service unavailable, try in-browser fallback directly
           if (errObj?.code === 'RATE_LIMITED' || errObj?.code === 'RATE_LIMIT_UNAVAILABLE') {
+            trackFallbackUsed(errObj.code === 'RATE_LIMITED' ? 'rate_limited' : 'service_unavailable');
             try {
               analyzedProject = await analyzeGitHubUrl(url);
             } catch (clientErr) {
@@ -1070,14 +1187,17 @@ function WorkspaceContent() {
               const msg = errObj.message || 'Server rate limit reached and client fallback failed.';
               setAnalyzingErrorCode(code);
               setAnalyzingRetryAfter(errObj.retryAfter ?? null);
+              trackAnalysisFailed('github_public', code, 'rate_limit');
               throw new Error(`${msg} (Client fallback error: ${clientErr instanceof Error ? clientErr.message : 'failed'})`);
             }
           } else if (errObj) {
             setAnalyzingErrorCode(errObj.code ?? null);
             setAnalyzingRetryAfter(errObj.retryAfter ?? null);
+            trackAnalysisFailed('github_public', errObj.code || 'UNKNOWN', 'server_error');
             throw new Error(errObj.message || 'Analysis failed on server.');
           } else {
             // General network failure: try in-browser fallback
+            trackFallbackUsed('network_error');
             analyzedProject = await analyzeGitHubUrl(url);
           }
         }
@@ -1101,14 +1221,24 @@ function WorkspaceContent() {
           null
       );
       setSelectedRoute(analyzedProject.routes[0] ?? null);
+
+      trackAnalysisCompleted(
+        'github_public',
+        Date.now() - startTime,
+        analyzedProject.repository.fileCount,
+        session?.user?.id ? 'authenticated' : 'public'
+      );
     } catch (err) {
       clearInterval(stepInterval);
       const message = err instanceof Error ? err.message : 'Could not analyze this repository.';
       setAnalyzingError(message);
+      trackAnalysisFailed('github_public', analyzingErrorCode || 'CLIENT_ERROR', 'ingestion');
     }
   }
 
   async function handleAnalyzeFolder(files: FileList) {
+    const startTime = Date.now();
+    trackAnalysisIntent('local_folder');
     setAnalyzingTarget(`Local directory (${files.length} files)`);
     setAnalyzingStep(1);
     setAnalyzingError(null);
@@ -1126,13 +1256,18 @@ function WorkspaceContent() {
       setSearch('');
       setSelectedComponent(analyzedProject.architecture.components[0] ?? null);
       setSelectedRoute(analyzedProject.routes[0] ?? null);
+
+      trackAnalysisCompleted('local_folder', Date.now() - startTime, analyzedProject.repository.fileCount);
     } catch (err) {
       clearInterval(stepInterval);
       setAnalyzingError(err instanceof Error ? err.message : 'Could not parse this directory.');
+      trackAnalysisFailed('local_folder', 'DIRECTORY_PARSE_ERROR', 'client_local');
     }
   }
 
   async function handleAnalyzeZipOrJson(file: File) {
+    const startTime = Date.now();
+    trackAnalysisIntent('zip_upload');
     setAnalyzingTarget(file.name);
     setAnalyzingStep(1);
     setAnalyzingError(null);
@@ -1157,12 +1292,16 @@ function WorkspaceContent() {
       setView('overview');
       setSelectedComponent(analyzedProject.architecture.components[0] ?? null);
       setSelectedRoute(analyzedProject.routes[0] ?? null);
+
+      trackAnalysisCompleted('zip_upload', Date.now() - startTime, analyzedProject.repository.fileCount);
     } catch (err) {
       setAnalyzingError(err instanceof Error ? err.message : 'Could not process uploaded file.');
+      trackAnalysisFailed('zip_upload', 'ZIP_PROCESS_ERROR', 'client_local');
     }
   }
 
   async function handleLoadDemo() {
+    trackAnalysisIntent('demo');
     setAnalyzingTarget('Demo Project (mixed-basic)');
     setAnalyzingStep(2);
     setAnalyzingError(null);
@@ -1208,6 +1347,7 @@ function WorkspaceContent() {
     const mermaidText = generateMermaid(project);
     await navigator.clipboard.writeText(mermaidText);
     setCopiedMermaid(true);
+    trackArtifactExported('mermaid');
     window.setTimeout(() => setCopiedMermaid(false), 2000);
   }
 
@@ -1220,48 +1360,69 @@ function WorkspaceContent() {
     link.download = `${project.repository.name}-repodna.json`;
     link.click();
     URL.revokeObjectURL(url);
+    trackArtifactExported('json');
   }
 
   // 1. If currently analyzing, show Analyzing Progress Screen
   if (analyzingTarget) {
     return (
-      <AnalyzingView
-        target={analyzingTarget}
-        step={analyzingStep}
-        error={analyzingError}
-        errorCode={analyzingErrorCode}
-        retryAfter={analyzingRetryAfter}
-        onRetry={() => {
-          if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
-            handleAnalyzeGitHub(analyzingTarget);
-          } else {
-            handleLoadDemo();
+      <>
+        <AnalyzingView
+          target={analyzingTarget}
+          step={analyzingStep}
+          error={analyzingError}
+          errorCode={analyzingErrorCode}
+          retryAfter={analyzingRetryAfter}
+          onRetry={() => {
+            if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
+              handleAnalyzeGitHub(analyzingTarget);
+            } else {
+              handleLoadDemo();
+            }
+          }}
+          onClientFallback={
+            analyzingTarget.startsWith('http') || analyzingTarget.includes('/')
+              ? () => handleAnalyzeGitHub(analyzingTarget, true)
+              : undefined
           }
-        }}
-        onClientFallback={
-          analyzingTarget.startsWith('http') || analyzingTarget.includes('/')
-            ? () => handleAnalyzeGitHub(analyzingTarget, true)
-            : undefined
-        }
-        onCancel={() => {
-          setAnalyzingTarget(null);
-          setAnalyzingError(null);
-          setAnalyzingErrorCode(null);
-          setAnalyzingRetryAfter(null);
-        }}
-      />
+          onCancel={() => {
+            setAnalyzingTarget(null);
+            setAnalyzingError(null);
+            setAnalyzingErrorCode(null);
+            setAnalyzingRetryAfter(null);
+          }}
+        />
+        <ConsentBanner />
+      </>
     );
   }
 
   // 2. If no project loaded, show clean Landing View
   if (!project) {
     return (
-      <LandingView
-        onAnalyzeGitHub={handleAnalyzeGitHub}
-        onAnalyzeFolder={handleAnalyzeFolder}
-        onAnalyzeZip={handleAnalyzeZipOrJson}
-        onLoadDemo={handleLoadDemo}
-      />
+      <>
+        <LandingView
+          onAnalyzeGitHub={handleAnalyzeGitHub}
+          onAnalyzeFolder={handleAnalyzeFolder}
+          onAnalyzeZip={handleAnalyzeZipOrJson}
+          onLoadDemo={handleLoadDemo}
+          onOpenPrivatePicker={() => {
+            if (session?.user) {
+              setPrivatePickerOpen(true);
+            } else {
+              window.location.href = '/api/auth/signin?callbackUrl=/';
+            }
+          }}
+          session={session}
+        />
+        <PrivateRepoPicker
+          isOpen={privatePickerOpen}
+          onClose={() => setPrivatePickerOpen(false)}
+          onSelectRepo={(repoUrl) => handleAnalyzeGitHub(repoUrl)}
+          onSignOut={() => setSession(null)}
+        />
+        <ConsentBanner />
+      </>
     );
   }
 
@@ -1272,7 +1433,7 @@ function WorkspaceContent() {
         <Link className="brand" href="/" onClick={(e) => { e.preventDefault(); setProject(null); }} aria-label="RepoDNA overview">
           <span className="brand-mark">R</span>
           <span className="brand-title">RepoDNA</span>
-          <span className="version">WEB v1.0</span>
+          <span className="version">v1.1</span>
         </Link>
         <label className="global-search">
           <span>⌕</span>
@@ -1280,7 +1441,7 @@ function WorkspaceContent() {
             ref={searchInputRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            onFocus={() => setView('files')}
+            onFocus={() => handleSwitchView('files')}
             placeholder="Search files, symbols, routes…"
           />
           <kbd>⌘ K</kbd>
@@ -1289,6 +1450,14 @@ function WorkspaceContent() {
           <span className="status-dot" /> {project.repository.name}
         </div>
         <div className="topbar-actions">
+          <button
+            className="chip-button"
+            onClick={() => setFeedbackModalOpen(true)}
+            type="button"
+            title="Give feedback or request features"
+          >
+            <span>⭐</span> Feedback
+          </button>
           <button className="chip-button" onClick={exportJsonArtifact} type="button" title="Download portable JSON analysis">
             <span>↓</span> JSON
           </button>
@@ -1304,7 +1473,7 @@ function WorkspaceContent() {
           <button
             className={`nav-item ${view === item.id ? 'active' : ''}`}
             key={item.id}
-            onClick={() => setView(item.id)}
+            onClick={() => handleSwitchView(item.id)}
             type="button"
           >
             <span className="nav-index">0{index + 1}</span>
@@ -1379,6 +1548,17 @@ function WorkspaceContent() {
         onAnalyzeUrl={handleAnalyzeGitHub}
         onImportFile={handleAnalyzeZipOrJson}
       />
+      <PrivateRepoPicker
+        isOpen={privatePickerOpen}
+        onClose={() => setPrivatePickerOpen(false)}
+        onSelectRepo={(repoUrl) => handleAnalyzeGitHub(repoUrl)}
+        onSignOut={() => setSession(null)}
+      />
+      <FeedbackModal
+        isOpen={feedbackModalOpen}
+        onClose={() => setFeedbackModalOpen(false)}
+      />
+      <ConsentBanner />
     </main>
   );
 }

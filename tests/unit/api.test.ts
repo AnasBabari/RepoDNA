@@ -45,12 +45,13 @@ describe('/api/analyze Route Handler', () => {
   });
 
   it('returns 429 when rate limit is exceeded', async () => {
-    vi.spyOn(ratelimitModule, 'checkRateLimit').mockResolvedValueOnce({
+    vi.spyOn(ratelimitModule, 'checkAnalysisRateLimit').mockResolvedValueOnce({
       allowed: false,
       limit: 5,
       remaining: 0,
       reset: Date.now() + 60000,
       retryAfter: 60,
+      quotaType: 'public',
     });
 
     const req = new NextRequest('http://localhost:3000/api/analyze', {
@@ -72,7 +73,7 @@ describe('/api/analyze Route Handler', () => {
   });
 
   it('returns 503 when rate limit infrastructure is unavailable', async () => {
-    vi.spyOn(ratelimitModule, 'checkRateLimit').mockRejectedValueOnce(
+    vi.spyOn(ratelimitModule, 'checkAnalysisRateLimit').mockRejectedValueOnce(
       Object.assign(new Error('Rate limit infrastructure unavailable'), { code: 'RATE_LIMIT_UNAVAILABLE' })
     );
 
@@ -93,11 +94,12 @@ describe('/api/analyze Route Handler', () => {
   });
 
   it('handles IngestionError with custom status codes (404, 413, 504)', async () => {
-    vi.spyOn(ratelimitModule, 'checkRateLimit').mockResolvedValue({
+    vi.spyOn(ratelimitModule, 'checkAnalysisRateLimit').mockResolvedValue({
       allowed: true,
       limit: 5,
       remaining: 4,
       reset: Date.now() + 60000,
+      quotaType: 'public',
     });
 
     vi.spyOn(analyzerModule, 'analyzeGitHubUrl').mockRejectedValueOnce(
