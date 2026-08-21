@@ -6,6 +6,16 @@ RepoDNA turns an unfamiliar Python, JavaScript, or TypeScript repository into a 
 
 It is deterministic, local-first, and does not use an LLM. The analyzer reads source as text and never executes repository code.
 
+## Screenshots
+
+### Repository overview
+
+![RepoDNA repository overview](docs/screenshots/overview.png)
+
+### Interactive architecture map
+
+![RepoDNA interactive architecture map](docs/screenshots/architecture.png)
+
 ## What V1 does
 
 - Analyses local repositories and public GitHub URLs.
@@ -143,4 +153,3 @@ V1 intentionally excludes AI chat, private GitHub OAuth, accounts, billing, coll
 ## License
 
 [MIT](LICENSE)
-
