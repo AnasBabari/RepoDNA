@@ -69,6 +69,62 @@ def _impact(args: argparse.Namespace) -> int:
     return 0
 
 
+def _export(args: argparse.Namespace) -> int:
+    project = _load_project(Path(args.project))
+    arch = project.get("architecture", {})
+    components = arch.get("components", [])
+    connections = arch.get("connections", [])
+    fmt = args.format.lower()
+
+    if fmt == "mermaid":
+        lines = ["flowchart TD"]
+        for comp in components:
+            cid = comp["id"].replace("-", "_")
+            cname = comp["name"]
+            cfiles = len(comp.get("files", []))
+            lines.append(f'    {cid}["{cname} ({cfiles} files)"]')
+        for conn in connections:
+            src = conn["source"].replace("-", "_")
+            tgt = conn["target"].replace("-", "_")
+            weight = conn.get("weight", 1)
+            label = f"|{weight}|" if weight > 1 else ""
+            lines.append(f"    {src} -->{label} {tgt}")
+        output = "\n".join(lines) + "\n"
+    elif fmt == "dot":
+        lines = [
+            "digraph Architecture {",
+            '    rankdir=LR;',
+            '    node [shape=box, style="rounded,filled", fillcolor="#0d141a", fontcolor="#ffffff", fontname="Helvetica"];',
+            '    edge [color="#4ce1f5", fontname="Helvetica", fontsize=10];',
+            "",
+        ]
+        for comp in components:
+            cid = comp["id"]
+            cname = comp["name"]
+            cfiles = len(comp.get("files", []))
+            lines.append(f'    "{cid}" [label="{cname}\\n({cfiles} files)"];')
+        lines.append("")
+        for conn in connections:
+            src = conn["source"]
+            tgt = conn["target"]
+            weight = conn.get("weight", 1)
+            label_attr = f' [label="{weight}"]' if weight > 1 else ""
+            lines.append(f'    "{src}" -> "{tgt}"{label_attr};')
+        lines.append("}")
+        output = "\n".join(lines) + "\n"
+    else:
+        output = json.dumps(arch, indent=2) + "\n"
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(output, encoding="utf-8")
+        print(f"Exported architecture to {out_path.resolve()}")
+    else:
+        print(output, end="")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="repodna", description="Understand a repository without executing its code.")
     parser.add_argument("--version", action="version", version=f"RepoDNA {__version__}")
@@ -90,6 +146,13 @@ def build_parser() -> argparse.ArgumentParser:
     impact.add_argument("query")
     impact.add_argument("--project", default=".repodna/project.json")
     impact.set_defaults(handler=_impact)
+
+    export_cmd = subparsers.add_parser("export", help="Export architecture diagram as Mermaid, Graphviz DOT, or JSON")
+    export_cmd.add_argument("--format", choices=["mermaid", "dot", "json"], default="mermaid", help="Output format")
+    export_cmd.add_argument("--project", default=".repodna/project.json", help="Input project JSON path")
+    export_cmd.add_argument("-o", "--output", help="Optional output file path")
+    export_cmd.set_defaults(handler=_export)
+
     return parser
 
 

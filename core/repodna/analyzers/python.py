@@ -12,8 +12,9 @@ HTTP_METHODS = {"get", "post", "put", "patch", "delete", "options", "head", "web
 EXTERNALS = {
     "stripe": "Stripe", "redis": "Redis", "boto3": "AWS", "openai": "OpenAI",
     "anthropic": "Anthropic", "supabase": "Supabase", "firebase_admin": "Firebase",
-    "kafka": "Kafka", "celery": "Celery", "sendgrid": "SendGrid",
-    "resend": "Resend", "twilio": "Twilio", "pymongo": "MongoDB",
+    "kafka": "Kafka", "aiokafka": "Kafka", "celery": "Celery", "pika": "RabbitMQ",
+    "sendgrid": "SendGrid", "resend": "Resend", "twilio": "Twilio", "pymongo": "MongoDB",
+    "motor": "MongoDB", "httpx": "HTTPX", "aiohttp": "aiohttp",
 }
 
 
@@ -47,6 +48,7 @@ class _PythonVisitor(ast.NodeVisitor):
         self.result = result
         self.parents: list[str] = []
         self.symbol_stack: list[str] = []
+        self.router_prefixes: dict[str, str] = {}  # router variable name -> url prefix
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
@@ -84,20 +86,63 @@ class _PythonVisitor(ast.NodeVisitor):
         elif root in {"sqlalchemy"}:
             self.result.frameworks.add("SQLAlchemy")
             self.result.databases.add("SQL database")
+        elif root in {"sqlmodel"}:
+            self.result.frameworks.add("SQLModel")
+            self.result.databases.add("SQL database")
+        elif root in {"tortoise"}:
+            self.result.frameworks.add("Tortoise ORM")
+            self.result.databases.add("SQL database")
+        elif root in {"peewee"}:
+            self.result.frameworks.add("Peewee")
+            self.result.databases.add("SQL database")
+        elif root in {"beanie"}:
+            self.result.frameworks.add("Beanie")
+            self.result.databases.add("MongoDB")
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        # Track APIRouter(prefix="/api/v1") or Blueprint("name", __name__, url_prefix="/api/v1")
+        if isinstance(node.value, ast.Call):
+            call_name = dotted_name(node.value.func).rsplit(".", 1)[-1]
+            if call_name in {"APIRouter", "Blueprint"}:
+                prefix = ""
+                for kw in node.value.keywords:
+                    if kw.arg in {"prefix", "url_prefix"} and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                        prefix = kw.value.value
+                        break
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        self.router_prefixes[target.id] = prefix
+        self.generic_visit(node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         bases = {dotted_name(base) for base in node.bases}
         kind = "class"
         evidence: list[str] = []
-        if any(base.endswith(("Base", "DeclarativeBase", "models.Model")) for base in bases):
-            kind = "database_model"
-            evidence.append("inherits from an ORM model base")
+        if any(base.endswith(("Base", "DeclarativeBase", "models.Model", "Model", "SQLModel", "Document")) for base in bases):
             if any("models.Model" in base for base in bases):
+                kind = "database_model"
+                evidence.append("inherits from Django Model")
                 self.result.frameworks.add("Django")
                 self.result.databases.add("Django ORM")
-            else:
+            elif any("SQLModel" in base for base in bases):
+                kind = "database_model"
+                evidence.append("inherits from SQLModel")
+                self.result.frameworks.add("SQLModel")
+                self.result.databases.add("SQL database")
+            elif any(base.endswith(("Base", "DeclarativeBase")) for base in bases):
+                kind = "database_model"
+                evidence.append("inherits from an ORM model base")
                 self.result.frameworks.add("SQLAlchemy")
                 self.result.databases.add("SQL database")
+            elif any(base.endswith("Document") for base in bases):
+                kind = "database_model"
+                evidence.append("inherits from Beanie/Mongo Document")
+                self.result.databases.add("MongoDB")
+            elif any(base == "Model" or base.endswith(".Model") for base in bases):
+                kind = "database_model"
+                evidence.append("inherits from Model base")
+                self.result.databases.add("SQL database")
+
         start, end = _node_span(node)
         symbol_id = _symbol_id(self.result.file.path, self.parents, node.name)
         self.result.symbols.append(Symbol(
@@ -153,7 +198,10 @@ class _PythonVisitor(ast.NodeVisitor):
             return
         decorator_name = dotted_name(decorator.func)
         method = decorator_name.rsplit(".", 1)[-1].lower()
-        path = literal_string(decorator.args[0]) if decorator.args else None
+        router_var = decorator_name.split(".", 1)[0] if "." in decorator_name else ""
+        prefix = self.router_prefixes.get(router_var, "")
+
+        raw_path = literal_string(decorator.args[0]) if decorator.args else None
         framework = "FastAPI"
         if method == "route":
             framework = "Flask"
@@ -164,13 +212,21 @@ class _PythonVisitor(ast.NodeVisitor):
                     method = ",".join(item for item in methods if item) or "GET"
         elif method not in HTTP_METHODS:
             return
-        if path is None:
+        if raw_path is None:
             return
+
+        if prefix:
+            clean_prefix = "/" + prefix.strip("/")
+            clean_sub = "/" + raw_path.strip("/") if raw_path.strip("/") else ""
+            full_path = f"{clean_prefix}{clean_sub}"
+        else:
+            full_path = "/" + raw_path.lstrip("/") if not raw_path.startswith("/") else raw_path
+
         self.result.frameworks.add(framework)
         self.result.routes.append(Route(
-            id=f"route:{self.result.file.path}:{function.lineno}:{method.upper()}:{path}",
+            id=f"route:{self.result.file.path}:{function.lineno}:{method.upper()}:{full_path}",
             method=method.upper(),
-            path=path,
+            path=full_path,
             handler=handler_id,
             file=self.result.file.path,
             line=function.lineno,

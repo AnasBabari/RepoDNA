@@ -10,13 +10,17 @@ It is deterministic, local-first, and does not use an LLM. The analyzer reads so
 
 ## Screenshots
 
-### Repository overview
-
+### Repository Overview
 ![RepoDNA repository overview](docs/screenshots/overview.png)
 
-### Interactive architecture map
-
+### Interactive Architecture Map
 ![RepoDNA interactive architecture map](docs/screenshots/architecture.png)
+
+### Route Execution Tracing
+![RepoDNA route execution tracing](docs/screenshots/routes-trace.png)
+
+### Change Impact & Dependencies
+![RepoDNA change impact and dependencies](docs/screenshots/dependencies.png)
 
 ## What V1 does
 

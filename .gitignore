@@ -11,10 +11,11 @@
 # testing
 /coverage
 
-# next.js
+# next.js & vite
 /.next/
 /.vinext/
 /out/
+next-env.d.ts
 
 # misc
 .DS_Store
@@ -31,8 +32,19 @@ yarn-error.log*
 
 # deployment and generated files
 .vercel
-next-env.d.ts
 /dist/
 /.wrangler/
 /outputs/
 /work/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# RepoDNA local cache
+public/cache.json
+.repodna/

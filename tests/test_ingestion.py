@@ -21,6 +21,23 @@ class IngestionTests(unittest.TestCase):
             self.assertEqual([file.relative_path for file in result.files], ["visible.py"])
             self.assertIn("file_size_limit", {item["reason"] for item in result.skipped})
 
+    def test_honours_nested_gitignore(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "packages" / "ui").mkdir(parents=True)
+            (root / "packages" / "ui" / ".gitignore").write_text("dist/\n*.cache\n", encoding="utf-8")
+            (root / "packages" / "ui" / "dist").mkdir(parents=True)
+            (root / "packages" / "ui" / "dist" / "index.js").write_text("built", encoding="utf-8")
+            (root / "packages" / "ui" / "temp.cache").write_text("cache", encoding="utf-8")
+            (root / "packages" / "ui" / "src").mkdir(parents=True)
+            (root / "packages" / "ui" / "src" / "index.ts").write_text("export const UI = true;", encoding="utf-8")
+
+            result = discover_local(root)
+            paths = [file.relative_path for file in result.files]
+            self.assertIn("packages/ui/src/index.ts", paths)
+            self.assertNotIn("packages/ui/dist/index.js", paths)
+            self.assertNotIn("packages/ui/temp.cache", paths)
+
     def test_validates_public_github_urls(self) -> None:
         self.assertEqual(parse_github_url("https://github.com/openai/openai-python"), ("openai", "openai-python"))
         with self.assertRaises(IngestionError):

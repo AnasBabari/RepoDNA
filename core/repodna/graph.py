@@ -49,18 +49,47 @@ def _normalize(path: PurePosixPath) -> str:
     return "/".join(parts)
 
 
-def _resolve_python(edge: ImportEdge, available: set[str]) -> str | None:
+def _detect_package_roots(available: set[str]) -> list[str]:
+    """Detect package roots like src, lib, backend, or directories with __init__.py."""
+    roots: set[str] = set()
+    for path in available:
+        pure = PurePosixPath(path)
+        if pure.name == "__init__.py" and len(pure.parts) > 1:
+            roots.add(pure.parts[0])
+            if len(pure.parts) > 2 and pure.parts[0] in {"src", "lib", "packages"}:
+                roots.add(f"{pure.parts[0]}/{pure.parts[1]}")
+        elif pure.parts and pure.parts[0] in {"src", "lib"}:
+            roots.add(pure.parts[0])
+    return sorted(roots, key=lambda r: len(r.split("/")), reverse=True)
+
+
+def _resolve_python(
+    edge: ImportEdge,
+    available: set[str],
+    package_roots: list[str] | None = None,
+) -> str | None:
     source_parent = PurePosixPath(edge.source).parent
     module = edge.module
     leading = len(module) - len(module.lstrip("."))
     module_parts = [part for part in module.lstrip(".").split(".") if part]
+
     if leading:
         base = source_parent
         for _ in range(max(0, leading - 1)):
             base = base.parent
         stem = PurePosixPath(base, *module_parts)
-    else:
-        stem = PurePosixPath(*module_parts)
+        candidates = [
+            f"{_normalize(stem)}.py",
+            f"{_normalize(stem)}/__init__.py",
+            f"{_normalize(stem)}.pyi",
+        ]
+        for name in edge.names:
+            child = PurePosixPath(stem, name)
+            candidates.extend([f"{_normalize(child)}.py", f"{_normalize(child)}/__init__.py"])
+        return next((c for c in candidates if c in available), None)
+
+    # Absolute import: check root-level first
+    stem = PurePosixPath(*module_parts)
     candidates = [
         f"{_normalize(stem)}.py",
         f"{_normalize(stem)}/__init__.py",
@@ -69,71 +98,154 @@ def _resolve_python(edge: ImportEdge, available: set[str]) -> str | None:
     for name in edge.names:
         child = PurePosixPath(stem, name)
         candidates.extend([f"{_normalize(child)}.py", f"{_normalize(child)}/__init__.py"])
-    return next((candidate for candidate in candidates if candidate in available), None)
+    match = next((c for c in candidates if c in available), None)
+    if match:
+        return match
+
+    # Check detected package roots (e.g. src/mypkg -> mypkg)
+    if package_roots:
+        for root in package_roots:
+            rooted_stem = PurePosixPath(root, *module_parts)
+            rooted_candidates = [
+                f"{_normalize(rooted_stem)}.py",
+                f"{_normalize(rooted_stem)}/__init__.py",
+                f"{_normalize(rooted_stem)}.pyi",
+            ]
+            for name in edge.names:
+                child = PurePosixPath(rooted_stem, name)
+                rooted_candidates.extend([f"{_normalize(child)}.py", f"{_normalize(child)}/__init__.py"])
+            match = next((c for c in rooted_candidates if c in available), None)
+            if match:
+                return match
+
+    return None
 
 
-def _resolve_javascript(edge: ImportEdge, available: set[str]) -> str | None:
-    if not edge.module.startswith("."):
-        return None
-    stem = PurePosixPath(PurePosixPath(edge.source).parent, edge.module)
-    normalized = _normalize(stem)
+def _resolve_javascript(
+    edge: ImportEdge,
+    available: set[str],
+    path_aliases: dict[str, str] | None = None,
+) -> str | None:
     extensions = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json")
-    candidates = [normalized, *(normalized + extension for extension in extensions)]
-    candidates.extend(f"{normalized}/index{extension}" for extension in extensions)
-    return next((candidate for candidate in candidates if candidate in available), None)
+    module = edge.module
+
+    # 1. Relative imports
+    if module.startswith("."):
+        stem = PurePosixPath(PurePosixPath(edge.source).parent, module)
+        normalized = _normalize(stem)
+        candidates = [normalized, *(normalized + ext for ext in extensions)]
+        candidates.extend(f"{normalized}/index{ext}" for ext in extensions)
+        return next((c for c in candidates if c in available), None)
+
+    # 2. Path aliases (from tsconfig.json / jsconfig.json)
+    if path_aliases:
+        for prefix, dest in path_aliases.items():
+            if prefix and (module == prefix or module.startswith(prefix + "/")):
+                subpath = module[len(prefix):].lstrip("/")
+                stem = PurePosixPath(dest, subpath) if dest else PurePosixPath(subpath)
+                normalized = _normalize(stem)
+                candidates = [normalized, *(normalized + ext for ext in extensions)]
+                candidates.extend(f"{normalized}/index{ext}" for ext in extensions)
+                match = next((c for c in candidates if c in available), None)
+                if match:
+                    return match
+
+    return None
 
 
-def resolve_imports(imports: list[ImportEdge], files: list[FileRecord]) -> None:
+def resolve_imports(
+    imports: list[ImportEdge],
+    files: list[FileRecord],
+    path_aliases: dict[str, str] | None = None,
+) -> None:
     available = {file.path for file in files}
+    package_roots = _detect_package_roots(available)
+
     for edge in imports:
         if edge.source.endswith((".py", ".pyi")):
-            edge.target = _resolve_python(edge, available)
+            edge.target = _resolve_python(edge, available, package_roots)
             edge.external = edge.target is None and not edge.module.startswith(".")
         else:
-            edge.target = _resolve_javascript(edge, available)
+            edge.target = _resolve_javascript(edge, available, path_aliases)
             edge.external = edge.target is None and not edge.module.startswith(".")
 
 
-def resolve_calls(calls: list[CallEdge], symbols: list[Symbol]) -> None:
+def resolve_calls(
+    calls: list[CallEdge],
+    symbols: list[Symbol],
+    imports: list[ImportEdge] | None = None,
+) -> None:
     by_name: dict[str, list[Symbol]] = defaultdict(list)
+    by_file_and_name: dict[tuple[str, str], list[Symbol]] = defaultdict(list)
     for symbol in symbols:
         if symbol.type != "module":
             by_name[symbol.name].append(symbol)
+            by_file_and_name[(symbol.file, symbol.name)].append(symbol)
+
+    # Build file-to-imported-target-files map
+    imported_targets_by_file: dict[str, set[str]] = defaultdict(set)
+    if imports:
+        for edge in imports:
+            if edge.target:
+                imported_targets_by_file[edge.source].add(edge.target)
+
     for edge in calls:
-        name = edge.callee.rsplit(".", 1)[-1]
+        callee = edge.callee
+        name = callee.rsplit(".", 1)[-1]
+
+        # 1. Check if callee is imported from another file
+        if "." in callee and edge.file in imported_targets_by_file:
+            qualifier = callee.split(".", 1)[0]
+            for target_file in imported_targets_by_file[edge.file]:
+                # Look for qualifier::name or direct symbol name in target file
+                matched_in_target = by_file_and_name.get((target_file, name), [])
+                if not matched_in_target:
+                    # Check if qualifier matches class or namespace
+                    matched_in_target = [s for s in symbols if s.file == target_file and s.name == name]
+                if len(matched_in_target) == 1:
+                    edge.target = matched_in_target[0].id
+                    edge.confidence = 0.92
+                    break
+            if edge.target:
+                continue
+
+        # 2. Local same-file match
+        same_file = by_file_and_name.get((edge.file, name), [])
+        if len(same_file) == 1:
+            edge.target = same_file[0].id
+            edge.confidence = 0.88
+            continue
+
+        # 3. Global unambiguous match
         matches = by_name.get(name, [])
         if len(matches) == 1:
             edge.target = matches[0].id
             edge.confidence = 0.82 if "." in edge.callee else 0.72
-        elif matches:
-            same_file = [symbol for symbol in matches if symbol.file == edge.file]
-            if len(same_file) == 1:
-                edge.target = same_file[0].id
-                edge.confidence = 0.76
 
 
 def classify_file(path: str, route_files: set[str], symbol_types: set[str]) -> tuple[str, list[str]]:
     lowered = path.lower()
     parts = set(PurePosixPath(lowered).parts)
     evidence: list[str] = []
-    if "tests" in parts or "test" in parts or lowered.endswith((".test.ts", ".test.tsx", "_test.py", "test.py")):
+
+    if "tests" in parts or "test" in parts or lowered.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx", "_test.py", "test.py")):
         return "tests", ["test path or filename"]
     if path in route_files or parts.intersection({"api", "routes", "routers", "controllers", "endpoints"}):
         evidence.append("contains or groups request handlers")
         return "api", evidence
-    if parts.intersection({"frontend", "client", "components", "pages", "views", "ui"}) or "component" in symbol_types:
+    if parts.intersection({"frontend", "client", "components", "pages", "views", "ui", "app"}) or "component" in symbol_types:
         return "frontend", ["frontend path or component symbols"]
     if parts.intersection({"services", "service", "usecases", "use_cases"}):
         return "services", ["service or use-case path"]
     if parts.intersection({"repositories", "repository", "dao"}):
         return "repositories", ["repository or DAO path"]
-    if parts.intersection({"models", "database", "db", "migrations", "schema"}) or "database_model" in symbol_types:
+    if parts.intersection({"models", "database", "db", "migrations", "schema", "entities"}) or "database_model" in symbol_types:
         return "database", ["database path or ORM model evidence"]
     if parts.intersection({"workers", "worker", "jobs", "tasks", "queues"}):
         return "workers", ["worker, job, or queue path"]
-    if parts.intersection({"domain", "entities", "core"}):
+    if parts.intersection({"domain", "core"}):
         return "domain", ["domain or core path"]
-    if parts.intersection({"infra", "infrastructure", ".github"}) or PurePosixPath(path).name in {"Dockerfile", "docker-compose.yml", "compose.yml"}:
+    if parts.intersection({"infra", "infrastructure", ".github", "deploy"}) or PurePosixPath(path).name in {"Dockerfile", "docker-compose.yml", "compose.yml"}:
         return "infrastructure", ["infrastructure manifest or path"]
     if PurePosixPath(path).suffix.lower() in {".json", ".toml", ".yaml", ".yml", ".ini", ".cfg"}:
         return "configuration", ["configuration file"]
@@ -150,9 +262,11 @@ def build_architecture(
     symbol_types_by_file: dict[str, set[str]] = defaultdict(set)
     for symbol in symbols:
         symbol_types_by_file[symbol.file].add(symbol.type)
+
     groups: dict[str, list[str]] = defaultdict(list)
     evidence: dict[str, set[str]] = defaultdict(set)
     file_component: dict[str, str] = {}
+
     for file in files:
         component, reasons = classify_file(file.path, route_files, symbol_types_by_file[file.path])
         groups[component].append(file.path)
@@ -182,6 +296,7 @@ def build_architecture(
         target = file_component.get(edge.target)
         if source and target and source != target:
             connection_counts[(source, target)] += 1
+
     connections = [
         ArchitectureConnection(
             id=f"component:{source}:{target}",
@@ -192,6 +307,7 @@ def build_architecture(
         )
         for (source, target), weight in sorted(connection_counts.items())
     ]
+
     return {
         "components": [component.__dict__ if hasattr(component, "__dict__") else {
             "id": component.id, "name": component.name, "type": component.type,
@@ -208,8 +324,9 @@ def rank_entrypoints(files: list[FileRecord], partials: list[PartialAnalysis]) -
     evidence_by_file: dict[str, list[str]] = defaultdict(list)
     for partial in partials:
         evidence_by_file[partial.file.path].extend(partial.entrypoint_evidence)
+
     conventional = {
-        "main.py": 30, "__main__.py": 35, "app.py": 24, "server.py": 25,
+        "main.py": 30, "__main__.py": 35, "app.py": 24, "server.py": 25, "wsgi.py": 20, "asgi.py": 22,
         "index.js": 22, "index.ts": 22, "server.js": 28, "server.ts": 28,
         "main.js": 24, "main.ts": 24, "main.tsx": 26,
     }
@@ -237,17 +354,21 @@ def build_flows(routes: list[Route], calls: list[CallEdge], symbols: list[Symbol
     for call in calls:
         if call.target:
             outgoing[call.source].append(call)
+
     symbol_by_id = {symbol.id: symbol for symbol in symbols}
     flows: list[dict[str, object]] = []
+
     for route in routes:
         nodes = [{"id": route.id, "type": "route", "label": f"{route.method} {route.path}", "file": route.file, "line": route.line}]
         edges: list[dict[str, str]] = []
         visited = {route.handler}
         queue: deque[tuple[str, int]] = deque([(route.handler, 0)])
+
         handler_symbol = symbol_by_id.get(route.handler)
         if handler_symbol:
             nodes.append({"id": handler_symbol.id, "type": handler_symbol.type, "label": handler_symbol.name, "file": handler_symbol.file, "line": handler_symbol.line})
             edges.append({"source": route.id, "target": handler_symbol.id, "type": "handles"})
+
         while queue and len(nodes) < limit:
             source, depth = queue.popleft()
             if depth >= 5:
@@ -263,6 +384,7 @@ def build_flows(routes: list[Route], calls: list[CallEdge], symbols: list[Symbol
                     queue.append((target.id, depth + 1))
                 if len(nodes) >= limit:
                     break
+
         flows.append({
             "id": f"flow:{route.id}",
             "name": f"{route.method} {route.path}",
@@ -317,8 +439,9 @@ def rank_important_files(
     route_count = Counter(route.file for route in routes)
     entry_scores = {entry.file: entry.score for entry in entrypoints}
     ranked: list[dict[str, object]] = []
+
     for file in files:
-        config_weight = 12 if PurePosixPath(file.path).name in {"package.json", "pyproject.toml", "Dockerfile"} else 0
+        config_weight = 12 if PurePosixPath(file.path).name in {"package.json", "pyproject.toml", "Dockerfile", "tsconfig.json"} else 0
         score = inbound[file.path] * 3 + outbound[file.path] * 2 + route_count[file.path] * 8 + entry_scores.get(file.path, 0) + config_weight
         if score:
             reasons = []
@@ -340,6 +463,7 @@ def onboarding_tour(
     if entrypoints:
         entry = entrypoints[0]
         steps.append({"title": "Start at the entry point", "file": entry.file, "description": "; ".join(entry.evidence[:2])})
+
     descriptions = {
         "api": "Requests enter the application through these handlers.",
         "services": "Business behavior is coordinated in this layer.",
@@ -360,11 +484,13 @@ def onboarding_tour(
             })
         if len(steps) >= 6:
             break
+
     for item in important_files:
         if len(steps) >= 6:
             break
         if not any(step.get("file") == item["file"] for step in steps):
             steps.append({"title": "Read a central file", "file": item["file"], "description": ", ".join(item["reasons"][:2])})
+
     for index, step in enumerate(steps, 1):
         step["step"] = index
     return steps
@@ -405,4 +531,3 @@ def impact_slice(query: str, symbols: Iterable[Symbol], imports: Iterable[Import
         "matches": [{"id": symbol.id, "name": symbol.name, "file": symbol.file, "line": symbol.line, "type": symbol.type} for symbol in matching_symbols],
         "dependents": sorted(dependents),
     }
-

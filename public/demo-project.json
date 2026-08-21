@@ -621,7 +621,7 @@
       "file": "backend/routes/users.py",
       "line": 8,
       "target": "backend/services/users.py::UserService::create",
-      "confidence": 0.82
+      "confidence": 0.92
     },
     {
       "id": "backend/routes/users.py::create_user:call:6:router.post",
@@ -638,8 +638,8 @@
       "callee": "UserService.get",
       "file": "backend/routes/users.py",
       "line": 12,
-      "target": null,
-      "confidence": 0.55
+      "target": "backend/services/users.py::UserService::get",
+      "confidence": 0.92
     },
     {
       "id": "backend/routes/users.py::get_user:call:10:router.get",
@@ -647,8 +647,8 @@
       "callee": "router.get",
       "file": "backend/routes/users.py",
       "line": 10,
-      "target": null,
-      "confidence": 0.55
+      "target": "backend/services/users.py::UserService::get",
+      "confidence": 0.92
     },
     {
       "id": "backend/services/users.py::UserService::create:call:6:UserRepository.save",
@@ -657,7 +657,7 @@
       "file": "backend/services/users.py",
       "line": 6,
       "target": "backend/repositories/users.py::UserRepository::save",
-      "confidence": 0.82
+      "confidence": 0.92
     },
     {
       "id": "backend/services/users.py::UserService::get:call:10:UserRepository.get",
@@ -665,8 +665,8 @@
       "callee": "UserRepository.get",
       "file": "backend/services/users.py",
       "line": 10,
-      "target": "backend/services/users.py::UserService::get",
-      "confidence": 0.76
+      "target": "backend/repositories/users.py::UserRepository::get",
+      "confidence": 0.92
     },
     {
       "id": "frontend/App.tsx::App:call:4:App",
@@ -675,7 +675,7 @@
       "file": "frontend/App.tsx",
       "line": 4,
       "target": "frontend/App.tsx::App",
-      "confidence": 0.72
+      "confidence": 0.88
     },
     {
       "id": "frontend/components/UserCard.tsx::UserCard:call:3:UserCard",
@@ -684,7 +684,7 @@
       "file": "frontend/components/UserCard.tsx",
       "line": 3,
       "target": "frontend/components/UserCard.tsx::UserCard",
-      "confidence": 0.72
+      "confidence": 0.88
     },
     {
       "id": "server/index.ts::checkout:call:7:checkout",
@@ -693,7 +693,7 @@
       "file": "server/index.ts",
       "line": 7,
       "target": "server/index.ts::checkout",
-      "confidence": 0.72
+      "confidence": 0.88
     },
     {
       "id": "server/index.ts::checkout:call:8:stripe.checkout.sessions.create",
@@ -818,7 +818,7 @@
       "score": 61,
       "confidence": 0.8566666666666667,
       "evidence": [
-        "mounts a React application",
+        "mounts a client application",
         "uses the conventional main.tsx filename"
       ]
     }
@@ -906,6 +906,27 @@
           "label": "get_user",
           "file": "backend/routes/users.py",
           "line": 11
+        },
+        {
+          "id": "backend/services/users.py::UserService::get",
+          "type": "method",
+          "label": "get",
+          "file": "backend/services/users.py",
+          "line": 9
+        },
+        {
+          "id": "backend/repositories/users.py::UserRepository::get",
+          "type": "method",
+          "label": "get",
+          "file": "backend/repositories/users.py",
+          "line": 9
+        },
+        {
+          "id": "backend/models/user.py::User",
+          "type": "database_model",
+          "label": "User",
+          "file": "backend/models/user.py",
+          "line": 6
         }
       ],
       "edges": [
@@ -913,6 +934,21 @@
           "source": "route:backend/routes/users.py:11:GET:/users/{user_id}",
           "target": "backend/routes/users.py::get_user",
           "type": "handles"
+        },
+        {
+          "source": "backend/routes/users.py::get_user",
+          "target": "backend/services/users.py::UserService::get",
+          "type": "calls"
+        },
+        {
+          "source": "backend/services/users.py::UserService::get",
+          "target": "backend/repositories/users.py::UserRepository::get",
+          "type": "calls"
+        },
+        {
+          "source": "backend/repositories/users.py::UserRepository::get",
+          "target": "backend/models/user.py::User",
+          "type": "calls"
         }
       ]
     },
@@ -1294,8 +1330,12 @@
       "package.json": "configuration",
       "requirements.txt": "other",
       "server/index.ts": "api"
+    },
+    "cache": {
+      "hits": 0,
+      "misses": 11
     }
   },
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-08-21T14:20:31.018471+00:00"
+  "generatedAt": "2026-08-21T15:19:22.197736+00:00"
 }

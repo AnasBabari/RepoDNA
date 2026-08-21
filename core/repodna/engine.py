@@ -4,13 +4,13 @@ import hashlib
 import json
 import re
 from collections import Counter, defaultdict
-from pathlib import Path
-from pathlib import PurePosixPath
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from repodna.analyzers import JavaScriptAnalyzer, PythonAnalyzer
 from repodna.cache import AnalysisCache
-from repodna.detection import environment_evidence, fingerprint, language_for
+from repodna.detection import environment_evidence, fingerprint, language_for, parse_tsconfig_paths
 from repodna.graph import (
     build_architecture,
     build_flows,
@@ -109,6 +109,14 @@ def _technology_records(
     return records
 
 
+def _analyze_single_file(file: FileRecord, text: str) -> PartialAnalysis:
+    path_obj = PurePosixPath(file.path)
+    analyzer = next((candidate for candidate in ANALYZERS if candidate.supports(path_obj)), None)
+    if analyzer:
+        return analyzer.analyze(file, text)
+    return PartialAnalysis(file=file)
+
+
 def analyze_repository(
     source: str,
     *,
@@ -120,9 +128,11 @@ def analyze_repository(
     cache = AnalysisCache(cache_path)
     with repository_source(source, limits) as discovery:
         fingerprint_data = fingerprint(discovery)
+        path_aliases = parse_tsconfig_paths(discovery)
         files: list[FileRecord] = []
         partials: list[PartialAnalysis] = []
         contents: list[tuple[str, str]] = []
+        manifest_hashes: dict[str, str] = {}
         diagnostics: list[Diagnostic] = [
             Diagnostic(
                 severity="info",
@@ -133,34 +143,54 @@ def analyze_repository(
             for item in discovery.skipped
         ]
 
-        for discovered in discovery.files:
+        to_parse: list[tuple[int, FileRecord, str]] = []
+        partials_slot: list[PartialAnalysis | None] = []
+
+        for index, discovered in enumerate(discovery.files):
             try:
                 text = _read_source(discovered.absolute_path)
             except OSError as exc:
                 diagnostics.append(Diagnostic("warning", "read_error", str(exc), discovered.relative_path))
+                partials_slot.append(None)
                 continue
             file = _file_record(discovered.relative_path, text, discovered.size)
             files.append(file)
             contents.append((discovered.relative_path, text))
+            if PurePosixPath(file.path).name in {"package.json", "pyproject.toml", "requirements.txt", "Pipfile", "tsconfig.json"}:
+                manifest_hashes[file.path] = file.hash
+
             partial = cache.restore(file)
-            if partial is None:
-                analyzer = next((candidate for candidate in ANALYZERS if candidate.supports(discovered.absolute_path)), None)
-                if analyzer:
-                    partial = analyzer.analyze(file, text)
-                else:
-                    partial = PartialAnalysis(file=file)
-            partials.append(partial)
-            if file.error:
-                diagnostics.append(Diagnostic("warning", "parse_error", file.error, file.path))
+            if partial is not None:
+                partials_slot.append(partial)
+            else:
+                partials_slot.append(None)
+                to_parse.append((index, file, text))
+
+        # Parse uncached files concurrently if count is non-trivial
+        if len(to_parse) > 8:
+            with ThreadPoolExecutor() as executor:
+                futures = [(idx, executor.submit(_analyze_single_file, fl, txt)) for idx, fl, txt in to_parse]
+                for idx, future in futures:
+                    partials_slot[idx] = future.result()
+        else:
+            for idx, fl, txt in to_parse:
+                partials_slot[idx] = _analyze_single_file(fl, txt)
+
+        partials = [p for p in partials_slot if p is not None]
+        for p in partials:
+            if p.file.error:
+                diagnostics.append(Diagnostic("warning", "parse_error", p.file.error, p.file.path))
 
         _apply_manifest_entrypoints(partials, contents)
-        cache.store(partials)
+        cache.store(partials, manifest_hashes)
+
         symbols = [symbol for partial in partials for symbol in partial.symbols]
         imports = [edge for partial in partials for edge in partial.imports]
         calls = [edge for partial in partials for edge in partial.calls]
         routes = [route for partial in partials for route in partial.routes]
-        resolve_imports(imports, files)
-        resolve_calls(calls, symbols)
+
+        resolve_imports(imports, files, path_aliases=path_aliases)
+        resolve_calls(calls, symbols, imports=imports)
 
         entrypoints = rank_entrypoints(files, partials)
         architecture, file_components = build_architecture(files, symbols, imports, routes)
@@ -187,7 +217,7 @@ def analyze_repository(
 
         language_lines = Counter()
         for file in files:
-            if file.language != "Configuration":
+            if file.language not in {"Configuration", "Markdown"}:
                 language_lines[file.language] += file.lines
         total_language_lines = sum(language_lines.values()) or 1
         language_percentages = {

@@ -14,6 +14,7 @@ class AnalysisCache:
     def __init__(self, path: Path | None) -> None:
         self.path = path
         self.entries: dict[str, dict] = {}
+        self.manifest_hashes: dict[str, str] = {}
         self.hits = 0
         self.misses = 0
         if path and path.is_file():
@@ -21,8 +22,10 @@ class AnalysisCache:
                 payload = json.loads(path.read_text(encoding="utf-8"))
                 if payload.get("version") == CACHE_VERSION and isinstance(payload.get("entries"), dict):
                     self.entries = payload["entries"]
+                    self.manifest_hashes = payload.get("manifestHashes", {})
             except (OSError, json.JSONDecodeError, TypeError):
                 self.entries = {}
+                self.manifest_hashes = {}
 
     def restore(self, file: FileRecord) -> PartialAnalysis | None:
         entry = self.entries.get(file.path)
@@ -49,9 +52,10 @@ class AnalysisCache:
         self.hits += 1
         return partial
 
-    def store(self, partials: list[PartialAnalysis]) -> None:
+    def store(self, partials: list[PartialAnalysis], manifest_hashes: dict[str, str] | None = None) -> None:
         if not self.path:
             return
+        # Store only currently active partials (automatically evicting deleted files)
         entries: dict[str, dict] = {}
         for partial in partials:
             entries[partial.file.path] = {
@@ -68,8 +72,12 @@ class AnalysisCache:
                 "entrypointEvidence": partial.entrypoint_evidence,
             }
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": CACHE_VERSION,
+            "manifestHashes": manifest_hashes or {},
+            "entries": entries,
+        }
         self.path.write_text(
-            json.dumps({"version": CACHE_VERSION, "entries": entries}, indent=2) + "\n",
+            json.dumps(payload, indent=2) + "\n",
             encoding="utf-8",
         )
-

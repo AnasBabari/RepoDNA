@@ -18,18 +18,19 @@ DEFAULT_IGNORES = {
     ".git", ".hg", ".svn", "node_modules", "venv", ".venv", "env",
     "dist", "build", "coverage", ".next", ".vinext", "__pycache__",
     "vendor", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache",
-    ".idea", ".vscode", ".repodna",
+    ".idea", ".vscode", ".repodna", ".turbo", ".cache",
 }
 SOURCE_EXTENSIONS = {
     ".py", ".pyi", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx",
     ".json", ".toml", ".yaml", ".yml", ".ini", ".cfg", ".sql",
-    ".prisma", ".md", ".html", ".css", ".scss", ".dockerfile",
+    ".prisma", ".md", ".mdx", ".html", ".css", ".scss", ".dockerfile",
+    ".sh", ".bash", ".graphql", ".gql",
 }
 SPECIAL_FILES = {
     "Dockerfile", "Procfile", "Makefile", "Pipfile", "package.json",
     "requirements.txt", "pyproject.toml", "poetry.lock", "Pipfile.lock",
     "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml",
-    "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "tsconfig.json",
+    "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "tsconfig.json", "jsconfig.json",
 }
 GITHUB_RE = re.compile(
     r"^https?://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?/?$"
@@ -65,8 +66,12 @@ class DiscoveryResult:
 
 class IgnoreMatcher:
     def __init__(self, root: Path) -> None:
-        self.patterns: list[tuple[str, bool]] = []
-        ignore_file = root / ".gitignore"
+        self.root = root.resolve()
+        self.rules: list[tuple[str, str, bool, bool]] = []
+        self._load_gitignore(self.root, "")
+
+    def _load_gitignore(self, dir_path: Path, relative_dir: str) -> None:
+        ignore_file = dir_path / ".gitignore"
         if ignore_file.is_file():
             try:
                 for raw in ignore_file.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -75,28 +80,59 @@ class IgnoreMatcher:
                         continue
                     negated = line.startswith("!")
                     if negated:
-                        line = line[1:]
-                    self.patterns.append((line.replace("\\", "/"), negated))
+                        line = line[1:].strip()
+                    is_dir_only = line.endswith("/")
+                    line = line.rstrip("/").replace("\\", "/")
+                    if line.startswith("/"):
+                        pattern = line.lstrip("/")
+                    else:
+                        pattern = line
+                    self.rules.append((relative_dir, pattern, negated, is_dir_only))
             except OSError:
                 pass
+
+    def add_nested_gitignore(self, dir_path: Path, relative_dir: str) -> None:
+        self._load_gitignore(dir_path, relative_dir)
 
     def ignored(self, relative: str, is_dir: bool = False) -> bool:
         relative = relative.replace("\\", "/").strip("/")
         parts = PurePosixPath(relative).parts
         if any(part in DEFAULT_IGNORES for part in parts):
             return True
+
         result = False
-        for pattern, negated in self.patterns:
-            normalized = pattern.strip("/")
-            directory_pattern = pattern.endswith("/")
-            matches = (
-                fnmatch.fnmatch(relative, normalized)
-                or fnmatch.fnmatch(PurePosixPath(relative).name, normalized)
-                or (directory_pattern and any(part == normalized for part in parts))
-                or ("/" not in normalized and any(fnmatch.fnmatch(part, normalized) for part in parts))
-            )
-            if matches and (not directory_pattern or is_dir or normalized in parts):
-                result = not negated
+        for base_dir, pattern, negated, is_dir_only in self.rules:
+            if is_dir_only and not is_dir:
+                continue
+
+            if base_dir:
+                if relative == base_dir:
+                    rel_to_base = ""
+                elif relative.startswith(base_dir + "/"):
+                    rel_to_base = relative[len(base_dir) + 1:]
+                else:
+                    continue
+            else:
+                rel_to_base = relative
+
+            if not rel_to_base:
+                continue
+
+            if "/" in pattern:
+                normalized_pattern = pattern.lstrip("/")
+                if (
+                    fnmatch.fnmatch(rel_to_base, normalized_pattern)
+                    or fnmatch.fnmatch(rel_to_base, f"**/{normalized_pattern}")
+                ):
+                    result = not negated
+            else:
+                rel_parts = PurePosixPath(rel_to_base).parts
+                if (
+                    fnmatch.fnmatch(PurePosixPath(rel_to_base).name, pattern)
+                    or any(fnmatch.fnmatch(p, pattern) for p in rel_parts)
+                ):
+                    result = not negated
+
         return result
 
 
@@ -121,6 +157,16 @@ def discover_local(root: Path, limits: IngestionLimits | None = None) -> Discove
 
     matcher = IgnoreMatcher(root)
     result = DiscoveryResult(root=root, name=root.name, files=[])
+
+    # First pass: load any nested .gitignores in subdirectories
+    for gitignore_path in root.rglob(".gitignore"):
+        if gitignore_path.is_file() and gitignore_path.parent != root:
+            try:
+                rel_dir = gitignore_path.parent.relative_to(root).as_posix()
+                matcher.add_nested_gitignore(gitignore_path.parent, rel_dir)
+            except ValueError:
+                pass
+
     for path in root.rglob("*"):
         try:
             relative = path.relative_to(root).as_posix()
@@ -129,7 +175,9 @@ def discover_local(root: Path, limits: IngestionLimits | None = None) -> Discove
         if path.is_symlink():
             result.skipped.append({"path": relative, "reason": "symlink"})
             continue
-        if path.is_dir() or matcher.ignored(relative, is_dir=False):
+        if path.is_dir():
+            continue
+        if matcher.ignored(relative, is_dir=False):
             continue
         if not _is_candidate(path):
             continue
@@ -148,6 +196,7 @@ def discover_local(root: Path, limits: IngestionLimits | None = None) -> Discove
         if len(result.files) >= limits.max_files:
             result.skipped.append({"path": "*", "reason": "file_count_limit"})
             break
+
     result.files.sort(key=lambda item: item.relative_path)
     return result
 

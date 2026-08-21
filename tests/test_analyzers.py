@@ -31,6 +31,32 @@ def create_user():
         self.assertIn("database_model", {symbol.type for symbol in result.symbols})
         self.assertIn("save_user", {call.callee for call in result.calls})
 
+    def test_extracts_fastapi_router_prefix(self) -> None:
+        source = '''from fastapi import APIRouter
+router = APIRouter(prefix="/api/v1")
+@router.get("/items")
+def list_items():
+    pass
+@router.post("/items/{item_id}")
+def update_item(item_id: int):
+    pass
+'''
+        result = PythonAnalyzer().analyze(record("app/routers/items.py", source), source)
+        self.assertEqual([(r.method, r.path) for r in result.routes], [("GET", "/api/v1/items"), ("POST", "/api/v1/items/{item_id}")])
+
+    def test_extracts_sqlmodel_and_beanie_models(self) -> None:
+        source = '''from sqlmodel import SQLModel
+from beanie import Document
+class Item(SQLModel): pass
+class UserDoc(Document): pass
+'''
+        result = PythonAnalyzer().analyze(record("app/models.py", source), source)
+        self.assertIn("SQLModel", result.frameworks)
+        self.assertIn("Beanie", result.frameworks)
+        models = [s.name for s in result.symbols if s.type == "database_model"]
+        self.assertIn("Item", models)
+        self.assertIn("UserDoc", models)
+
     def test_degrades_gracefully_on_invalid_python(self) -> None:
         result = PythonAnalyzer().analyze(record("broken.py", "def broken(:"), "def broken(:")
         self.assertFalse(result.file.parsed)
@@ -64,6 +90,25 @@ app.post("/checkout", Checkout);
         source = "export default function handler() { return Response.json({ ok: true }); }"
         result = JavaScriptAnalyzer().analyze(record("pages/api/health.ts", source), source)
         self.assertEqual([(route.method, route.path, route.framework) for route in result.routes], [("ANY", "/api/health", "Next.js")])
+
+    def test_extracts_nextjs_app_router_route_groups(self) -> None:
+        source = "export async function POST(req) { return Response.json({ status: 'ok' }); }"
+        result = JavaScriptAnalyzer().analyze(record("app/(auth)/login/route.ts", source), source)
+        self.assertEqual([(r.method, r.path, r.framework) for r in result.routes], [("POST", "/login", "Next.js")])
+
+    def test_extracts_nestjs_controller_routes(self) -> None:
+        source = '''@Controller("users")
+export class UserController {
+    @Get()
+    findAll() {}
+
+    @Post("create")
+    create() {}
+}
+'''
+        result = JavaScriptAnalyzer().analyze(record("src/users/users.controller.ts", source), source)
+        self.assertIn("NestJS", result.frameworks)
+        self.assertEqual([(r.method, r.path) for r in result.routes], [("GET", "/users"), ("POST", "/users/create")])
 
 
 if __name__ == "__main__":

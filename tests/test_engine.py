@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import io
 import json
 import shutil
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
+from repodna.cli import build_parser
 from repodna.engine import analyze_repository
 from repodna.graph import impact_slice
 
@@ -70,6 +73,64 @@ class EngineTests(unittest.TestCase):
             changed_file.write_text(changed_file.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
             third = analyze_repository(str(repository), cache_path=cache)
             self.assertEqual(third.metadata["cache"]["misses"], 1)
+
+    def test_resolves_tsconfig_path_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tsconfig.json").write_text(json.dumps({
+                "compilerOptions": {
+                    "baseUrl": ".",
+                    "paths": {
+                        "@/*": ["src/*"],
+                        "~/components/*": ["src/components/*"]
+                    }
+                }
+            }), encoding="utf-8")
+            (root / "src" / "components").mkdir(parents=True)
+            (root / "src" / "components" / "Button.tsx").write_text("export function Button() {}", encoding="utf-8")
+            (root / "src" / "App.tsx").write_text('import { Button } from "@/components/Button";', encoding="utf-8")
+            res = analyze_repository(str(root))
+            import_edge = next((edge for edge in res.imports if edge.source == "src/App.tsx"), None)
+            self.assertIsNotNone(import_edge)
+            self.assertEqual(import_edge.target, "src/components/Button.tsx")
+            self.assertFalse(import_edge.external)
+
+    def test_resolves_python_src_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pkg_dir = root / "src" / "mypackage"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
+            (pkg_dir / "service.py").write_text("def compute(): pass", encoding="utf-8")
+            (pkg_dir / "api.py").write_text("from mypackage.service import compute\ncompute()", encoding="utf-8")
+            res = analyze_repository(str(root))
+            import_edge = next((edge for edge in res.imports if edge.source == "src/mypackage/api.py"), None)
+            self.assertIsNotNone(import_edge)
+            self.assertEqual(import_edge.target, "src/mypackage/service.py")
+            self.assertFalse(import_edge.external)
+
+    def test_cli_export_formats(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project_path = Path(directory) / "project.json"
+            self.result.write_json(project_path)
+
+            parser = build_parser()
+            # Mermaid format
+            args_mermaid = parser.parse_args(["export", "--project", str(project_path), "--format", "mermaid"])
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                args_mermaid.handler(args_mermaid)
+            output = buf.getvalue()
+            self.assertIn("flowchart TD", output)
+            self.assertIn("frontend", output)
+
+            # DOT format
+            args_dot = parser.parse_args(["export", "--project", str(project_path), "--format", "dot"])
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                args_dot.handler(args_dot)
+            output_dot = buf.getvalue()
+            self.assertIn("digraph Architecture", output_dot)
 
 
 if __name__ == "__main__":

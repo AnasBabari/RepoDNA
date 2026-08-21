@@ -26,6 +26,11 @@ EXPRESS_ROUTE_RE = re.compile(
     r"\s*\(\s*[\"'](?P<path>[^\"']+)[\"']\s*,\s*(?P<handler>[A-Za-z_$][\w$]*)?",
     re.IGNORECASE,
 )
+NEST_CONTROLLER_RE = re.compile(r"@Controller\s*\(\s*[\"'](?P<prefix>[^\"']*)[\"']\s*\)")
+NEST_ROUTE_RE = re.compile(
+    r"@(Get|Post|Put|Patch|Delete|Options|Head|All)\s*\(\s*(?:[\"'](?P<path>[^\"']*)[\"'])?\s*\)\s*\n\s*(?:async\s+)?(?P<handler>[A-Za-z_$][\w$]*)\s*\(",
+    re.IGNORECASE,
+)
 CALL_RE = re.compile(r"\b(?P<name>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(")
 
 EXTERNALS = {
@@ -34,18 +39,21 @@ EXTERNALS = {
     "@anthropic-ai": "Anthropic", "@supabase": "Supabase",
     "firebase": "Firebase", "kafkajs": "Kafka", "amqplib": "RabbitMQ",
     "@sendgrid": "SendGrid", "resend": "Resend", "twilio": "Twilio",
-    "mongodb": "MongoDB", "mongoose": "MongoDB",
+    "mongodb": "MongoDB", "mongoose": "MongoDB", "graphql": "GraphQL",
+    "@apollo": "GraphQL", "@grpc": "gRPC",
 }
 FRAMEWORKS = {
     "react": "React", "next": "Next.js", "express": "Express",
     "@nestjs": "NestJS", "vite": "Vite", "vitest": "Vitest",
     "playwright": "Playwright", "@playwright": "Playwright",
+    "vue": "Vue", "nuxt": "Nuxt", "svelte": "Svelte", "@sveltejs": "SvelteKit",
+    "astro": "Astro", "@remix-run": "Remix", "hono": "Hono", "fastify": "Fastify",
 }
 DATABASES = {
-    "@prisma": "Prisma", "prisma": "Prisma", "pg": "PostgreSQL",
-    "postgres": "PostgreSQL", "mysql": "MySQL", "mysql2": "MySQL",
-    "sqlite": "SQLite", "better-sqlite3": "SQLite", "mongodb": "MongoDB",
-    "mongoose": "MongoDB", "@supabase": "Supabase",
+    "@prisma": "Prisma", "prisma": "Prisma", "drizzle-orm": "Drizzle ORM",
+    "typeorm": "TypeORM", "pg": "PostgreSQL", "postgres": "PostgreSQL",
+    "mysql": "MySQL", "mysql2": "MySQL", "sqlite": "SQLite", "better-sqlite3": "SQLite",
+    "mongodb": "MongoDB", "mongoose": "MongoDB", "@supabase": "Supabase",
 }
 
 
@@ -56,8 +64,10 @@ def _line_number(source: str, offset: int) -> int:
 def _names_from_bindings(bindings: str | None) -> list[str]:
     if not bindings:
         return []
-    cleaned = re.sub(r"\b(?:type|as)\b", " ", bindings)
-    return [name for name in re.findall(r"[A-Za-z_$][\w$]*", cleaned) if name not in {"from"}]
+    # Strip multiline comments and types
+    cleaned = re.sub(r"//.*|/\*[\s\S]*?\*/", " ", bindings)
+    cleaned = re.sub(r"\b(?:type|as|default)\b", " ", cleaned)
+    return [name for name in re.findall(r"[A-Za-z_$][\w$]*", cleaned) if name not in {"from", "import"}]
 
 
 def _module_root(module: str) -> str:
@@ -82,6 +92,7 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
             end_line=file.lines,
         ))
 
+        # 1. Imports
         for match in IMPORT_RE.finditer(source):
             module = match.group("module")
             line = _line_number(source, match.start())
@@ -103,6 +114,7 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
                 if root == prefix or root.startswith(prefix + "/"):
                     result.databases.add(name)
 
+        # 2. Classes, Interfaces, Types
         symbols_by_line: list[Symbol] = []
         for regex, kind in ((CLASS_RE, "class"), (INTERFACE_RE, "interface"), (TYPE_RE, "type")):
             for match in regex.finditer(source):
@@ -119,6 +131,7 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
                 result.symbols.append(symbol)
                 symbols_by_line.append(symbol)
 
+        # 3. Functions & Components
         for match in FUNCTION_RE.finditer(source):
             line = _line_number(source, match.start())
             name = match.group("decl") or match.group("arrow")
@@ -136,6 +149,8 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
             symbols_by_line.append(symbol)
 
         symbols_by_line.sort(key=lambda symbol: symbol.line)
+
+        # 4. Express Routes
         for match in EXPRESS_ROUTE_RE.finditer(source):
             line = _line_number(source, match.start())
             handler_name = match.group("handler") or f"anonymous@{line}"
@@ -152,17 +167,43 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
                 confidence=0.96,
             ))
 
+        # 5. NestJS Controller Routes
+        controller_match = NEST_CONTROLLER_RE.search(source)
+        if controller_match:
+            result.frameworks.add("NestJS")
+            prefix = controller_match.group("prefix") or ""
+            prefix = "/" + prefix.strip("/") if prefix.strip("/") else ""
+            for rmatch in NEST_ROUTE_RE.finditer(source):
+                line = _line_number(source, rmatch.start())
+                method = rmatch.group(1).upper()
+                subpath = rmatch.group("path") or ""
+                subpath = "/" + subpath.strip("/") if subpath.strip("/") else ""
+                full_path = f"{prefix}{subpath}" or "/"
+                handler_name = rmatch.group("handler") or f"handler@{line}"
+                result.routes.append(Route(
+                    id=f"route:{file.path}:{line}:{method}:{full_path}",
+                    method=method,
+                    path=full_path,
+                    handler=f"{file.path}::{handler_name}",
+                    file=file.path,
+                    line=line,
+                    framework="NestJS",
+                    confidence=0.95,
+                ))
+
+        # 6. Next.js App Router & Pages Router Routes
         path = PurePosixPath(file.path)
         if path.name in {"route.ts", "route.js", "route.tsx", "route.jsx"} and "app" in path.parts:
             for method in re.findall(r"export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\b", source):
                 line_match = re.search(rf"export\s+(?:async\s+)?function\s+{method}\b", source)
                 line = _line_number(source, line_match.start()) if line_match else 1
                 app_index = path.parts.index("app")
-                route_parts = [part for part in path.parts[app_index + 1:-1] if not part.startswith("(")]
+                # Filter out route groups like (auth), (dashboard)
+                route_parts = [part for part in path.parts[app_index + 1:-1] if not (part.startswith("(") and part.endswith(")"))]
                 route_path = "/" + "/".join(route_parts)
                 result.frameworks.add("Next.js")
                 result.routes.append(Route(
-                    id=f"route:{file.path}:{line}:{method}:{route_path}",
+                    id=f"route:{file.path}:{line}:{method}:{route_path or '/'}",
                     method=method,
                     path=route_path or "/",
                     handler=f"{file.path}::{method}",
@@ -191,12 +232,13 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
                 confidence=0.9,
             ))
 
+        # 7. Function Calls
         for match in CALL_RE.finditer(source):
             line = _line_number(source, match.start())
             source_symbol = next((symbol for symbol in reversed(symbols_by_line) if symbol.line <= line), None)
             if source_symbol:
                 callee = match.group("name")
-                if callee not in {"if", "for", "while", "switch", "function"}:
+                if callee not in {"if", "for", "while", "switch", "function", "catch", "return"}:
                     result.calls.append(CallEdge(
                         id=f"{source_symbol.id}:call:{line}:{callee}",
                         source=source_symbol.id,
@@ -205,13 +247,14 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
                         line=line,
                     ))
 
+        # 8. Entrypoint evidence & Framework helpers
         if path.name in {"index.js", "index.ts", "server.js", "server.ts", "main.js", "main.ts"}:
             result.entrypoint_evidence.append(f"uses a conventional {path.name} entrypoint filename")
         if re.search(r"\b(?:app|server)\.listen\s*\(", source):
             result.entrypoint_evidence.append("starts an HTTP listener")
-        if "createRoot(" in source or "ReactDOM.render(" in source:
-            result.frameworks.add("React")
-            result.entrypoint_evidence.append("mounts a React application")
+        if "createRoot(" in source or "ReactDOM.render(" in source or "createApp(" in source:
+            result.frameworks.add("React" if "createApp(" not in source else "Vue")
+            result.entrypoint_evidence.append("mounts a client application")
         if "createClient(" in source and "supabase" in source.lower():
             result.externals.add("Supabase")
             result.databases.add("Supabase")
