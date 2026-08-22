@@ -49,6 +49,38 @@ function unresolvedMountDiagnostic(mount: ExpressMountRecord, dynamic: boolean):
   };
 }
 
+function routeDirectoryCandidate(path: string): boolean {
+  return /(^|\/)(?:routes?|routers?)(?:\/|$)/i.test(path);
+}
+
+function unresolvedRouteCandidates(
+  mount: ExpressMountRecord,
+  routes: RouteRecord[],
+  resolvedTargets: Set<string>
+): RouteRecord[] {
+  const expressRoutes = routes.filter((route) =>
+    route.framework === 'Express' && route.file !== mount.file && !resolvedTargets.has(route.file)
+  );
+  const mountDirectory = mount.file.includes('/') ? mount.file.slice(0, mount.file.lastIndexOf('/') + 1) : '';
+  const nearbyRouteFiles = expressRoutes.filter((route) =>
+    route.file.startsWith(mountDirectory) && routeDirectoryCandidate(route.file)
+  );
+  if (nearbyRouteFiles.length) return nearbyRouteFiles;
+
+  const routeFiles = expressRoutes.filter((route) => routeDirectoryCandidate(route.file));
+  return routeFiles.length ? routeFiles : expressRoutes;
+}
+
+function incompletePathDiagnostic(mount: ExpressMountRecord, route: RouteRecord): Diagnostic {
+  const call = `${mount.receiver}.use(${[mount.prefixExpression, mount.targetExpression].filter(Boolean).join(', ')})`;
+  return {
+    severity: 'warning',
+    code: 'EXPRESS_ROUTE_PATH_INCOMPLETE',
+    message: `Full mounted path unresolved for ${route.method} ${route.path}; this is the router-local path from ${route.file}:${route.line}. Runtime mount "${call}" at ${mount.file}:${mount.line} could not be followed statically.`,
+    file: route.file,
+  };
+}
+
 export function resolveExpressRouteMounts(
   partials: PartialAnalysis[],
   imports: ImportRecord[],
@@ -61,6 +93,7 @@ export function resolveExpressRouteMounts(
   const routeFiles = new Set(routes.filter((route) => route.framework === 'Express').map((route) => route.file));
   const mountFiles = new Set(mounts.map((mount) => mount.file));
   const resolved: ResolvedMount[] = [];
+  const unresolved: ExpressMountRecord[] = [];
 
   for (const mount of mounts) {
     const target = resolveMountTarget(mount, imports);
@@ -70,8 +103,16 @@ export function resolveExpressRouteMounts(
       continue;
     }
 
-    if (looksLikeRouterMount(mount)) {
-      pushDiagnostic(diagnostics, unresolvedMountDiagnostic(mount, mount.dynamic || mount.prefix === null));
+    // A computed prefix is always a coverage gap. Do not let target-resolution
+    // heuristics suppress the warning for directory-loaded runtime routers.
+    if (mount.prefix === null || looksLikeRouterMount(mount)) unresolved.push(mount);
+  }
+
+  const resolvedTargets = new Set(resolved.map((item) => item.target));
+  for (const mount of unresolved) {
+    pushDiagnostic(diagnostics, unresolvedMountDiagnostic(mount, mount.dynamic || mount.prefix === null));
+    for (const route of unresolvedRouteCandidates(mount, routes, resolvedTargets)) {
+      pushDiagnostic(diagnostics, incompletePathDiagnostic(mount, route));
     }
   }
 

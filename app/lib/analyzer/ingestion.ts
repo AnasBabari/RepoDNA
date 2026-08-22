@@ -79,6 +79,10 @@ function validatePath(rawPath: string): void {
   }
 }
 
+function normalizeArchivePath(rawPath: string): string {
+  return rawPath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/{2,}/g, '/');
+}
+
 async function sha256(content: string): Promise<string> {
   if (typeof crypto !== 'undefined' && crypto.subtle) {
     const msgBuffer = new TextEncoder().encode(content);
@@ -123,7 +127,12 @@ export async function extractFromZip(
   let totalExtractedBytes = 0;
 
   // Determine zip root prefix (e.g. repo-name-HEAD/)
-  const allPaths = Object.keys(zip.files);
+  const archiveEntries = Object.entries(zip.files).map(([rawPath, entry]) => ({
+    rawPath,
+    path: normalizeArchivePath(rawPath),
+    entry,
+  }));
+  const allPaths = archiveEntries.map((item) => item.path);
   let prefix = '';
   const firstSlash = allPaths[0]?.indexOf('/');
   if (firstSlash !== -1 && allPaths[0]) {
@@ -133,12 +142,12 @@ export async function extractFromZip(
     }
   }
 
-  for (const [rawPath, entry] of Object.entries(zip.files)) {
+  for (const { rawPath, path, entry } of archiveEntries) {
     // 2. Validate against path traversal
     validatePath(rawPath);
 
     if (entry.dir) continue;
-    const relPath = prefix && rawPath.startsWith(prefix) ? rawPath.slice(prefix.length) : rawPath;
+    const relPath = prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
     if (!relPath || relPath.startsWith('/')) continue;
 
     if (isIgnored(relPath)) {

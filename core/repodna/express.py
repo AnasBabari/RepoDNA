@@ -62,6 +62,45 @@ def _unresolved_mount_diagnostic(mount: ExpressMount, dynamic: bool) -> Diagnost
     )
 
 
+def _route_directory_candidate(path: str) -> bool:
+    return bool(re.search(r"(^|/)(?:routes?|routers?)(?:/|$)", path, re.IGNORECASE))
+
+
+def _unresolved_route_candidates(
+    mount: ExpressMount,
+    routes: list[Route],
+    resolved_targets: set[str],
+) -> list[Route]:
+    express_routes = [
+        route for route in routes
+        if route.framework == "Express" and route.file != mount.file and route.file not in resolved_targets
+    ]
+    mount_directory = mount.file.rsplit("/", 1)[0] + "/" if "/" in mount.file else ""
+    nearby = [
+        route for route in express_routes
+        if route.file.startswith(mount_directory) and _route_directory_candidate(route.file)
+    ]
+    if nearby:
+        return nearby
+    route_files = [route for route in express_routes if _route_directory_candidate(route.file)]
+    return route_files or express_routes
+
+
+def _incomplete_path_diagnostic(mount: ExpressMount, route: Route) -> Diagnostic:
+    arguments = ", ".join(value for value in (mount.prefix_expression, mount.target_expression) if value)
+    call = f"{mount.receiver}.use({arguments})"
+    return Diagnostic(
+        severity="warning",
+        code="EXPRESS_ROUTE_PATH_INCOMPLETE",
+        message=(
+            f"Full mounted path unresolved for {route.method} {route.path}; this is the router-local path "
+            f"from {route.file}:{route.line}. Runtime mount \"{call}\" at {mount.file}:{mount.line} "
+            "could not be followed statically."
+        ),
+        file=route.file,
+    )
+
+
 def resolve_express_route_mounts(
     partials: list[PartialAnalysis],
     imports: list[ImportEdge],
@@ -75,6 +114,7 @@ def resolve_express_route_mounts(
     route_files = {route.file for route in routes if route.framework == "Express"}
     mount_files = {mount.file for mount in mounts}
     resolved: list[tuple[ExpressMount, str, str]] = []
+    unresolved: list[ExpressMount] = []
 
     for mount in mounts:
         target = _resolve_mount_target(mount, imports)
@@ -82,11 +122,17 @@ def resolve_express_route_mounts(
         if target and target_has_route_surface and mount.prefix is not None:
             resolved.append((mount, target, mount.prefix))
             continue
-        if _looks_like_router_mount(mount):
-            _push_diagnostic(
-                diagnostics,
-                _unresolved_mount_diagnostic(mount, mount.dynamic or mount.prefix is None),
-            )
+        if mount.prefix is None or _looks_like_router_mount(mount):
+            unresolved.append(mount)
+
+    resolved_targets = {target for _, target, _ in resolved}
+    for mount in unresolved:
+        _push_diagnostic(
+            diagnostics,
+            _unresolved_mount_diagnostic(mount, mount.dynamic or mount.prefix is None),
+        )
+        for route in _unresolved_route_candidates(mount, routes, resolved_targets):
+            _push_diagnostic(diagnostics, _incomplete_path_diagnostic(mount, route))
 
     if not resolved:
         return routes

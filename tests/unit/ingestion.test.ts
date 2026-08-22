@@ -39,6 +39,21 @@ describe('Ingestion & Resource Limits', () => {
     await expect(extractFromZip(buffer, 'test-repo')).rejects.toThrow(IngestionError);
   });
 
+  it('normalizes Windows archive separators before import and route resolution', async () => {
+    const zip = new JSZip();
+    zip.file('package.json', '{"name":"windows-archive"}');
+    zip.file('src\\app.js', "const router = require('./routes/users');");
+    zip.file('src\\routes\\users.js', "router.get('/:id', handler);");
+    const buffer = await zip.generateAsync({ type: 'arraybuffer' });
+
+    const result = await extractFromZip(buffer, 'windows-archive');
+    expect(result.files.map((file) => file.path).sort()).toEqual([
+      'package.json',
+      'src/app.js',
+      'src/routes/users.js',
+    ]);
+  });
+
   it('enforces compressed archive size limit', async () => {
     // Test with a custom low archive limit
     const zip = new JSZip();
