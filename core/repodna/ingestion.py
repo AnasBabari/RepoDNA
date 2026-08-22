@@ -252,10 +252,11 @@ def _safe_extract_zip(payload: bytes, destination: Path, limits: IngestionLimits
 
 
 @contextmanager
-def repository_source(source: str, limits: IngestionLimits | None = None) -> Iterator[DiscoveryResult]:
+def repository_source(source: str | Path, limits: IngestionLimits | None = None) -> Iterator[DiscoveryResult]:
     limits = limits or IngestionLimits()
-    if source.startswith(("https://github.com/", "http://github.com/")):
-        owner, repo = parse_github_url(source)
+    source_str = str(source)
+    if source_str.startswith(("https://github.com/", "http://github.com/")):
+        owner, repo = parse_github_url(source_str)
         with tempfile.TemporaryDirectory(prefix="repodna-") as temp:
             root = _safe_extract_zip(_download_archive(owner, repo, limits), Path(temp), limits)
             result = discover_local(root, limits)

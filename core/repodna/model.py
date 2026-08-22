@@ -151,8 +151,18 @@ class AnalysisResult:
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
-        payload["schemaVersion"] = "1.0.0"
+        payload["schemaVersion"] = "1.1.0"
         payload["generatedAt"] = datetime.now(UTC).isoformat()
+        
+        # Canonical camelCase normalization
+        payload["externalSystems"] = payload.get("external_systems", [])
+        payload["importantFiles"] = payload.get("important_files", [])
+        
+        # Symbol endLine normalization
+        for sym in payload.get("symbols", []):
+            if isinstance(sym, dict) and "end_line" in sym and "endLine" not in sym:
+                sym["endLine"] = sym["end_line"]
+                
         return payload
 
     def write_json(self, target: Path) -> None:

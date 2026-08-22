@@ -5,10 +5,14 @@ import crypto from 'crypto';
 export const AUTH_MAX_AGE_SECONDS = 8 * 60 * 60; // 8 hours
 
 export function generatePseudonymousId(githubId: string | number, secret?: string): string {
-  const salt = secret || process.env.AUTH_SECRET || 'repodna-pseudo-salt-default';
+  const salt = secret || process.env.AUTH_SECRET;
+  if (process.env.NODE_ENV === 'production' && !salt) {
+    throw new Error('AUTH_SECRET is required in production for secure pseudonymous identity generation.');
+  }
+  const effectiveSalt = salt || 'repodna-pseudo-salt-dev';
   return crypto
-    .createHash('sha256')
-    .update(`${salt}:github:${githubId}`)
+    .createHmac('sha256', effectiveSalt)
+    .update(`github:${githubId}`)
     .digest('hex')
     .slice(0, 16);
 }

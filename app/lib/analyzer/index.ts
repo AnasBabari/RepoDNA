@@ -175,7 +175,7 @@ export function analyzeRepositoryFiles(discovery: {
   }));
 
   return {
-    schemaVersion: '1.0.0',
+    schemaVersion: '1.1.0',
     generatedAt: new Date().toISOString(),
     repository: {
       name,
@@ -194,10 +194,12 @@ export function analyzeRepositoryFiles(discovery: {
     calls,
     routes,
     databases: dbRecords,
+    externalSystems: extRecords,
     external_systems: extRecords,
     entrypoints,
     flows,
     architecture,
+    importantFiles,
     important_files: importantFiles,
     onboarding,
     metrics: {
@@ -211,6 +213,7 @@ export function analyzeRepositoryFiles(discovery: {
     metadata: {
       analysisMode: 'static-typescript',
       executedRepositoryCode: false,
+      analyzerVersion: '1.2.0',
       limits: {
         maxFiles: 10000,
         maxFileBytes: 1000000,

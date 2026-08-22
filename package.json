@@ -11,7 +11,7 @@
     "build": "vinext build",
     "build:vercel": "next build",
     "start": "vinext start",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern tests/fixtures",
     "test:unit": "vitest run",
     "test:python": "python -c \"import sys, unittest; sys.path.insert(0, 'core'); test_suite = unittest.defaultTestLoader.discover('tests'); runner = unittest.TextTestRunner(verbosity=2); res = runner.run(test_suite); sys.exit(0 if res.wasSuccessful() else 1)\"",
     "test": "npm run lint && npm run test:unit && npm run build"

@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.0.0",
-  "generatedAt": "2026-08-21T21:22:41.324Z",
+  "schemaVersion": "1.1.0",
+  "generatedAt": "2026-08-22T00:26:02.200Z",
   "repository": {
     "name": "nanoGPT",
     "source": "https://github.com/karpathy/nanoGPT",
@@ -878,6 +878,7 @@
   ],
   "routes": [],
   "databases": [],
+  "externalSystems": [],
   "external_systems": [],
   "entrypoints": [
     {
@@ -912,6 +913,30 @@
     ],
     "connections": []
   },
+  "importantFiles": [
+    {
+      "file": "train.py",
+      "score": 37,
+      "reasons": [
+        "entrypoint candidate",
+        "imports 1 local file(s)"
+      ]
+    },
+    {
+      "file": "model.py",
+      "score": 6,
+      "reasons": [
+        "imported by 2 file(s)"
+      ]
+    },
+    {
+      "file": "sample.py",
+      "score": 2,
+      "reasons": [
+        "imports 1 local file(s)"
+      ]
+    }
+  ],
   "important_files": [
     {
       "file": "train.py",
@@ -989,6 +1014,7 @@
   "metadata": {
     "analysisMode": "static-typescript",
     "executedRepositoryCode": false,
+    "analyzerVersion": "1.2.0",
     "limits": {
       "maxFiles": 10000,
       "maxFileBytes": 1000000,

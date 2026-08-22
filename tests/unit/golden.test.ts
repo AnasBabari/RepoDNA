@@ -100,7 +100,7 @@ export function Dashboard() {
     const project = analyzeRepositoryFiles(discovery);
 
     // 1. Repository metadata
-    expect(project.schemaVersion).toBe('1.0.0');
+    expect(project.schemaVersion).toBe('1.1.0');
     expect(project.repository.name).toBe('golden-app');
     expect(project.repository.fileCount).toBe(7);
 
@@ -134,7 +134,7 @@ export function Dashboard() {
     const { analyzeGitHubUrl } = await import('../../app/lib/analyzer');
     const project = await analyzeGitHubUrl('https://github.com/yusrababari/Twitter-Sentiment-Analysis');
 
-    expect(project.schemaVersion).toBe('1.0.0');
+    expect(project.schemaVersion).toBe('1.1.0');
     expect(project.repository.name).toBe('Twitter-Sentiment-Analysis');
     expect(project.repository.fileCount).toBeGreaterThan(0);
     expect(project.metadata.executedRepositoryCode).toBe(false);

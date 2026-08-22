@@ -57,7 +57,7 @@ class EngineTests(unittest.TestCase):
             target = Path(directory) / "project.json"
             self.result.write_json(target)
             payload = json.loads(target.read_text(encoding="utf-8"))
-            self.assertEqual(payload["schemaVersion"], "1.0.0")
+            self.assertEqual(payload["schemaVersion"], "1.1.0")
 
     def test_reuses_unchanged_files_from_incremental_cache(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

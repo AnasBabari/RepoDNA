@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.0.0",
-  "generatedAt": "2026-08-21T21:22:41.318Z",
+  "schemaVersion": "1.1.0",
+  "generatedAt": "2026-08-22T00:26:02.193Z",
   "repository": {
     "name": "strix",
     "source": "https://github.com/usestrix/strix",
@@ -818,6 +818,14 @@
       "evidence": []
     }
   ],
+  "externalSystems": [
+    {
+      "name": "HTTPX",
+      "type": "external_system",
+      "confidence": 0.72,
+      "evidence": []
+    }
+  ],
   "external_systems": [
     {
       "name": "HTTPX",
@@ -1173,6 +1181,77 @@
       }
     ]
   },
+  "importantFiles": [
+    {
+      "file": "strix/main.py",
+      "score": 69,
+      "reasons": [
+        "entrypoint candidate",
+        "imports 2 local file(s)"
+      ]
+    },
+    {
+      "file": "strix/api/routes.py",
+      "score": 23,
+      "reasons": [
+        "defines 2 route(s)",
+        "imported by 1 file(s)",
+        "imports 2 local file(s)"
+      ]
+    },
+    {
+      "file": "package.json",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    },
+    {
+      "file": "pyproject.toml",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    },
+    {
+      "file": "strix/core/scanner.py",
+      "score": 12,
+      "reasons": [
+        "imported by 2 file(s)",
+        "imports 3 local file(s)"
+      ]
+    },
+    {
+      "file": "strix/models/scan.py",
+      "score": 12,
+      "reasons": [
+        "imported by 4 file(s)"
+      ]
+    },
+    {
+      "file": "strix/services/agent.py",
+      "score": 7,
+      "reasons": [
+        "imported by 1 file(s)",
+        "imports 2 local file(s)"
+      ]
+    },
+    {
+      "file": "strix/tools/fuzzer.py",
+      "score": 5,
+      "reasons": [
+        "imported by 1 file(s)",
+        "imports 1 local file(s)"
+      ]
+    },
+    {
+      "file": "strix/tools/crawler.py",
+      "score": 3,
+      "reasons": [
+        "imported by 1 file(s)"
+      ]
+    }
+  ],
   "important_files": [
     {
       "file": "strix/main.py",
@@ -1339,6 +1418,7 @@
   "metadata": {
     "analysisMode": "static-typescript",
     "executedRepositoryCode": false,
+    "analyzerVersion": "1.2.0",
     "limits": {
       "maxFiles": 10000,
       "maxFileBytes": 1000000,

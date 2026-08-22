@@ -113,30 +113,31 @@ UPSTASH_REDIS_REST_TOKEN="your-upstash-token"
 
 ---
 
-## Testing & Quality Assurance
+## Testing, Schema Parity & Quality Assurance
 
 ```bash
-# Run all 43 Vitest unit tests (auth, quotas, detection, AST, graph, ingestion, API, analytics)
+# Run all 47 Vitest unit and cross-engine parity tests
 npm run test:unit
 
-# Run ESLint + Vitest + Vinext build
+# Run Python core test suite (24 unit and conformance tests)
+npm run test:python
+
+# Run ESLint + Vitest + Next.js build
 npm test
 
 # Run native Vercel Next.js build
 npm run build:vercel
-
-# Run Python core test suite (22 unit tests)
-npm run test:python
 ```
 
 ---
 
-## Privacy & Safety Model
+## Canonical Contract & Security
 
-- **Zero Code Execution**: Source files are parsed purely as text. RepoDNA never runs `npm install`, `pip install`, `eval`, application entry points, shell scripts, or build tasks.
-- **Zero Server Persistence**: Source code and archive payloads are never saved to disk on the server or logged to monitoring.
-- **Privacy-Safe Analytics (PostHog EU)**: Explicit opt-in banner. All analytics events strictly sanitize payloads, stripping repository URLs, names, file paths, symbol names, and code snippets.
-- **Pseudonymous User IDs**: User identifiers in analytics use one-way salted SHA-256 hashes to prevent linkage back to GitHub accounts.
+- **Formal Schema**: Analysis artifacts conform to [`schema/repodna.schema.json`](schema/repodna.schema.json) (v1.1.0).
+- **Security Model**: Detailed zero-code-execution guarantees and vulnerability policy in [`SECURITY.md`](SECURITY.md).
+- **Threat Model**: Complete threat matrix and mitigations in [`docs/threat-model.md`](docs/threat-model.md).
+- **Static Analysis Boundaries**: Detailed analysis limits and confidence scoring in [`docs/analysis-limitations.md`](docs/analysis-limitations.md).
+- **Architecture Decisions**: Full list of ADRs in [`docs/adr/`](docs/adr/).
 
 ---
 

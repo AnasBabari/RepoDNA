@@ -18,7 +18,8 @@ export type SymbolRecord = {
   name: string;
   file: string;
   line: number;
-  end_line: number | null;
+  endLine?: number | null;
+  end_line?: number | null;
   parent: string | null;
   exported: boolean;
   evidence: string[];
@@ -136,6 +137,7 @@ export type RepoDNAProject = {
   calls: CallRecord[];
   routes: RouteRecord[];
   databases: TechnologyBoundary[];
+  externalSystems?: TechnologyBoundary[];
   external_systems: TechnologyBoundary[];
   entrypoints: EntrypointRecord[];
   flows: FlowRecord[];
@@ -143,6 +145,7 @@ export type RepoDNAProject = {
     components: ArchitectureComponent[];
     connections: ArchitectureConnection[];
   };
+  importantFiles?: ImportantFile[];
   important_files: ImportantFile[];
   onboarding: OnboardingStep[];
   metrics: {
@@ -161,6 +164,7 @@ export type RepoDNAProject = {
   metadata: {
     analysisMode: string;
     executedRepositoryCode: boolean;
+    analyzerVersion?: string;
     limits: {
       maxFiles: number;
       maxFileBytes: number;

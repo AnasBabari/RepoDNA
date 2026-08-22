@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.0.0",
-  "generatedAt": "2026-08-21T21:22:41.328Z",
+  "schemaVersion": "1.1.0",
+  "generatedAt": "2026-08-22T00:26:02.204Z",
   "repository": {
     "name": "full-stack-fastapi-template",
     "source": "https://github.com/tiangolo/full-stack-fastapi-template",
@@ -936,6 +936,14 @@
       "evidence": []
     }
   ],
+  "externalSystems": [
+    {
+      "name": "Celery",
+      "type": "external_system",
+      "confidence": 0.72,
+      "evidence": []
+    }
+  ],
   "external_systems": [
     {
       "name": "Celery",
@@ -1142,6 +1150,50 @@
     ],
     "connections": []
   },
+  "importantFiles": [
+    {
+      "file": "backend/app/main.py",
+      "score": 65,
+      "reasons": [
+        "entrypoint candidate"
+      ]
+    },
+    {
+      "file": "backend/app/api/main.py",
+      "score": 30,
+      "reasons": [
+        "entrypoint candidate"
+      ]
+    },
+    {
+      "file": "backend/app/api/routes/items.py",
+      "score": 16,
+      "reasons": [
+        "defines 2 route(s)"
+      ]
+    },
+    {
+      "file": "backend/app/api/routes/users.py",
+      "score": 16,
+      "reasons": [
+        "defines 2 route(s)"
+      ]
+    },
+    {
+      "file": "frontend/package.json",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    },
+    {
+      "file": "pyproject.toml",
+      "score": 12,
+      "reasons": [
+        "project configuration"
+      ]
+    }
+  ],
   "important_files": [
     {
       "file": "backend/app/main.py",
@@ -1281,6 +1333,7 @@
   "metadata": {
     "analysisMode": "static-typescript",
     "executedRepositoryCode": false,
+    "analyzerVersion": "1.2.0",
     "limits": {
       "maxFiles": 10000,
       "maxFileBytes": 1000000,

@@ -1,0 +1,10 @@
+{
+  "name": "express-basic-fixture",
+  "version": "1.0.0",
+  "main": "src/app.js",
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.11.0",
+    "dotenv": "^16.4.0"
+  }
+}

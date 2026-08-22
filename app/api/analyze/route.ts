@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import crypto from 'crypto';
 import { analyzeGitHubUrl } from '../../lib/analyzer';
 import { IngestionError } from '../../lib/analyzer/types';
 import { auth } from '../../lib/auth';
 import { checkAnalysisRateLimit } from '../../lib/ratelimit';
+import { createApiErrorResponse } from '../../lib/api-error';
+import { validateRepoDNAProject } from '../../lib/schema/validator';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +14,7 @@ interface StructuredLog {
   requestId: string;
   timestamp: string;
   method: string;
-  repo: string | null;
+  repoIdHash: string | null;
   clientIp: string;
   userType: 'authenticated' | 'public';
   durationMs: number;
@@ -19,6 +22,12 @@ interface StructuredLog {
   status: number;
   resultCode: string;
   failureCategory: string | null;
+}
+
+function hashRepo(target: string | null): string | null {
+  if (!target) return null;
+  const salt = process.env.AUTH_SECRET || 'repodna-log-salt-dev';
+  return crypto.createHmac('sha256', salt).update(target).digest('hex').slice(0, 12);
 }
 
 function getClientIp(request: NextRequest): string {
@@ -94,7 +103,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
         requestId,
         timestamp: new Date().toISOString(),
         method,
-        repo: url,
+        repoIdHash: hashRepo(url),
         clientIp,
         userType,
         durationMs,
@@ -105,17 +114,13 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       });
 
       const retryAfter = rateLimit.retryAfter ?? 60;
-      return NextResponse.json(
+      return createApiErrorResponse(
+        'RATE_LIMITED',
+        `Too many repository analysis requests (${rateLimit.quotaType} quota). Please wait ${retryAfter} seconds before trying again.`,
+        429,
         {
-          success: false,
-          error: {
-            code: 'RATE_LIMITED',
-            message: `Too many repository analysis requests (${rateLimit.quotaType} quota). Please wait ${retryAfter} seconds before trying again.`,
-            retryAfter,
-          },
-        },
-        {
-          status: 429,
+          requestId,
+          retryAfter,
           headers: {
             'Retry-After': String(retryAfter),
             'X-RateLimit-Limit': String(rateLimit.limit),
@@ -131,7 +136,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       requestId,
       timestamp: new Date().toISOString(),
       method,
-      repo: url,
+      repoIdHash: hashRepo(url),
       clientIp,
       userType,
       durationMs,
@@ -141,26 +146,22 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       failureCategory: 'infrastructure',
     });
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'RATE_LIMIT_UNAVAILABLE',
-          message: 'Analysis rate-limiting service is temporarily unavailable. Please try browser-based analysis.',
-        },
-      },
-      { status: 503 }
+    return createApiErrorResponse(
+      'RATE_LIMIT_UNAVAILABLE',
+      'Analysis rate-limiting service is temporarily unavailable. Please try browser-based analysis.',
+      503,
+      { requestId, fallbackAvailable: true }
     );
   }
 
-  // 2. Validate URL Parameter
+  // 2. Validate URL parameter
   if (!url || typeof url !== 'string' || !url.trim()) {
     const durationMs = Date.now() - startTime;
     logStructured({
       requestId,
       timestamp: new Date().toISOString(),
       method,
-      repo: null,
+      repoIdHash: null,
       clientIp,
       userType,
       durationMs,
@@ -170,15 +171,11 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       failureCategory: 'client_validation',
     });
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'INVALID_REQUEST',
-          message: 'Missing or empty "url" parameter. Must provide a valid public or private GitHub repository URL.',
-        },
-      },
-      { status: 400 }
+    return createApiErrorResponse(
+      'INVALID_REQUEST',
+      'Missing repository URL. Provide ?url=https://github.com/owner/repo or JSON body {"url": "..."}',
+      400,
+      { requestId }
     );
   }
 
@@ -187,11 +184,17 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
     const project = await analyzeGitHubUrl(url.trim(), undefined, accessToken);
     const durationMs = Date.now() - startTime;
 
+    // Schema validation invariant
+    const validation = validateRepoDNAProject(project);
+    if (!validation.valid && process.env.NODE_ENV !== 'production') {
+      console.error('[RepoDNA:SchemaValidationError]', validation.errors);
+    }
+
     logStructured({
       requestId,
       timestamp: new Date().toISOString(),
       method,
-      repo: project.repository.name,
+      repoIdHash: hashRepo(url),
       clientIp,
       userType,
       durationMs,
@@ -210,7 +213,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
         requestId,
         timestamp: new Date().toISOString(),
         method,
-        repo: url,
+        repoIdHash: hashRepo(url),
         clientIp,
         userType,
         durationMs,
@@ -220,20 +223,13 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
         failureCategory: 'ingestion',
       });
 
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: error.code,
-            message: error.message,
-            fallbackAvailable:
-              error.code === 'UPSTREAM_GITHUB_RATE_LIMITED' ||
-              error.code === 'UPSTREAM_GITHUB_ERROR' ||
-              error.code === 'FETCH_TIMEOUT',
-          },
-        },
-        { status: error.status }
-      );
+      return createApiErrorResponse(error.code, error.message, error.status, {
+        requestId,
+        fallbackAvailable:
+          error.code === 'UPSTREAM_GITHUB_RATE_LIMITED' ||
+          error.code === 'UPSTREAM_GITHUB_ERROR' ||
+          error.code === 'FETCH_TIMEOUT',
+      });
     }
 
     const message = error instanceof Error ? error.message : 'Unexpected analysis failure';
@@ -241,7 +237,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       requestId,
       timestamp: new Date().toISOString(),
       method,
-      repo: url,
+      repoIdHash: hashRepo(url),
       clientIp,
       userType,
       durationMs,
@@ -251,16 +247,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       failureCategory: 'internal',
     });
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'ANALYSIS_FAILED',
-          message,
-        },
-      },
-      { status: 500 }
-    );
+    return createApiErrorResponse('ANALYSIS_FAILED', message, 500, { requestId });
   }
 }
 
@@ -280,15 +267,10 @@ export async function POST(request: NextRequest) {
       url = body.repo;
     }
   } catch {
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'MALFORMED_JSON',
-          message: 'Invalid JSON request body. Expected {"url": "https://github.com/owner/repo"}.',
-        },
-      },
-      { status: 400 }
+    return createApiErrorResponse(
+      'MALFORMED_JSON',
+      'Invalid JSON request body. Expected {"url": "https://github.com/owner/repo"}.',
+      400
     );
   }
 
