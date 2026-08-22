@@ -1875,10 +1875,40 @@ code, kbd {
 .react-flow__minimap {
   border: 1px solid #253646 !important;
   border-radius: 8px !important;
-  background: rgba(8, 12, 17, 0.9) !important;
+  background: #081018 !important;
   backdrop-filter: blur(16px) !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(76, 225, 245, 0.08) !important;
   overflow: hidden;
+}
+
+.react-flow__minimap-svg {
+  cursor: grab;
+}
+
+.react-flow__minimap-svg:active {
+  cursor: grabbing;
+}
+
+.react-flow__minimap-node {
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.react-flow__minimap-mask {
+  transition: fill 0.18s ease, stroke 0.18s ease;
+}
+
+.minimap-help {
+  position: absolute;
+  right: 15px;
+  bottom: 171px;
+  z-index: 10;
+  border: 1px solid #253646;
+  border-radius: 5px;
+  background: rgba(8, 14, 20, 0.9);
+  padding: 4px 7px;
+  color: #7f929f;
+  font: 600 8px var(--font-geist-mono);
+  pointer-events: none;
 }
 
 /* Routes & Tracing View */

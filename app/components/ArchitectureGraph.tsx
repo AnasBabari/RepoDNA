@@ -92,6 +92,8 @@ function ArchitectureNodeCard({ data }: NodeProps<ArchitectureNode>) {
 }
 
 const nodeTypes = { architecture: ArchitectureNodeCard };
+const ARCHITECTURE_NODE_WIDTH = 220;
+const ARCHITECTURE_NODE_HEIGHT = 104;
 
 /**
  * Calculates tiered hierarchical coordinates so graphs flow logically from
@@ -190,6 +192,8 @@ export function ArchitectureGraph({
         id: component.id,
         type: 'architecture',
         position: layout.get(component.id) ?? { x: 0, y: 0 },
+        initialWidth: ARCHITECTURE_NODE_WIDTH,
+        initialHeight: ARCHITECTURE_NODE_HEIGHT,
         data: {
           ...component,
           relation,
@@ -314,14 +318,26 @@ export function ArchitectureGraph({
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#192836" gap={32} size={1.2} />
-        <MiniMap
+        <MiniMap<ArchitectureNode>
           pannable
           zoomable
+          ariaLabel="Architecture map navigator. Drag to pan, scroll to zoom, or select a node."
+          bgColor="#081018"
           nodeColor={(node) => tones[(node.data as ArchitectureNodeData).type]?.color ?? '#84919e'}
-          maskColor="rgba(6, 9, 13, 0.85)"
+          nodeStrokeColor="#dffbff"
+          nodeStrokeWidth={3}
+          nodeBorderRadius={6}
+          maskColor="rgba(2, 8, 12, 0.42)"
+          maskStrokeColor="#4ce1f5"
+          maskStrokeWidth={2}
+          onNodeClick={(_, node) => onSelect(node.data)}
         />
         <Controls showInteractive={false} />
       </ReactFlow>
+
+      <div className="minimap-help" aria-hidden="true">
+        Navigator · drag to pan · scroll to zoom
+      </div>
 
       {/* Bottom Architectural Legend Bar */}
       <div className="arch-legend-bar">
