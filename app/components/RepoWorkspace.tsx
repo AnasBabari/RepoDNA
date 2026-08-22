@@ -35,6 +35,7 @@ import type {
 } from '../lib/types';
 
 type View = 'overview' | 'architecture' | 'routes' | 'dependencies' | 'files';
+type OverviewAudience = 'plain' | 'technical';
 
 const navigation: { id: View; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -452,7 +453,13 @@ function AnalyzingView({
   );
 }
 
-function RouteCoverageWarning({ project }: { project: RepoDNAProject }) {
+function RouteCoverageWarning({
+  project,
+  collapsible = false,
+}: {
+  project: RepoDNAProject;
+  collapsible?: boolean;
+}) {
   const mountWarnings = project.diagnostics.filter((item) =>
     ['DYNAMIC_ROUTE_MOUNT_UNRESOLVED', 'EXPRESS_ROUTE_MOUNT_UNRESOLVED'].includes(item.code)
   );
@@ -469,15 +476,29 @@ function RouteCoverageWarning({ project }: { project: RepoDNAProject }) {
           {mountWarnings.length} Express mount{mountWarnings.length === 1 ? '' : 's'} could not be resolved
           {pathWarnings.length ? ` · ${pathWarnings.length} displayed path${pathWarnings.length === 1 ? '' : 's'} incomplete` : ''}
         </h2>
-        <p>The paths identified below are router-local declarations, not verified public URLs. Additional runtime-only routes may be absent.</p>
-        <ul>
-          {warnings.slice(0, 10).map((warning, index) => (
-            <li key={`${warning.file}-${warning.code}-${index}`}>
-              <code>{warning.file ?? 'unknown file'}</code>
-              <span>{warning.message}</span>
-            </li>
-          ))}
-        </ul>
+        <p>The affected paths are shown as partial, so the map does not imply they are verified public URLs.</p>
+        {collapsible ? (
+          <details>
+            <summary>Review {warnings.length} technical detail{warnings.length === 1 ? '' : 's'}</summary>
+            <ul>
+              {warnings.slice(0, 10).map((warning, index) => (
+                <li key={`${warning.file}-${warning.code}-${index}`}>
+                  <code>{warning.file ?? 'unknown file'}</code>
+                  <span>{warning.message}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : (
+          <ul>
+            {warnings.slice(0, 10).map((warning, index) => (
+              <li key={`${warning.file}-${warning.code}-${index}`}>
+                <code>{warning.file ?? 'unknown file'}</code>
+                <span>{warning.message}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );
@@ -490,138 +511,235 @@ function isRoutePathIncomplete(project: RepoDNAProject, route: RouteRecord): boo
   );
 }
 
-function Overview({ project, onOpenArchitecture }: { project: RepoDNAProject; onOpenArchitecture: () => void }) {
+function Overview({
+  project,
+  onOpenArchitecture,
+  onOpenRoutes,
+}: {
+  project: RepoDNAProject;
+  onOpenArchitecture: () => void;
+  onOpenRoutes: () => void;
+}) {
+  const [audience, setAudience] = useState<OverviewAudience>('plain');
   const primaryEntry = project.entrypoints[0];
+  const incompletePaths = project.diagnostics.filter((item) => item.code === 'EXPRESS_ROUTE_PATH_INCOMPLETE').length;
+  const codebaseSize = project.repository.sourceFileCount <= 25
+    ? 'Small codebase'
+    : project.repository.sourceFileCount <= 150
+      ? 'Medium codebase'
+      : 'Large codebase';
+  const primaryTechnology = project.technologies[0] ?? Object.keys(project.repository.languages)[0] ?? 'Custom application';
+
   return (
     <div className="view-stack overview-view">
-      <section className="overview-hero">
+      <section className="overview-toolbar" aria-label="Overview audience">
         <div>
-          <p className="eyebrow cyan-text">Repository decoded</p>
-          <h1>Understand the system<br />before touching code.</h1>
-          <p className="hero-copy">
-            RepoDNA discovered {project.metrics.components} architectural regions, {project.metrics.routes} routes, and{' '}
-            {formatNumber(project.metrics.symbols)} symbols using deterministic static analysis.
-          </p>
-          <button className="primary-button" onClick={onOpenArchitecture} type="button">
-            Explore architecture map <span>→</span>
+          <p className="eyebrow cyan-text">Repository overview</p>
+          <p>Choose how much implementation detail you want to see.</p>
+        </div>
+        <div className="audience-switch" role="group" aria-label="Explanation level">
+          <button
+            className={audience === 'plain' ? 'is-active' : ''}
+            aria-pressed={audience === 'plain'}
+            onClick={() => setAudience('plain')}
+            type="button"
+          >
+            Simple
+            <small>Plain language</small>
+          </button>
+          <button
+            className={audience === 'technical' ? 'is-active' : ''}
+            aria-pressed={audience === 'technical'}
+            onClick={() => setAudience('technical')}
+            type="button"
+          >
+            Technical
+            <small>Metrics & evidence</small>
           </button>
         </div>
-        <div className="score-orbit" aria-label={`Repository complexity ${project.metrics.complexityScore} out of 100`}>
-          <div className="score-ring" style={{ '--score': `${project.metrics.complexityScore * 3.6}deg` } as React.CSSProperties}>
-            <span><strong>{project.metrics.complexityScore}</strong>/100</span>
+      </section>
+
+      <section className="overview-hero">
+        <div>
+          <p className="eyebrow cyan-text">Analysis complete</p>
+          <h1>{audience === 'plain' ? 'Here’s the shape of this repository.' : 'Repository analysis summary.'}</h1>
+          <p className="hero-copy">
+            {audience === 'plain'
+              ? `RepoDNA found ${project.metrics.components} main areas and ${project.metrics.routes} request paths. Start with the visual map, then follow the suggested reading order.`
+              : `Static analysis identified ${project.metrics.components} architectural regions, ${project.metrics.routes} routes, and ${formatNumber(project.metrics.symbols)} symbols without executing repository code.`}
+          </p>
+          <div className="overview-actions">
+            <button className="primary-button" onClick={onOpenArchitecture} type="button">
+              Open visual map <span>→</span>
+            </button>
+            <button className="secondary-button" onClick={onOpenRoutes} type="button">
+              View request paths
+            </button>
           </div>
-          <p>Structural complexity</p>
         </div>
-      </section>
-
-      <RouteCoverageWarning project={project} />
-
-      <section className="metric-grid" aria-label="Analysis summary">
-        <article>
-          <span>Source files</span>
-          <strong>{formatNumber(project.repository.sourceFileCount)}</strong>
-          <i>{project.metrics.parseSuccessRate}% parsed</i>
-        </article>
-        <article>
-          <span>Dependencies</span>
-          <strong>{formatNumber(project.metrics.localDependencies)}</strong>
-          <i>{project.metrics.externalDependencies} external</i>
-        </article>
-        <article>
-          <span>Routes</span>
-          <strong>{formatNumber(project.metrics.routes)}</strong>
-          <i>{project.flows.length} traceable flows</i>
-        </article>
-        <article>
-          <span>Cycles</span>
-          <strong>{project.metrics.dependencyCycles.length}</strong>
-          <i>{project.metrics.dependencyCycles.length ? 'Review recommended' : 'Clean architecture'}</i>
-        </article>
-      </section>
-
-      <div className="overview-columns">
-        <section className="panel stack-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Detected stack</p>
-              <h2>Technologies & frameworks</h2>
-            </div>
-            <span>{project.technologies.length} detected</span>
-          </div>
-          <div className="technology-cloud">
-            {project.technologies.length > 0 ? (
-              project.technologies.map((technology) => (
-                <span key={technology}>{technology}</span>
-              ))
-            ) : (
-              <p className="empty-copy">No third-party frameworks detected.</p>
-            )}
-          </div>
-          <div className="language-bars">
-            {Object.entries(project.repository.languages).map(([language, percentage]) => (
-              <div key={language}>
-                <span>{language}</span>
-                <i><b style={{ width: `${percentage}%` }} /></i>
-                <strong>{percentage}%</strong>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel start-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Execution</p>
-              <h2>Start here</h2>
-            </div>
-            <span>{project.entrypoints.length} entrypoints</span>
-          </div>
-          {primaryEntry ? (
-            <div className="entrypoint-card">
-              <span className="file-glyph">↳</span>
-              <div>
-                <strong>{primaryEntry.file}</strong>
-                <p>{primaryEntry.evidence[0] ?? 'Likely application entry point'}</p>
-              </div>
-              <i>{Math.round(primaryEntry.confidence * 100)}% match</i>
-            </div>
-          ) : (
-            <p className="empty-copy">No confident application entry point was found.</p>
-          )}
-          <p className="eyebrow subheading">Recommended tour</p>
-          <ol className="tour-list">
-            {project.onboarding.slice(0, 4).map((step) => (
-              <li key={`${step.step}-${step.file}`}>
-                <span>0{step.step}</span>
-                <div>
-                  <strong>{step.title}</strong>
-                  <code>{step.file}</code>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-      </div>
-
-      <section className="panel important-panel">
-        <div className="panel-heading">
+        <div className="analysis-trust-card">
+          <span>✓</span>
           <div>
-            <p className="eyebrow">Centrality</p>
-            <h2>Files worth reading first</h2>
+            <strong>Safe static analysis</strong>
+            <p>No repository code or install scripts were run.</p>
           </div>
-          <span>Top {Math.min(5, project.important_files.length)}</span>
-        </div>
-        <div className="important-grid">
-          {project.important_files.slice(0, 5).map((file, index) => (
-            <article key={file.file}>
-              <span>0{index + 1}</span>
-              <strong>{file.file}</strong>
-              <p>{file.reasons.slice(0, 2).join(' · ')}</p>
-              <i>{file.score} pts</i>
-            </article>
-          ))}
         </div>
       </section>
+
+      {audience === 'plain' ? (
+        <>
+          <section className="plain-summary-grid" aria-label="Plain-language summary">
+            <article>
+              <span>Size</span>
+              <strong>{codebaseSize}</strong>
+              <p>{formatNumber(project.repository.sourceFileCount)} source files were analyzed.</p>
+            </article>
+            <article>
+              <span>Built with</span>
+              <strong>{primaryTechnology}</strong>
+              <p>{project.technologies.length > 1 ? `Plus ${project.technologies.length - 1} other detected technologies.` : 'Primary detected technology.'}</p>
+            </article>
+            <article>
+              <span>Map quality</span>
+              <strong>{incompletePaths ? 'Mostly mapped' : 'Fully mapped'}</strong>
+              <p>{incompletePaths ? `${incompletePaths} request path${incompletePaths === 1 ? '' : 's'} need verification.` : 'No unresolved request paths were found.'}</p>
+            </article>
+          </section>
+
+          <RouteCoverageWarning project={project} collapsible />
+
+          <section className="panel reading-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Suggested path</p>
+                <h2>What to open first</h2>
+              </div>
+              <span>{Math.min(3, project.onboarding.length)} steps</span>
+            </div>
+            <ol className="plain-reading-list">
+              {project.onboarding.slice(0, 3).map((step) => (
+                <li key={`${step.step}-${step.file}`}>
+                  <span>{step.step}</span>
+                  <div>
+                    <strong>{step.title}</strong>
+                    <p>{step.file}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </>
+      ) : (
+        <>
+          <section className="metric-grid" aria-label="Technical analysis summary">
+            <article>
+              <span>Source files</span>
+              <strong>{formatNumber(project.repository.sourceFileCount)}</strong>
+              <i>{project.metrics.parseSuccessRate}% parsed</i>
+            </article>
+            <article>
+              <span>Dependencies</span>
+              <strong>{formatNumber(project.metrics.localDependencies)}</strong>
+              <i>{project.metrics.externalDependencies} external · {project.metrics.dependencyCycles.length} cycles</i>
+            </article>
+            <article>
+              <span>Routes</span>
+              <strong>{formatNumber(project.metrics.routes)}</strong>
+              <i>{project.flows.length} traceable flows</i>
+            </article>
+            <article>
+              <span>Complexity</span>
+              <strong>{project.metrics.complexityScore}/100</strong>
+              <i>Structural score</i>
+            </article>
+          </section>
+
+          <RouteCoverageWarning project={project} collapsible />
+
+          <div className="overview-columns">
+            <section className="panel stack-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Detected stack</p>
+                  <h2>Technologies & languages</h2>
+                </div>
+                <span>{project.technologies.length} detected</span>
+              </div>
+              <div className="technology-cloud">
+                {project.technologies.length > 0 ? (
+                  project.technologies.map((technology) => (
+                    <span key={technology}>{technology}</span>
+                  ))
+                ) : (
+                  <p className="empty-copy">No third-party frameworks detected.</p>
+                )}
+              </div>
+              <div className="language-bars">
+                {Object.entries(project.repository.languages).map(([language, percentage]) => (
+                  <div key={language}>
+                    <span>{language}</span>
+                    <i><b style={{ width: `${percentage}%` }} /></i>
+                    <strong>{percentage}%</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel start-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Execution</p>
+                  <h2>Entrypoint & reading order</h2>
+                </div>
+                <span>{project.entrypoints.length} entrypoints</span>
+              </div>
+              {primaryEntry ? (
+                <div className="entrypoint-card">
+                  <span className="file-glyph">↳</span>
+                  <div>
+                    <strong>{primaryEntry.file}</strong>
+                    <p>{primaryEntry.evidence[0] ?? 'Likely application entry point'}</p>
+                  </div>
+                  <i>{Math.round(primaryEntry.confidence * 100)}% match</i>
+                </div>
+              ) : (
+                <p className="empty-copy">No confident application entry point was found.</p>
+              )}
+              <ol className="tour-list">
+                {project.onboarding.slice(0, 3).map((step) => (
+                  <li key={`${step.step}-${step.file}`}>
+                    <span>0{step.step}</span>
+                    <div>
+                      <strong>{step.title}</strong>
+                      <code>{step.file}</code>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
+
+          <section className="panel important-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Structural importance</p>
+                <h2>Highest-impact files</h2>
+              </div>
+              <span>Top {Math.min(5, project.important_files.length)}</span>
+            </div>
+            <div className="important-grid">
+              {project.important_files.slice(0, 5).map((file, index) => (
+                <article key={file.file}>
+                  <span>0{index + 1}</span>
+                  <strong>{file.file}</strong>
+                  <p>{file.reasons.slice(0, 2).join(' · ')}</p>
+                  <i>{file.score} pts</i>
+                </article>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }
@@ -1638,25 +1756,33 @@ function WorkspaceContent() {
             {item.label}
           </button>
         ))}
-        <div className="sidebar-divider" />
-        <p className="eyebrow">Repository stats</p>
-        <div className="repo-facts">
-          <span><strong>{project.repository.sourceFileCount}</strong> source files</span>
-          <span><strong>{project.metrics.symbols}</strong> symbols</span>
-          <span><strong>{project.metrics.routes}</strong> routes</span>
-        </div>
-        <div className="privacy-card">
-          <span className="shield">◆</span>
-          <div>
-            <strong>Client-Side & Safe</strong>
-            <p>Zero runtime code execution.</p>
-          </div>
-        </div>
+        {view !== 'overview' && (
+          <>
+            <div className="sidebar-divider" />
+            <p className="eyebrow">Repository stats</p>
+            <div className="repo-facts">
+              <span><strong>{project.repository.sourceFileCount}</strong> source files</span>
+              <span><strong>{project.metrics.symbols}</strong> symbols</span>
+              <span><strong>{project.metrics.routes}</strong> routes</span>
+            </div>
+            <div className="privacy-card">
+              <span className="shield">◆</span>
+              <div>
+                <strong>Client-Side & Safe</strong>
+                <p>Zero runtime code execution.</p>
+              </div>
+            </div>
+          </>
+        )}
       </aside>
 
       <section className="workspace">
         {view === 'overview' && (
-          <Overview project={project} onOpenArchitecture={() => setView('architecture')} />
+          <Overview
+            project={project}
+            onOpenArchitecture={() => handleSwitchView('architecture')}
+            onOpenRoutes={() => handleSwitchView('routes')}
+          />
         )}
         {view === 'architecture' && (
           <div className="architecture-view">
