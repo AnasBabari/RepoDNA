@@ -1708,6 +1708,35 @@ code, kbd {
   box-shadow: inset 3px 0 0 var(--cyan);
 }
 
+.route-row.is-incomplete {
+  background: linear-gradient(90deg, rgba(255, 174, 66, 0.07), transparent 72%);
+}
+
+.route-path {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.route-path code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-path small {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 174, 66, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 174, 66, 0.1);
+  padding: 2px 6px;
+  color: #ffc76f;
+  font: 650 8px var(--font-geist-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .route-row code {
   color: #b8c4cd;
   font-size: 11px;

@@ -453,9 +453,11 @@ function AnalyzingView({
 }
 
 function RouteCoverageWarning({ project }: { project: RepoDNAProject }) {
-  const warnings = project.diagnostics.filter((item) =>
+  const mountWarnings = project.diagnostics.filter((item) =>
     ['DYNAMIC_ROUTE_MOUNT_UNRESOLVED', 'EXPRESS_ROUTE_MOUNT_UNRESOLVED'].includes(item.code)
   );
+  const pathWarnings = project.diagnostics.filter((item) => item.code === 'EXPRESS_ROUTE_PATH_INCOMPLETE');
+  const warnings = [...mountWarnings, ...pathWarnings];
   if (!warnings.length) return null;
 
   return (
@@ -463,10 +465,13 @@ function RouteCoverageWarning({ project }: { project: RepoDNAProject }) {
       <div className="route-coverage-icon">!</div>
       <div>
         <p className="eyebrow">Incomplete route map</p>
-        <h2>{warnings.length} Express mount{warnings.length === 1 ? '' : 's'} could not be resolved</h2>
-        <p>Routes beneath these runtime mounts may be absent or may not include their full URL prefix.</p>
+        <h2>
+          {mountWarnings.length} Express mount{mountWarnings.length === 1 ? '' : 's'} could not be resolved
+          {pathWarnings.length ? ` · ${pathWarnings.length} displayed path${pathWarnings.length === 1 ? '' : 's'} incomplete` : ''}
+        </h2>
+        <p>The paths identified below are router-local declarations, not verified public URLs. Additional runtime-only routes may be absent.</p>
         <ul>
-          {warnings.slice(0, 6).map((warning, index) => (
+          {warnings.slice(0, 10).map((warning, index) => (
             <li key={`${warning.file}-${warning.code}-${index}`}>
               <code>{warning.file ?? 'unknown file'}</code>
               <span>{warning.message}</span>
@@ -475,6 +480,13 @@ function RouteCoverageWarning({ project }: { project: RepoDNAProject }) {
         </ul>
       </div>
     </section>
+  );
+}
+
+function isRoutePathIncomplete(project: RepoDNAProject, route: RouteRecord): boolean {
+  const messagePrefix = `Full mounted path unresolved for ${route.method} ${route.path};`;
+  return project.diagnostics.some((item) =>
+    item.code === 'EXPRESS_ROUTE_PATH_INCOMPLETE' && item.file === route.file && item.message.startsWith(messagePrefix)
   );
 }
 
@@ -648,13 +660,16 @@ function RoutesView({
           </div>
           {project.routes.map((route) => (
             <button
-              className={`route-row ${selected?.id === route.id ? 'is-selected' : ''}`}
+              className={`route-row ${selected?.id === route.id ? 'is-selected' : ''} ${isRoutePathIncomplete(project, route) ? 'is-incomplete' : ''}`}
               key={route.id}
               onClick={() => onSelect(route)}
               type="button"
             >
               <span className={`method ${methodTone[route.method] ?? ''}`}>{route.method}</span>
-              <code>{route.path}</code>
+              <span className="route-path">
+                <code>{route.path}</code>
+                {isRoutePathIncomplete(project, route) && <small title="The runtime mount prefix could not be resolved">partial path</small>}
+              </span>
               <span>{route.handler.split('::').at(-1)}</span>
               <i>{Math.round(route.confidence * 100)}%</i>
             </button>
