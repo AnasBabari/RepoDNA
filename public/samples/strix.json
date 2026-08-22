@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "generatedAt": "2026-08-22T00:32:11.983Z",
+  "generatedAt": "2026-08-22T10:48:29.288Z",
   "repository": {
     "name": "strix",
     "source": "https://github.com/usestrix/strix",
@@ -10,7 +10,7 @@
     },
     "fileCount": 10,
     "sourceFileCount": 8,
-    "parsedFileCount": 0,
+    "parsedFileCount": 8,
     "lines": 108,
     "fingerprint": {
       "languages": [
@@ -77,7 +77,7 @@
       "bytes": 900,
       "hash": "strix_1",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -88,7 +88,7 @@
       "bytes": 1100,
       "hash": "strix_2",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -99,7 +99,7 @@
       "bytes": 1200,
       "hash": "strix_3",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -110,7 +110,7 @@
       "bytes": 950,
       "hash": "strix_4",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -121,7 +121,7 @@
       "bytes": 650,
       "hash": "strix_5",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -132,7 +132,7 @@
       "bytes": 750,
       "hash": "strix_6",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -143,7 +143,7 @@
       "bytes": 800,
       "hash": "strix_7",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -154,7 +154,7 @@
       "bytes": 900,
       "hash": "strix_8",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     }
   ],
@@ -1412,7 +1412,7 @@
     "symbols": 26,
     "routes": 2,
     "components": 7,
-    "parseSuccessRate": 0
+    "parseSuccessRate": 100
   },
   "diagnostics": [],
   "metadata": {

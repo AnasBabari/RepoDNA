@@ -1,5 +1,6 @@
 import { analyzeJavaScript } from './analyzers/javascript';
 import { analyzePython } from './analyzers/python';
+import { analyzePythonTreeSitter } from './analyzers/python-treesitter';
 import { environmentEvidence, fingerprint, languageFor, parseTsconfigPaths } from './detection';
 import {
   buildArchitecture,
@@ -21,13 +22,31 @@ import type {
   TechnologyBoundary,
 } from './types';
 
-export function analyzeRepositoryFiles(discovery: {
-  files: DiscoveredFile[];
-  skipped: { path: string; reason: string }[];
-  name: string;
-  source: string;
-}): RepoDNAProject {
+export type ParserMode = 'legacy' | 'tree-sitter';
+
+export interface AnalyzeOptions {
+  parserMode?: ParserMode;
+}
+
+export function resolveParserMode(options?: AnalyzeOptions): ParserMode {
+  if (options?.parserMode) return options.parserMode;
+  if (typeof process !== 'undefined' && process.env?.REPODNA_PARSER_MODE === 'tree-sitter') {
+    return 'tree-sitter';
+  }
+  return 'legacy';
+}
+
+export async function analyzeRepositoryFiles(
+  discovery: {
+    files: DiscoveredFile[];
+    skipped: { path: string; reason: string }[];
+    name: string;
+    source: string;
+  },
+  options?: AnalyzeOptions
+): Promise<RepoDNAProject> {
   const { files: discoveredFiles, skipped, name, source } = discovery;
+  const parserMode = resolveParserMode(options);
 
   const fingerprintData = fingerprint(discoveredFiles);
   const pathAliases = parseTsconfigPaths(discoveredFiles);
@@ -61,7 +80,10 @@ export function analyzeRepositoryFiles(discovery: {
 
     let partial: PartialAnalysis;
     if (discovered.path.endsWith('.py') || discovered.path.endsWith('.pyi')) {
-      partial = analyzePython(discovered);
+      partial =
+        parserMode === 'tree-sitter'
+          ? await analyzePythonTreeSitter(discovered)
+          : analyzePython(discovered);
     } else if (['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'].some((ext) => discovered.path.endsWith(ext))) {
       partial = analyzeJavaScript(discovered);
     } else {
@@ -79,7 +101,31 @@ export function analyzeRepositoryFiles(discovery: {
     }
 
     partials.push(partial);
-    if (partial.file.error) {
+    fileRec.parsed = partial.file.parsed;
+    fileRec.error = partial.file.error;
+    if (partial.parserNotice) {
+      diagnostics.push({
+        severity: 'warning',
+        code: partial.parserNotice.code,
+        message: partial.parserNotice.message,
+        file: partial.file.path,
+      });
+    } else if (partial.parseMeta?.quality === 'partial') {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'SOURCE_PARSE_PARTIAL',
+        message: `Python source contained syntax errors and was partially analyzed.`,
+        file: partial.file.path,
+      });
+    } else if (partial.parseMeta?.quality === 'failed') {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'SOURCE_PARSE_FAILED',
+        message: `Python source could not be parsed and was skipped from syntax analysis.`,
+        file: partial.file.path,
+      });
+    }
+    if (partial.file.error && !partial.parserNotice) {
       diagnostics.push({
         severity: 'warning',
         code: 'parse_error',
@@ -211,7 +257,7 @@ export function analyzeRepositoryFiles(discovery: {
     },
     diagnostics,
     metadata: {
-      analysisMode: 'static-typescript',
+      analysisMode: parserMode === 'tree-sitter' ? 'static-typescript-tree-sitter' : 'static-typescript',
       executedRepositoryCode: false,
       analyzerVersion: '1.2.0',
       limits: {
@@ -285,18 +331,28 @@ function resolveManifestTarget(manifestPath: string, candidate: string, availabl
 export async function analyzeGitHubUrl(
   url: string,
   limits?: import('./types').IngestionLimits,
-  accessToken?: string
+  accessToken?: string,
+  options?: AnalyzeOptions
 ): Promise<RepoDNAProject> {
   const discovery = await fetchGitHubRepo(url, limits, accessToken);
-  return analyzeRepositoryFiles(discovery);
+  return analyzeRepositoryFiles(discovery, options);
 }
 
-export async function analyzeUploadedFiles(files: FileList | File[], limits?: import('./types').IngestionLimits): Promise<RepoDNAProject> {
+export async function analyzeUploadedFiles(
+  files: FileList | File[],
+  limits?: import('./types').IngestionLimits,
+  options?: AnalyzeOptions
+): Promise<RepoDNAProject> {
   const discovery = await extractFromFileList(files, limits);
-  return analyzeRepositoryFiles(discovery);
+  return analyzeRepositoryFiles(discovery, options);
 }
 
-export async function analyzeZipBuffer(buffer: ArrayBuffer | Uint8Array, name = 'uploaded-repo', limits?: import('./types').IngestionLimits): Promise<RepoDNAProject> {
+export async function analyzeZipBuffer(
+  buffer: ArrayBuffer | Uint8Array,
+  name = 'uploaded-repo',
+  limits?: import('./types').IngestionLimits,
+  options?: AnalyzeOptions
+): Promise<RepoDNAProject> {
   const discovery = await extractFromZip(buffer, name, limits);
-  return analyzeRepositoryFiles({ ...discovery, source: `upload:zip:${name}` });
+  return analyzeRepositoryFiles({ ...discovery, source: `upload:zip:${name}` }, options);
 }

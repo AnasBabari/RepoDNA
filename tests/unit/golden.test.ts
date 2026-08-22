@@ -3,7 +3,7 @@ import { analyzeRepositoryFiles } from '../../app/lib/analyzer';
 import type { DiscoveredFile } from '../../app/lib/analyzer/types';
 
 describe('Cross-Engine Golden Structure Verification', () => {
-  it('correctly maps mixed-language full stack architecture', () => {
+  it('correctly maps mixed-language full stack architecture', async () => {
     const discovery = {
       name: 'golden-app',
       source: 'test:fixture',
@@ -97,7 +97,7 @@ export function Dashboard() {
       ] as DiscoveredFile[],
     };
 
-    const project = analyzeRepositoryFiles(discovery);
+    const project = await analyzeRepositoryFiles(discovery);
 
     // 1. Repository metadata
     expect(project.schemaVersion).toBe('1.1.0');

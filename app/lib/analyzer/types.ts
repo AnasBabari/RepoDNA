@@ -71,6 +71,8 @@ export interface PartialAnalysis {
   databases: Set<string>;
   externals: Set<string>;
   entrypointEvidence: string[];
+  parseMeta?: { quality: 'complete' | 'partial' | 'failed'; errorNodes: number };
+  parserNotice?: { code: string; message: string };
 }
 
 export type {

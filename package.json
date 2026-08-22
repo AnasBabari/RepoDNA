@@ -8,6 +8,10 @@
   },
   "scripts": {
     "dev": "vinext dev",
+    "postinstall": "node scripts/copy-tree-sitter-wasm.mjs",
+    "copy:wasm": "node scripts/copy-tree-sitter-wasm.mjs",
+    "prebuild": "node scripts/copy-tree-sitter-wasm.mjs",
+    "prebuild:vercel": "node scripts/copy-tree-sitter-wasm.mjs",
     "build": "vinext build",
     "build:vercel": "next build",
     "start": "vinext start",
@@ -27,7 +31,8 @@
     "next-auth": "^5.0.0-beta.32",
     "posthog-js": "^1.418.10",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "web-tree-sitter": "^0.26.12"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.53.1",
@@ -48,6 +53,7 @@
     "puppeteer-core": "^25.8.0",
     "react-server-dom-webpack": "^19.2.8",
     "tailwindcss": "4.2.1",
+    "tree-sitter-python": "^0.25.0",
     "typescript": "5.9.3",
     "vinext": "^1.0.0-beta.8",
     "vite": "^8.2.2",

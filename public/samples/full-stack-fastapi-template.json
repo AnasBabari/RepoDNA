@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "generatedAt": "2026-08-22T00:32:11.993Z",
+  "generatedAt": "2026-08-22T10:48:29.300Z",
   "repository": {
     "name": "full-stack-fastapi-template",
     "source": "https://github.com/tiangolo/full-stack-fastapi-template",
@@ -10,7 +10,7 @@
     },
     "fileCount": 11,
     "sourceFileCount": 9,
-    "parsedFileCount": 0,
+    "parsedFileCount": 9,
     "lines": 125,
     "fingerprint": {
       "languages": [
@@ -77,7 +77,7 @@
       "bytes": 900,
       "hash": "fst_1",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -88,7 +88,7 @@
       "bytes": 700,
       "hash": "fst_2",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -99,7 +99,7 @@
       "bytes": 1100,
       "hash": "fst_3",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -110,7 +110,7 @@
       "bytes": 900,
       "hash": "fst_4",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -121,7 +121,7 @@
       "bytes": 700,
       "hash": "fst_5",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -132,7 +132,7 @@
       "bytes": 600,
       "hash": "fst_6",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -143,7 +143,7 @@
       "bytes": 700,
       "hash": "fst_7",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -154,7 +154,7 @@
       "bytes": 700,
       "hash": "fst_8",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -165,7 +165,7 @@
       "bytes": 600,
       "hash": "fst_9",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     }
   ],
@@ -1327,7 +1327,7 @@
     "symbols": 26,
     "routes": 4,
     "components": 4,
-    "parseSuccessRate": 0
+    "parseSuccessRate": 100
   },
   "diagnostics": [],
   "metadata": {

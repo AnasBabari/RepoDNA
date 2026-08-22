@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "generatedAt": "2026-08-22T00:32:11.988Z",
+  "generatedAt": "2026-08-22T10:48:29.297Z",
   "repository": {
     "name": "nanoGPT",
     "source": "https://github.com/karpathy/nanoGPT",
@@ -9,7 +9,7 @@
     },
     "fileCount": 4,
     "sourceFileCount": 3,
-    "parsedFileCount": 0,
+    "parsedFileCount": 3,
     "lines": 104,
     "fingerprint": {
       "languages": [
@@ -48,7 +48,7 @@
       "bytes": 2400,
       "hash": "ng_1",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -59,7 +59,7 @@
       "bytes": 1400,
       "hash": "ng_2",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     },
     {
@@ -70,7 +70,7 @@
       "bytes": 800,
       "hash": "ng_3",
       "role": "source",
-      "parsed": false,
+      "parsed": true,
       "error": null
     }
   ],
@@ -1008,7 +1008,7 @@
     "symbols": 18,
     "routes": 0,
     "components": 1,
-    "parseSuccessRate": 0
+    "parseSuccessRate": 100
   },
   "diagnostics": [],
   "metadata": {
