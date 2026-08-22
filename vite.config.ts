@@ -2,12 +2,22 @@ import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
 import { defineConfig } from 'vite';
-import hostingConfig from './.openai/hosting.json' with { type: 'json' };
+import fs from 'node:fs';
+
+let hostingConfig: { d1?: string | null; r2?: string | null } = { d1: null, r2: null };
+try {
+  if (fs.existsSync('./.openai/hosting.json')) {
+    hostingConfig = JSON.parse(fs.readFileSync('./.openai/hosting.json', 'utf8'));
+  }
+} catch {
+  // Graceful fallback
+}
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   '00000000-0000-4000-8000-000000000000';
 
-const { d1, r2 } = hostingConfig;
+const d1 = hostingConfig?.d1 ?? null;
+const r2 = hostingConfig?.r2 ?? null;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';

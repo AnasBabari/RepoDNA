@@ -63,6 +63,5 @@ RELEASE_NOTES.md
 SECURITY.md
 
 # Tooling, scripts & IDE clutter
-.openai/
 .vscode/
 scripts/
