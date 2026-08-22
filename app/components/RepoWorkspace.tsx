@@ -10,6 +10,13 @@ import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
 import { analyzeGitHubUrl, analyzeUploadedFiles, analyzeZipBuffer } from '../lib/analyzer';
 import {
+  ANALYSIS_COMPLETE_STEP,
+  ANALYSIS_PROGRESS_STEPS,
+  AnalysisCancelledError,
+  assertArchitectureConsistency,
+  runAnalysisLifecycle,
+} from '../lib/analysis-lifecycle';
+import {
   initAnalytics,
   identifyUser,
   trackAnalysisCompleted,
@@ -56,7 +63,17 @@ function matchesProject(value: unknown): value is RepoDNAProject {
     typeof candidate.schemaVersion === 'string' &&
     !!candidate.repository?.name &&
     Array.isArray(candidate.files) &&
-    Array.isArray(candidate.architecture?.components)
+    Array.isArray(candidate.symbols) &&
+    Array.isArray(candidate.imports) &&
+    Array.isArray(candidate.calls) &&
+    Array.isArray(candidate.routes) &&
+    Array.isArray(candidate.entrypoints) &&
+    Array.isArray(candidate.flows) &&
+    Array.isArray(candidate.architecture?.components) &&
+    Array.isArray(candidate.architecture?.connections) &&
+    !!candidate.metrics &&
+    Array.isArray(candidate.diagnostics) &&
+    !!candidate.metadata?.fileComponents
   );
 }
 
@@ -375,14 +392,6 @@ function AnalyzingView({
   onClientFallback?: () => void;
   onCancel: () => void;
 }) {
-  const steps = [
-    'Connecting to repository source...',
-    'Extracting source files and manifests...',
-    'Parsing symbols, routes, and data models...',
-    'Resolving imports and execution call graphs...',
-    'Synthesizing architecture map & metrics...',
-  ];
-
   return (
     <main className="landing-shell">
       <div className="analyzing-container">
@@ -414,7 +423,7 @@ function AnalyzingView({
         ) : (
           <div>
             <ul className="progress-steps-list">
-              {steps.map((text, idx) => {
+              {ANALYSIS_PROGRESS_STEPS.map((text, idx) => {
                 const isDone = idx < step;
                 const isActive = idx === step;
                 return (
@@ -428,6 +437,11 @@ function AnalyzingView({
                 );
               })}
             </ul>
+            <p className="analysis-stage-summary" aria-live="polite">
+              {step >= ANALYSIS_COMPLETE_STEP
+                ? 'All analysis and consistency checks completed.'
+                : `Stage ${Math.min(step + 1, ANALYSIS_PROGRESS_STEPS.length)} of ${ANALYSIS_PROGRESS_STEPS.length}`}
+            </p>
             <p className="privacy-note">
               <span>◆</span> Local-first & serverless analysis. Your source is never persisted.
             </p>
@@ -1143,10 +1157,62 @@ function WorkspaceContent() {
   const [privatePickerOpen, setPrivatePickerOpen] = useState(false);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const activeAnalysisRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     initAnalytics();
+    return () => activeAnalysisRef.current?.abort();
   }, []);
+
+  function beginAnalysis(target: string): AbortController {
+    activeAnalysisRef.current?.abort();
+    const controller = new AbortController();
+    activeAnalysisRef.current = controller;
+    setAnalyzingTarget(target);
+    setAnalyzingStep(0);
+    setAnalyzingError(null);
+    setAnalyzingErrorCode(null);
+    setAnalyzingRetryAfter(null);
+    return controller;
+  }
+
+  function isActiveAnalysis(controller: AbortController): boolean {
+    return activeAnalysisRef.current === controller && !controller.signal.aborted;
+  }
+
+  async function analyzeThroughSplash(
+    controller: AbortController,
+    analyze: () => Promise<RepoDNAProject>
+  ): Promise<RepoDNAProject> {
+    return runAnalysisLifecycle({
+      analyze,
+      validate: assertArchitectureConsistency,
+      signal: controller.signal,
+      onStep: (step) => {
+        if (isActiveAnalysis(controller)) setAnalyzingStep(step);
+      },
+    });
+  }
+
+  function revealProject(controller: AbortController, analyzedProject: RepoDNAProject) {
+    if (!isActiveAnalysis(controller)) return;
+    activeAnalysisRef.current = null;
+    setAnalyzingTarget(null);
+    setProject(analyzedProject);
+    setView('overview');
+    setSearch('');
+    setSelectedComponent(
+      analyzedProject.architecture.components.find((component) => component.type === 'api') ??
+        analyzedProject.architecture.components[0] ??
+        null
+    );
+    setSelectedRoute(analyzedProject.routes[0] ?? null);
+  }
+
+  function showAnalysisError(controller: AbortController, error: unknown, fallbackMessage: string) {
+    if (!isActiveAnalysis(controller) || error instanceof AnalysisCancelledError) return;
+    setAnalyzingError(error instanceof Error ? error.message : fallbackMessage);
+  }
 
   // Check URL query parameters (e.g. ?repo=https://github.com/owner/repo)
   useEffect(() => {
@@ -1203,51 +1269,36 @@ function WorkspaceContent() {
   async function handleAnalyzeGitHub(url: string, forceClientOnly = false) {
     const cleanUrl = url.trim();
     const startTime = Date.now();
+    const controller = beginAnalysis(cleanUrl);
+    let failureCode = 'CLIENT_ERROR';
+    let loadedSample = false;
     trackAnalysisIntent('github_public');
-    setAnalyzingTarget(cleanUrl);
-    setAnalyzingStep(0);
-    setAnalyzingError(null);
-    setAnalyzingErrorCode(null);
-    setAnalyzingRetryAfter(null);
-
-    // 0. Check pre-cached instant sample artifacts first
-    if (!forceClientOnly) {
-      const samplePath = SAMPLE_ARTIFACTS[cleanUrl] || SAMPLE_ARTIFACTS[cleanUrl.replace(/\/$/, '')];
-      if (samplePath) {
-        try {
-          const sampleRes = await fetch(samplePath);
-          if (sampleRes.ok) {
-            const parsedSample = (await sampleRes.json()) as unknown;
-            if (matchesProject(parsedSample)) {
-              setAnalyzingTarget(null);
-              setProject(parsedSample);
-              setView('overview');
-              setSearch('');
-              setSelectedComponent(
-                parsedSample.architecture.components.find((c) => c.type === 'api') ??
-                  parsedSample.architecture.components[0] ??
-                  null
-              );
-              setSelectedRoute(parsedSample.routes[0] ?? null);
-              trackAnalysisCompleted('demo', Date.now() - startTime, parsedSample.repository.fileCount);
-              return;
-            }
-          }
-        } catch {
-          // Continue with standard fetch if sample load fails
-        }
-      }
-    }
-
-    const stepInterval = setInterval(() => {
-      setAnalyzingStep((prev) => (prev < 4 ? prev + 1 : prev));
-    }, 400);
 
     try {
-      let analyzedProject: RepoDNAProject | null = null;
+      const analyzedProject = await analyzeThroughSplash(controller, async () => {
+        // Check pre-cached sample artifacts without bypassing the shared progress lifecycle.
+        if (!forceClientOnly) {
+          const samplePath = SAMPLE_ARTIFACTS[cleanUrl] || SAMPLE_ARTIFACTS[cleanUrl.replace(/\/$/, '')];
+          if (samplePath) {
+            try {
+              const sampleRes = await fetch(samplePath, { signal: controller.signal });
+              if (sampleRes.ok) {
+                const parsedSample = (await sampleRes.json()) as unknown;
+                if (matchesProject(parsedSample)) {
+                  loadedSample = true;
+                  return parsedSample;
+                }
+              }
+            } catch {
+              if (controller.signal.aborted) throw new AnalysisCancelledError();
+              // Continue with standard fetch if a sample artifact is unavailable.
+            }
+          }
+        }
 
-      if (!forceClientOnly) {
-        // 1. Try Next.js serverless API route first
+        if (forceClientOnly) return analyzeGitHubUrl(cleanUrl);
+
+        // Try the serverless analyzer first, then transparently fall back to the browser.
         interface ApiResponse {
           success?: boolean;
           project?: unknown;
@@ -1262,178 +1313,144 @@ function WorkspaceContent() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: cleanUrl }),
+            signal: controller.signal,
           });
 
           apiData = (await res.json().catch(() => null)) as ApiResponse | null;
-
-          if (res.ok && apiData && apiData.success && matchesProject(apiData.project)) {
-            analyzedProject = apiData.project;
-          } else {
-            isServerError = true;
-          }
+          if (res.ok && apiData?.success && matchesProject(apiData.project)) return apiData.project;
+          isServerError = true;
         } catch {
+          if (controller.signal.aborted) throw new AnalysisCancelledError();
           isServerError = true;
         }
 
-        if (isServerError) {
-          const errObj = apiData && apiData.error ? apiData.error : null;
-          // Automatic client-side in-browser fallback for rate limits or server infrastructure errors
-          const shouldAutoFallback =
-            !errObj ||
-            errObj.code === 'RATE_LIMITED' ||
-            errObj.code === 'RATE_LIMIT_UNAVAILABLE' ||
-            errObj.code === 'UPSTREAM_GITHUB_RATE_LIMITED' ||
-            errObj.code === 'UPSTREAM_GITHUB_ERROR' ||
-            errObj.code === 'FETCH_TIMEOUT' ||
-            errObj.fallbackAvailable;
+        if (!isServerError) throw new Error('Analysis did not produce a valid project.');
 
-          if (shouldAutoFallback) {
-            const fallbackReason =
-              errObj?.code === 'RATE_LIMITED' || errObj?.code === 'UPSTREAM_GITHUB_RATE_LIMITED'
-                ? 'rate_limited'
-                : errObj?.code === 'FETCH_TIMEOUT'
-                ? 'timeout'
-                : errObj?.code === 'RATE_LIMIT_UNAVAILABLE'
+        const errObj = apiData?.error ?? null;
+        const shouldAutoFallback =
+          !errObj ||
+          errObj.code === 'RATE_LIMITED' ||
+          errObj.code === 'RATE_LIMIT_UNAVAILABLE' ||
+          errObj.code === 'UPSTREAM_GITHUB_RATE_LIMITED' ||
+          errObj.code === 'UPSTREAM_GITHUB_ERROR' ||
+          errObj.code === 'FETCH_TIMEOUT' ||
+          errObj.fallbackAvailable;
+
+        if (!shouldAutoFallback) {
+          failureCode = errObj.code || 'UNKNOWN';
+          setAnalyzingErrorCode(errObj.code ?? null);
+          setAnalyzingRetryAfter(errObj.retryAfter ?? null);
+          trackAnalysisFailed('github_public', failureCode, 'server_error');
+          throw new Error(errObj.message || 'Analysis failed on server.');
+        }
+
+        const fallbackReason =
+          errObj?.code === 'RATE_LIMITED' || errObj?.code === 'UPSTREAM_GITHUB_RATE_LIMITED'
+            ? 'rate_limited'
+            : errObj?.code === 'FETCH_TIMEOUT'
+              ? 'timeout'
+              : errObj?.code === 'RATE_LIMIT_UNAVAILABLE'
                 ? 'service_unavailable'
                 : 'network_error';
-            trackFallbackUsed(fallbackReason);
-            try {
-              analyzedProject = await analyzeGitHubUrl(cleanUrl);
-            } catch (clientErr) {
-              const code = errObj?.code || 'FALLBACK_FAILED';
-              const msg = errObj?.message || 'Server analysis failed and browser analysis could not complete.';
-              setAnalyzingErrorCode(code);
-              setAnalyzingRetryAfter(errObj?.retryAfter ?? null);
-              trackAnalysisFailed('github_public', code, 'client_fallback');
-              throw new Error(`${msg} (In-browser error: ${clientErr instanceof Error ? clientErr.message : 'failed'})`);
-            }
-          } else {
-            setAnalyzingErrorCode(errObj.code ?? null);
-            setAnalyzingRetryAfter(errObj.retryAfter ?? null);
-            trackAnalysisFailed('github_public', errObj.code || 'UNKNOWN', 'server_error');
-            throw new Error(errObj.message || 'Analysis failed on server.');
-          }
+        trackFallbackUsed(fallbackReason);
+
+        try {
+          return await analyzeGitHubUrl(cleanUrl);
+        } catch (clientError) {
+          failureCode = errObj?.code || 'FALLBACK_FAILED';
+          const message = errObj?.message || 'Server analysis failed and browser analysis could not complete.';
+          setAnalyzingErrorCode(failureCode);
+          setAnalyzingRetryAfter(errObj?.retryAfter ?? null);
+          trackAnalysisFailed('github_public', failureCode, 'client_fallback');
+          throw new Error(`${message} (In-browser error: ${clientError instanceof Error ? clientError.message : 'failed'})`);
         }
-      } else {
-        // Direct client-side analysis
-        analyzedProject = await analyzeGitHubUrl(cleanUrl);
-      }
+      });
 
-      if (!analyzedProject) {
-        throw new Error('Analysis did not produce a valid project.');
-      }
-
-      clearInterval(stepInterval);
-      setAnalyzingTarget(null);
-      setProject(analyzedProject);
-      setView('overview');
-      setSearch('');
-      setSelectedComponent(
-        analyzedProject.architecture.components.find((c) => c.type === 'api') ??
-          analyzedProject.architecture.components[0] ??
-          null
-      );
-      setSelectedRoute(analyzedProject.routes[0] ?? null);
+      if (!isActiveAnalysis(controller)) return;
+      revealProject(controller, analyzedProject);
 
       trackAnalysisCompleted(
-        'github_public',
+        loadedSample ? 'demo' : 'github_public',
         Date.now() - startTime,
         analyzedProject.repository.fileCount,
         session?.user?.id ? 'authenticated' : 'public'
       );
     } catch (err) {
-      clearInterval(stepInterval);
-      const message = err instanceof Error ? err.message : 'Could not analyze this repository.';
-      setAnalyzingError(message);
-      trackAnalysisFailed('github_public', analyzingErrorCode || 'CLIENT_ERROR', 'ingestion');
+      showAnalysisError(controller, err, 'Could not analyze this repository.');
+      if (isActiveAnalysis(controller) && !(err instanceof AnalysisCancelledError)) {
+        trackAnalysisFailed('github_public', failureCode, 'ingestion');
+      }
     }
   }
 
   async function handleAnalyzeFolder(files: FileList) {
     const startTime = Date.now();
+    const controller = beginAnalysis(`Local directory (${files.length} files)`);
     trackAnalysisIntent('local_folder');
-    setAnalyzingTarget(`Local directory (${files.length} files)`);
-    setAnalyzingStep(1);
-    setAnalyzingError(null);
-
-    const stepInterval = setInterval(() => {
-      setAnalyzingStep((prev) => (prev < 4 ? prev + 1 : prev));
-    }, 300);
 
     try {
-      const analyzedProject = await analyzeUploadedFiles(files);
-      clearInterval(stepInterval);
-      setAnalyzingTarget(null);
-      setProject(analyzedProject);
-      setView('overview');
-      setSearch('');
-      setSelectedComponent(analyzedProject.architecture.components[0] ?? null);
-      setSelectedRoute(analyzedProject.routes[0] ?? null);
+      const analyzedProject = await analyzeThroughSplash(controller, () => analyzeUploadedFiles(files));
+      if (!isActiveAnalysis(controller)) return;
+      revealProject(controller, analyzedProject);
 
       trackAnalysisCompleted('local_folder', Date.now() - startTime, analyzedProject.repository.fileCount);
     } catch (err) {
-      clearInterval(stepInterval);
-      setAnalyzingError(err instanceof Error ? err.message : 'Could not parse this directory.');
-      trackAnalysisFailed('local_folder', 'DIRECTORY_PARSE_ERROR', 'client_local');
+      showAnalysisError(controller, err, 'Could not parse this directory.');
+      if (isActiveAnalysis(controller) && !(err instanceof AnalysisCancelledError)) {
+        trackAnalysisFailed('local_folder', 'DIRECTORY_PARSE_ERROR', 'client_local');
+      }
     }
   }
 
   async function handleAnalyzeZipOrJson(file: File) {
     const startTime = Date.now();
+    const controller = beginAnalysis(file.name);
     trackAnalysisIntent('zip_upload');
-    setAnalyzingTarget(file.name);
-    setAnalyzingStep(1);
-    setAnalyzingError(null);
 
     try {
-      if (file.name.endsWith('.json')) {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-        if (!matchesProject(parsed)) throw new Error('Incompatible RepoDNA project schema.');
-        setAnalyzingTarget(null);
-        setProject(parsed);
-        setView('overview');
-        setSelectedComponent(parsed.architecture.components[0] ?? null);
-        setSelectedRoute(parsed.routes[0] ?? null);
-        return;
-      }
+      const analyzedProject = await analyzeThroughSplash(controller, async () => {
+        if (file.name.endsWith('.json')) {
+          const text = await file.text();
+          const parsed = JSON.parse(text) as unknown;
+          if (!matchesProject(parsed)) throw new Error('Incompatible RepoDNA project schema.');
+          return parsed;
+        }
 
-      const buffer = await file.arrayBuffer();
-      const analyzedProject = await analyzeZipBuffer(buffer, file.name.replace(/\.zip$/i, ''));
-      setAnalyzingTarget(null);
-      setProject(analyzedProject);
-      setView('overview');
-      setSelectedComponent(analyzedProject.architecture.components[0] ?? null);
-      setSelectedRoute(analyzedProject.routes[0] ?? null);
+        const buffer = await file.arrayBuffer();
+        return analyzeZipBuffer(buffer, file.name.replace(/\.zip$/i, ''));
+      });
+      if (!isActiveAnalysis(controller)) return;
+      revealProject(controller, analyzedProject);
 
       trackAnalysisCompleted('zip_upload', Date.now() - startTime, analyzedProject.repository.fileCount);
     } catch (err) {
-      setAnalyzingError(err instanceof Error ? err.message : 'Could not process uploaded file.');
-      trackAnalysisFailed('zip_upload', 'ZIP_PROCESS_ERROR', 'client_local');
+      showAnalysisError(controller, err, 'Could not process uploaded file.');
+      if (isActiveAnalysis(controller) && !(err instanceof AnalysisCancelledError)) {
+        trackAnalysisFailed('zip_upload', 'ZIP_PROCESS_ERROR', 'client_local');
+      }
     }
   }
 
   async function handleLoadDemo() {
+    const startTime = Date.now();
+    const controller = beginAnalysis('Demo Project (mixed-basic)');
     trackAnalysisIntent('demo');
-    setAnalyzingTarget('Demo Project (mixed-basic)');
-    setAnalyzingStep(2);
-    setAnalyzingError(null);
     try {
-      const res = await fetch('/demo-project.json');
-      if (!res.ok) throw new Error('Could not fetch demo artifact.');
-      const parsed = await res.json();
-      if (!matchesProject(parsed)) throw new Error('Incompatible demo project schema.');
-      setAnalyzingTarget(null);
-      setProject(parsed);
-      setView('overview');
-      setSelectedComponent(
-        parsed.architecture.components.find((c) => c.type === 'api') ??
-          parsed.architecture.components[0] ??
-          null
-      );
-      setSelectedRoute(parsed.routes[0] ?? null);
+      const analyzedProject = await analyzeThroughSplash(controller, async () => {
+        const res = await fetch('/demo-project.json', { signal: controller.signal });
+        if (!res.ok) throw new Error('Could not fetch demo artifact.');
+        const parsed = (await res.json()) as unknown;
+        if (!matchesProject(parsed)) throw new Error('Incompatible demo project schema.');
+        return parsed;
+      });
+      if (!isActiveAnalysis(controller)) return;
+      revealProject(controller, analyzedProject);
+      trackAnalysisCompleted('demo', Date.now() - startTime, analyzedProject.repository.fileCount);
     } catch (err) {
-      setAnalyzingError(err instanceof Error ? err.message : 'Failed to load demo project.');
+      showAnalysisError(controller, err, 'Failed to load demo project.');
+      if (isActiveAnalysis(controller) && !(err instanceof AnalysisCancelledError)) {
+        trackAnalysisFailed('demo', 'DEMO_LOAD_ERROR', 'client_local');
+      }
     }
   }
 
@@ -1499,6 +1516,8 @@ function WorkspaceContent() {
               : undefined
           }
           onCancel={() => {
+            activeAnalysisRef.current?.abort();
+            activeAnalysisRef.current = null;
             setAnalyzingTarget(null);
             setAnalyzingError(null);
             setAnalyzingErrorCode(null);

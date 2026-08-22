@@ -486,6 +486,14 @@ code, kbd {
   color: #041014;
 }
 
+.analysis-stage-summary {
+  margin: -12px 0 20px;
+  color: #8ca0b1;
+  font: 500 10px var(--font-geist-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 /* =========================================================================
    APPLICATION WORKSPACE LAYOUT
    ========================================================================= */
