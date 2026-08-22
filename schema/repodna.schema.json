@@ -358,7 +358,7 @@
         "symbols": { "type": "integer", "minimum": 0 },
         "routes": { "type": "integer", "minimum": 0 },
         "components": { "type": "integer", "minimum": 0 },
-        "parseSuccessRate": { "type": "number", "minimum": 0, "maximum": 1 }
+        "parseSuccessRate": { "type": "number", "minimum": 0, "maximum": 100 }
       }
     },
     "diagnostics": {

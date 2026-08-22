@@ -184,10 +184,30 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
     const project = await analyzeGitHubUrl(url.trim(), undefined, accessToken);
     const durationMs = Date.now() - startTime;
 
-    // Schema validation invariant
+    // Schema validation invariant (fail-closed in all environments)
     const validation = validateRepoDNAProject(project);
-    if (!validation.valid && process.env.NODE_ENV !== 'production') {
-      console.error('[RepoDNA:SchemaValidationError]', validation.errors);
+    if (!validation.valid) {
+      console.error('[RepoDNA:SchemaValidationError]', requestId, validation.errors);
+      logStructured({
+        requestId,
+        timestamp: new Date().toISOString(),
+        method,
+        repoIdHash: hashRepo(url),
+        clientIp,
+        userType,
+        durationMs,
+        fileCount: project?.repository?.fileCount ?? null,
+        status: 500,
+        resultCode: 'ANALYSIS_SCHEMA_ERROR',
+        failureCategory: 'contract',
+      });
+
+      return createApiErrorResponse(
+        'ANALYSIS_SCHEMA_ERROR',
+        'Repository analysis produced an invalid result.',
+        500,
+        { requestId }
+      );
     }
 
     logStructured({
@@ -232,7 +252,8 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       });
     }
 
-    const message = error instanceof Error ? error.message : 'Unexpected analysis failure';
+    // Log true internal exception server-side without leaking implementation details to client
+    console.error('[RepoDNA:InternalError]', requestId, error);
     logStructured({
       requestId,
       timestamp: new Date().toISOString(),
@@ -247,7 +268,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       failureCategory: 'internal',
     });
 
-    return createApiErrorResponse('ANALYSIS_FAILED', message, 500, { requestId });
+    return createApiErrorResponse('ANALYSIS_FAILED', 'Repository analysis failed unexpectedly.', 500, { requestId });
   }
 }
 
