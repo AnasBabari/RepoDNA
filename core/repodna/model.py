@@ -80,6 +80,20 @@ class Route:
 
 
 @dataclass(slots=True)
+class ExpressMount:
+    id: str
+    file: str
+    line: int
+    receiver: str
+    prefix: str | None
+    prefix_expression: str | None
+    target_identifier: str | None
+    target_module: str | None
+    target_expression: str
+    dynamic: bool
+
+
+@dataclass(slots=True)
 class Entrypoint:
     id: str
     file: str
@@ -123,6 +137,7 @@ class PartialAnalysis:
     imports: list[ImportEdge] = field(default_factory=list)
     calls: list[CallEdge] = field(default_factory=list)
     routes: list[Route] = field(default_factory=list)
+    express_mounts: list[ExpressMount] = field(default_factory=list)
     frameworks: set[str] = field(default_factory=set)
     databases: set[str] = field(default_factory=set)
     externals: set[str] = field(default_factory=set)
@@ -173,4 +188,3 @@ class AnalysisResult:
             json.dumps(self.to_dict(), indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
-

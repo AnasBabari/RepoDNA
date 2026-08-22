@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-from repodna.model import CallEdge, ImportEdge, PartialAnalysis, Route, Symbol
+from repodna.model import CallEdge, ExpressMount, ImportEdge, PartialAnalysis, Route, Symbol
 
 from .base import LanguageAnalyzer
 
@@ -22,10 +22,15 @@ FUNCTION_RE = re.compile(
 INTERFACE_RE = re.compile(r"\binterface\s+(?P<name>[A-Za-z_$][\w$]*)")
 TYPE_RE = re.compile(r"\btype\s+(?P<name>[A-Za-z_$][\w$]*)\s*=")
 EXPRESS_ROUTE_RE = re.compile(
-    r"\b(?:app|router)\.(?P<method>get|post|put|patch|delete|options|head|all)"
+    r"\b(?P<receiver>[A-Za-z_$][\w$]*)\.(?P<method>get|post|put|patch|delete|options|head|all)"
     r"\s*\(\s*[\"'](?P<path>[^\"']+)[\"']\s*,\s*(?P<handler>[A-Za-z_$][\w$]*)?",
     re.IGNORECASE,
 )
+EXPRESS_RECEIVER_RE = re.compile(
+    r"\b(?:const|let|var)\s+(?P<receiver>[A-Za-z_$][\w$]*)\s*=\s*"
+    r"(?:express\s*\(|(?:express\.)?Router\s*\()"
+)
+EXPRESS_MOUNT_RE = re.compile(r"\b(?P<receiver>[A-Za-z_$][\w$]*)\.use\s*\(")
 NEST_CONTROLLER_RE = re.compile(r"@Controller\s*\(\s*[\"'](?P<prefix>[^\"']*)[\"']\s*\)")
 NEST_ROUTE_RE = re.compile(
     r"@(Get|Post|Put|Patch|Delete|Options|Head|All)\s*\(\s*(?:[\"'](?P<path>[^\"']*)[\"'])?\s*\)\s*\n\s*(?:async\s+)?(?P<handler>[A-Za-z_$][\w$]*)\s*\(",
@@ -70,6 +75,143 @@ def _names_from_bindings(bindings: str | None) -> list[str]:
     return [name for name in re.findall(r"[A-Za-z_$][\w$]*", cleaned) if name not in {"from", "import"}]
 
 
+def _infer_require_bindings(source: str, match_start: int) -> list[str]:
+    line_start = source.rfind("\n", 0, match_start) + 1
+    prefix = source[line_start:match_start]
+    direct = re.search(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*$", prefix)
+    if direct:
+        return [direct.group(1)]
+    destructured = re.search(r"\b(?:const|let|var)\s*\{([^}]+)\}\s*=\s*$", prefix)
+    if not destructured:
+        return []
+    names: list[str] = []
+    for part in destructured.group(1).split(","):
+        name = re.split(r"\s*:\s*", part.strip())[-1].strip()
+        if re.fullmatch(r"[A-Za-z_$][\w$]*", name):
+            names.append(name)
+    return names
+
+
+def _express_receivers(source: str) -> set[str]:
+    return {"app", "router", *(match.group("receiver") for match in EXPRESS_RECEIVER_RE.finditer(source))}
+
+
+def _read_call_arguments(source: str, open_paren: int) -> list[str] | None:
+    args: list[str] = []
+    start = open_paren + 1
+    paren_depth = 1
+    brace_depth = 0
+    bracket_depth = 0
+    quote: str | None = None
+    escaped = False
+    line_comment = False
+    block_comment = False
+    index = open_paren + 1
+    while index < len(source):
+        char = source[index]
+        next_char = source[index + 1] if index + 1 < len(source) else ""
+        if line_comment:
+            if char == "\n":
+                line_comment = False
+            index += 1
+            continue
+        if block_comment:
+            if char == "*" and next_char == "/":
+                block_comment = False
+                index += 2
+            else:
+                index += 1
+            continue
+        if quote:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            index += 1
+            continue
+        if char == "/" and next_char == "/":
+            line_comment = True
+            index += 2
+            continue
+        if char == "/" and next_char == "*":
+            block_comment = True
+            index += 2
+            continue
+        if char in {"'", '"', "`"}:
+            quote = char
+        elif char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+            if paren_depth == 0:
+                final_arg = source[start:index].strip()
+                if final_arg or args:
+                    args.append(final_arg)
+                return args
+        elif char == "{":
+            brace_depth += 1
+        elif char == "}":
+            brace_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]":
+            bracket_depth -= 1
+        elif char == "," and paren_depth == 1 and brace_depth == 0 and bracket_depth == 0:
+            args.append(source[start:index].strip())
+            start = index + 1
+        index += 1
+    return None
+
+
+def _static_string_value(expression: str) -> str | None:
+    value = expression.strip()
+    if len(value) < 2 or value[0] not in {"'", '"', "`"} or value[-1] != value[0]:
+        return None
+    if value[0] == "`" and "${" in value:
+        return None
+    return re.sub(r"\\([\\'\"`])", r"\1", value[1:-1])
+
+
+def _direct_require_module(expression: str) -> str | None:
+    match = re.fullmatch(r"require\s*\(\s*[\"']([^\"']+)[\"']\s*\)", expression.strip())
+    return match.group(1) if match else None
+
+
+def _extract_express_mounts(source: str, file, receivers: set[str]) -> list[ExpressMount]:
+    mounts: list[ExpressMount] = []
+    for match in EXPRESS_MOUNT_RE.finditer(source):
+        receiver = match.group("receiver")
+        if receiver not in receivers:
+            continue
+        open_paren = source.find("(", match.start())
+        args = _read_call_arguments(source, open_paren)
+        if not args:
+            continue
+        static_prefix = _static_string_value(args[0])
+        has_explicit_prefix = static_prefix is not None
+        target_expression = args[-1].strip()
+        target_identifier = target_expression if re.fullmatch(r"[A-Za-z_$][\w$]*", target_expression) else None
+        target_module = _direct_require_module(target_expression)
+        prefix_expression = args[0].strip() if has_explicit_prefix or len(args) > 1 else None
+        prefix = static_prefix if has_explicit_prefix else "/" if len(args) == 1 else None
+        line = _line_number(source, match.start())
+        mounts.append(ExpressMount(
+            id=f"express-mount:{file.path}:{line}:{len(mounts)}",
+            file=file.path,
+            line=line,
+            receiver=receiver,
+            prefix=prefix,
+            prefix_expression=prefix_expression,
+            target_identifier=target_identifier,
+            target_module=target_module,
+            target_expression=target_expression,
+            dynamic=prefix is None or (target_identifier is None and target_module is None),
+        ))
+    return mounts
+
+
 def _module_root(module: str) -> str:
     if module.startswith("@"):
         parts = module.split("/")
@@ -96,11 +238,12 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
         for match in IMPORT_RE.finditer(source):
             module = match.group("module")
             line = _line_number(source, match.start())
+            bindings = match.groupdict().get("bindings")
             result.imports.append(ImportEdge(
                 id=f"{file.path}:import:{line}:{module}",
                 source=file.path,
                 module=module,
-                names=_names_from_bindings(match.groupdict().get("bindings")),
+                names=_names_from_bindings(bindings) if bindings else _infer_require_bindings(source, match.start()),
                 line=line,
             ))
             root = _module_root(module)
@@ -150,8 +293,11 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
 
         symbols_by_line.sort(key=lambda symbol: symbol.line)
 
-        # 4. Express Routes
+        # 4. Express Routes and router mounts
+        express_receivers = _express_receivers(source)
         for match in EXPRESS_ROUTE_RE.finditer(source):
+            if match.group("receiver") not in express_receivers:
+                continue
             line = _line_number(source, match.start())
             handler_name = match.group("handler") or f"anonymous@{line}"
             handler = next((symbol.id for symbol in symbols_by_line if symbol.name == handler_name), f"{file.path}::{handler_name}")
@@ -166,6 +312,7 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
                 framework="Express",
                 confidence=0.96,
             ))
+        result.express_mounts.extend(_extract_express_mounts(source, file, express_receivers))
 
         # 5. NestJS Controller Routes
         controller_match = NEST_CONTROLLER_RE.search(source)

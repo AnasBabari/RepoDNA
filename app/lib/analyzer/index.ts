@@ -2,6 +2,7 @@ import { analyzeJavaScript } from './analyzers/javascript';
 import { analyzePython } from './analyzers/python';
 import { analyzePythonTreeSitter } from './analyzers/python-treesitter';
 import { environmentEvidence, fingerprint, languageFor, parseTsconfigPaths } from './detection';
+import { resolveExpressRouteMounts } from './express';
 import {
   buildArchitecture,
   buildFlows,
@@ -141,9 +142,10 @@ export async function analyzeRepositoryFiles(
   const symbols = partials.flatMap((p) => p.symbols);
   const imports = partials.flatMap((p) => p.imports);
   const calls = partials.flatMap((p) => p.calls);
-  const routes = partials.flatMap((p) => p.routes);
+  let routes = partials.flatMap((p) => p.routes);
 
   resolveImports(imports, files, pathAliases);
+  routes = resolveExpressRouteMounts(partials, imports, diagnostics);
   resolveCalls(calls, symbols, imports);
 
   const entrypoints = rankEntrypoints(files, partials);

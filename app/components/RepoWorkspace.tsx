@@ -438,6 +438,32 @@ function AnalyzingView({
   );
 }
 
+function RouteCoverageWarning({ project }: { project: RepoDNAProject }) {
+  const warnings = project.diagnostics.filter((item) =>
+    ['DYNAMIC_ROUTE_MOUNT_UNRESOLVED', 'EXPRESS_ROUTE_MOUNT_UNRESOLVED'].includes(item.code)
+  );
+  if (!warnings.length) return null;
+
+  return (
+    <section className="route-coverage-warning" role="alert" aria-label="Incomplete route analysis">
+      <div className="route-coverage-icon">!</div>
+      <div>
+        <p className="eyebrow">Incomplete route map</p>
+        <h2>{warnings.length} Express mount{warnings.length === 1 ? '' : 's'} could not be resolved</h2>
+        <p>Routes beneath these runtime mounts may be absent or may not include their full URL prefix.</p>
+        <ul>
+          {warnings.slice(0, 6).map((warning, index) => (
+            <li key={`${warning.file}-${warning.code}-${index}`}>
+              <code>{warning.file ?? 'unknown file'}</code>
+              <span>{warning.message}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 function Overview({ project, onOpenArchitecture }: { project: RepoDNAProject; onOpenArchitecture: () => void }) {
   const primaryEntry = project.entrypoints[0];
   return (
@@ -461,6 +487,8 @@ function Overview({ project, onOpenArchitecture }: { project: RepoDNAProject; on
           <p>Structural complexity</p>
         </div>
       </section>
+
+      <RouteCoverageWarning project={project} />
 
       <section className="metric-grid" aria-label="Analysis summary">
         <article>
@@ -595,6 +623,7 @@ function RoutesView({
         </div>
         <span>{project.routes.length} routes</span>
       </section>
+      <RouteCoverageWarning project={project} />
       <div className="route-layout">
         <section className="panel route-list-panel">
           <div className="table-head">

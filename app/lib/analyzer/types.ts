@@ -61,6 +61,19 @@ export interface DiscoveredFile {
   hash: string;
 }
 
+export interface ExpressMountRecord {
+  id: string;
+  file: string;
+  line: number;
+  receiver: string;
+  prefix: string | null;
+  prefixExpression: string | null;
+  targetIdentifier: string | null;
+  targetModule: string | null;
+  targetExpression: string;
+  dynamic: boolean;
+}
+
 export interface PartialAnalysis {
   file: FileRecord;
   symbols: SymbolRecord[];
@@ -71,6 +84,7 @@ export interface PartialAnalysis {
   databases: Set<string>;
   externals: Set<string>;
   entrypointEvidence: string[];
+  expressMounts?: ExpressMountRecord[];
   parseMeta?: { quality: 'complete' | 'partial' | 'failed'; errorNodes: number };
   parserNotice?: { code: string; message: string };
 }

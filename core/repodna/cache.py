@@ -4,10 +4,10 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from repodna.model import CallEdge, FileRecord, ImportEdge, PartialAnalysis, Route, Symbol
+from repodna.model import CallEdge, ExpressMount, FileRecord, ImportEdge, PartialAnalysis, Route, Symbol
 
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 class AnalysisCache:
@@ -41,6 +41,7 @@ class AnalysisCache:
                 imports=[ImportEdge(**item) for item in entry.get("imports", [])],
                 calls=[CallEdge(**item) for item in entry.get("calls", [])],
                 routes=[Route(**item) for item in entry.get("routes", [])],
+                express_mounts=[ExpressMount(**item) for item in entry.get("expressMounts", [])],
                 frameworks=set(entry.get("frameworks", [])),
                 databases=set(entry.get("databases", [])),
                 externals=set(entry.get("externals", [])),
@@ -66,6 +67,7 @@ class AnalysisCache:
                 "imports": [asdict(item) for item in partial.imports],
                 "calls": [asdict(item) for item in partial.calls],
                 "routes": [asdict(item) for item in partial.routes],
+                "expressMounts": [asdict(item) for item in partial.express_mounts],
                 "frameworks": sorted(partial.frameworks),
                 "databases": sorted(partial.databases),
                 "externals": sorted(partial.externals),

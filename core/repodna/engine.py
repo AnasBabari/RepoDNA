@@ -11,6 +11,7 @@ from typing import Any
 from repodna.analyzers import JavaScriptAnalyzer, PythonAnalyzer
 from repodna.cache import AnalysisCache
 from repodna.detection import environment_evidence, fingerprint, language_for, parse_tsconfig_paths
+from repodna.express import resolve_express_route_mounts
 from repodna.graph import (
     build_architecture,
     build_flows,
@@ -190,6 +191,7 @@ def analyze_repository(
         routes = [route for partial in partials for route in partial.routes]
 
         resolve_imports(imports, files, path_aliases=path_aliases)
+        routes = resolve_express_route_mounts(partials, imports, diagnostics)
         resolve_calls(calls, symbols, imports=imports)
 
         entrypoints = rank_entrypoints(files, partials)

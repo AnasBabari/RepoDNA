@@ -1,4 +1,4 @@
-import type { DiscoveredFile, PartialAnalysis, SymbolRecord } from '../types';
+import type { DiscoveredFile, ExpressMountRecord, PartialAnalysis, SymbolRecord } from '../types';
 
 const IMPORT_RE = /(?:import\s+([\s\S]*?)\s+from\s+|import\s*\(|require\s*\()["']([^"']+)["']/g;
 const EXPORT_RE = /^\s*export\s+(?:default\s+)?/;
@@ -6,7 +6,9 @@ const CLASS_RE = /\bclass\s+([a-zA-Z_$][\w$]*)/g;
 const FUNCTION_RE = /(?:async\s+)?function\s+([a-zA-Z_$][\w$]*)\s*\(|(?:const|let|var)\s+([a-zA-Z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>/g;
 const INTERFACE_RE = /\binterface\s+([a-zA-Z_$][\w$]*)/g;
 const TYPE_RE = /\btype\s+([a-zA-Z_$][\w$]*)\s*=/g;
-const EXPRESS_ROUTE_RE = /\b(?:app|router)\.(get|post|put|patch|delete|options|head|all)\s*\(\s*["']([^"']+)["']\s*,\s*([a-zA-Z_$][\w$]*)?/gi;
+const EXPRESS_ROUTE_RE = /\b([a-zA-Z_$][\w$]*)\.(get|post|put|patch|delete|options|head|all)\s*\(\s*["']([^"']+)["']\s*,\s*([a-zA-Z_$][\w$]*)?/gi;
+const EXPRESS_RECEIVER_RE = /\b(?:const|let|var)\s+([a-zA-Z_$][\w$]*)\s*=\s*(?:express\s*\(|(?:express\.)?Router\s*\()/g;
+const EXPRESS_MOUNT_RE = /\b([a-zA-Z_$][\w$]*)\.use\s*\(/g;
 const NEST_CONTROLLER_RE = /@Controller\s*\(\s*["']([^"']*)["']\s*\)/;
 const NEST_ROUTE_RE = /@(Get|Post|Put|Patch|Delete|Options|Head|All)\s*\(\s*(?:["']([^"']*)["'])?\s*\)\s*\n\s*(?:async\s+)?([a-zA-Z_$][\w$]*)\s*\(/gi;
 const CALL_RE = /\b([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*)\s*\(/g;
@@ -47,6 +49,147 @@ function parseBindings(bindings?: string): string[] {
     .replace(/\b(?:type|as|default)\b/g, ' ');
   const matches = cleaned.match(/[a-zA-Z_$][\w$]*/g) || [];
   return matches.filter((m) => m !== 'from' && m !== 'import');
+}
+
+function inferRequireBindings(source: string, matchIndex: number): string[] {
+  const lineStart = source.lastIndexOf('\n', matchIndex) + 1;
+  const prefix = source.slice(lineStart, matchIndex);
+  const direct = prefix.match(/\b(?:const|let|var)\s+([a-zA-Z_$][\w$]*)\s*=\s*$/);
+  if (direct) return [direct[1]];
+
+  const destructured = prefix.match(/\b(?:const|let|var)\s*\{([^}]+)\}\s*=\s*$/);
+  if (!destructured) return [];
+  return destructured[1]
+    .split(',')
+    .map((part) => part.trim().split(/\s*:\s*/).at(-1)?.trim() ?? '')
+    .filter((name) => /^[a-zA-Z_$][\w$]*$/.test(name));
+}
+
+function collectExpressReceivers(source: string): Set<string> {
+  const receivers = new Set(['app', 'router']);
+  EXPRESS_RECEIVER_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = EXPRESS_RECEIVER_RE.exec(source)) !== null) receivers.add(match[1]);
+  return receivers;
+}
+
+function readCallArguments(source: string, openParen: number): string[] | null {
+  const args: string[] = [];
+  let start = openParen + 1;
+  let parenDepth = 1;
+  let braceDepth = 0;
+  let bracketDepth = 0;
+  let quote: "'" | '"' | '`' | null = null;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = openParen + 1; index < source.length; index++) {
+    const char = source[index];
+    const next = source[index + 1];
+
+    if (lineComment) {
+      if (char === '\n') lineComment = false;
+      continue;
+    }
+    if (blockComment) {
+      if (char === '*' && next === '/') {
+        blockComment = false;
+        index++;
+      }
+      continue;
+    }
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '/' && next === '/') {
+      lineComment = true;
+      index++;
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      blockComment = true;
+      index++;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '(') parenDepth++;
+    else if (char === ')') {
+      parenDepth--;
+      if (parenDepth === 0) {
+        const finalArg = source.slice(start, index).trim();
+        if (finalArg || args.length > 0) args.push(finalArg);
+        return args;
+      }
+    } else if (char === '{') braceDepth++;
+    else if (char === '}') braceDepth--;
+    else if (char === '[') bracketDepth++;
+    else if (char === ']') bracketDepth--;
+    else if (char === ',' && parenDepth === 1 && braceDepth === 0 && bracketDepth === 0) {
+      args.push(source.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  return null;
+}
+
+function staticStringValue(expression: string): string | null {
+  const value = expression.trim();
+  if (value.length < 2) return null;
+  const quote = value[0];
+  if (!['"', "'", '`'].includes(quote) || value.at(-1) !== quote) return null;
+  if (quote === '`' && value.includes('${')) return null;
+  return value.slice(1, -1).replace(/\\([\\'"`])/g, '$1');
+}
+
+function directRequireModule(expression: string): string | null {
+  return expression.match(/^require\s*\(\s*["']([^"']+)["']\s*\)$/)?.[1] ?? null;
+}
+
+function extractExpressMounts(
+  source: string,
+  file: DiscoveredFile,
+  receivers: Set<string>
+): ExpressMountRecord[] {
+  const mounts: ExpressMountRecord[] = [];
+  EXPRESS_MOUNT_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = EXPRESS_MOUNT_RE.exec(source)) !== null) {
+    const receiver = match[1];
+    if (!receivers.has(receiver)) continue;
+    const openParen = source.indexOf('(', match.index);
+    const args = readCallArguments(source, openParen);
+    if (!args?.length) continue;
+
+    const staticPrefix = staticStringValue(args[0]);
+    const hasExplicitPrefix = staticPrefix !== null;
+    const targetExpression = args[hasExplicitPrefix ? args.length - 1 : args.length === 1 ? 0 : args.length - 1].trim();
+    const targetIdentifier = /^[a-zA-Z_$][\w$]*$/.test(targetExpression) ? targetExpression : null;
+    const targetModule = directRequireModule(targetExpression);
+    const prefixExpression = hasExplicitPrefix ? args[0].trim() : args.length > 1 ? args[0].trim() : null;
+    const prefix = hasExplicitPrefix ? staticPrefix : args.length === 1 ? '/' : null;
+    const line = getLineNumber(source, match.index);
+
+    mounts.push({
+      id: `express-mount:${file.path}:${line}:${mounts.length}`,
+      file: file.path,
+      line,
+      receiver,
+      prefix,
+      prefixExpression,
+      targetIdentifier,
+      targetModule,
+      targetExpression,
+      dynamic: prefix === null || (!targetIdentifier && !targetModule),
+    });
+  }
+  return mounts;
 }
 
 function getModuleRoot(mod: string): string {
@@ -94,6 +237,7 @@ export function analyzeJavaScript(file: DiscoveredFile): PartialAnalysis {
     databases: new Set<string>(),
     externals: new Set<string>(),
     entrypointEvidence: [],
+    expressMounts: [],
   };
 
   // 1. Imports
@@ -108,7 +252,7 @@ export function analyzeJavaScript(file: DiscoveredFile): PartialAnalysis {
       id: `${file.path}:import:${line}:${moduleName}`,
       source: file.path,
       module: moduleName,
-      names: parseBindings(bindings),
+      names: bindings ? parseBindings(bindings) : inferRequireBindings(source, impMatch.index),
       line,
       target: null,
       external: false,
@@ -184,14 +328,16 @@ export function analyzeJavaScript(file: DiscoveredFile): PartialAnalysis {
 
   symbolsByLine.sort((a, b) => a.line - b.line);
 
-  // 4. Express Routes
+  // 4. Express Routes and router mounts
+  const expressReceivers = collectExpressReceivers(source);
   EXPRESS_ROUTE_RE.lastIndex = 0;
   let expMatch: RegExpExecArray | null;
   while ((expMatch = EXPRESS_ROUTE_RE.exec(source)) !== null) {
+    if (!expressReceivers.has(expMatch[1])) continue;
     const line = getLineNumber(source, expMatch.index);
-    const method = expMatch[1].toUpperCase();
-    const routePath = expMatch[2];
-    const handlerName = expMatch[3] || `anonymous@${line}`;
+    const method = expMatch[2].toUpperCase();
+    const routePath = expMatch[3];
+    const handlerName = expMatch[4] || `anonymous@${line}`;
     const matchedSymbol = symbolsByLine.find((s) => s.name === handlerName);
     const handlerId = matchedSymbol ? matchedSymbol.id : `${file.path}::${handlerName}`;
 
@@ -207,6 +353,7 @@ export function analyzeJavaScript(file: DiscoveredFile): PartialAnalysis {
       confidence: 0.96,
     });
   }
+  result.expressMounts = extractExpressMounts(source, file, expressReceivers);
 
   // 5. NestJS Controller Routes
   const nestController = NEST_CONTROLLER_RE.exec(source);
