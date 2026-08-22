@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://repodna.anas-babari.chatgpt.site'),
   title: 'RepoDNA — Understand any codebase visually',
   description: 'Map routes, services, dependencies, databases and execution paths without executing repository code.',
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+  },
   openGraph: {
     type: 'website',
     url: '/',

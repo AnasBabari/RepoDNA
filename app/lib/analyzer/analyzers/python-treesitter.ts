@@ -102,7 +102,7 @@ function symbolId(file: DiscoveredFile, symbol: SyntaxSymbol): string {
 
 function extractSymbols(file: DiscoveredFile, facts: import('../parser/types').SyntaxFacts, result: PartialAnalysis): void {
   for (const symbol of facts.symbols) {
-    let type = symbol.kind;
+    let type: string = symbol.kind;
     const evidence: string[] = [];
 
     if (symbol.kind === 'class') {

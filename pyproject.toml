@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "RepoDNA contributors" }]
-dependencies = []
+dependencies = ["jsonschema>=4.18"]
 
 [project.scripts]
 repodna = "repodna.cli:main"

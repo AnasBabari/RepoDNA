@@ -24,6 +24,7 @@ function resolvePackageDir(specifier) {
 
 const ASSETS = [
   ['web-tree-sitter', 'web-tree-sitter.wasm'],
+  ['web-tree-sitter', 'web-tree-sitter.js'],
   ['tree-sitter-python', 'tree-sitter-python.wasm'],
 ];
 
