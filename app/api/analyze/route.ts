@@ -272,12 +272,6 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
   }
 }
 
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const url = searchParams.get('url') || searchParams.get('repo');
-  return handleAnalyze(url, 'GET', request);
-}
-
 export async function POST(request: NextRequest) {
   let url: string | null = null;
   try {

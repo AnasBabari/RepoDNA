@@ -1516,7 +1516,7 @@ function WorkspaceContent() {
         interface ApiResponse {
           success?: boolean;
           project?: unknown;
-          error?: { code?: string; message?: string; retryAfter?: number; fallbackAvailable?: boolean };
+          error?: { code?: string; message?: string; retryAfter?: number; fallbackAvailable?: boolean; requestId?: string };
         }
 
         let apiData: ApiResponse | null = null;

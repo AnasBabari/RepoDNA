@@ -1,14 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { GET, POST } from '../../app/api/analyze/route';
+import { POST } from '../../app/api/analyze/route';
 import * as ratelimitModule from '../../app/lib/ratelimit';
 import * as analyzerModule from '../../app/lib/analyzer';
 import { IngestionError } from '../../app/lib/analyzer/types';
 
 describe('/api/analyze Route Handler', () => {
-  it('returns 400 for GET without ?url= parameter', async () => {
-    const req = new NextRequest('http://localhost:3000/api/analyze');
-    const res = await GET(req);
+  it('returns 400 for POST without url or repo field', async () => {
+    const req = new NextRequest('http://localhost:3000/api/analyze', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req);
     const data = await res.json();
 
     expect(res.status).toBe(400);

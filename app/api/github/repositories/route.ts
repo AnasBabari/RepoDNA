@@ -57,13 +57,22 @@ export async function GET(request: NextRequest) {
       githubUrl = `https://api.github.com/user/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}&affiliation=owner,collaborator,organization_member`;
     }
 
-    const ghResponse = await fetch(githubUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'RepoDNA-V1.1',
-      },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    let ghResponse: Response;
+    try {
+      ghResponse = await fetch(githubUrl, {
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'RepoDNA-V1.1',
+        },
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (ghResponse.status === 401) {
       return NextResponse.json(
@@ -165,14 +174,13 @@ export async function GET(request: NextRequest) {
       hasMore: repositories.length === perPage,
       repositories,
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Network error connecting to GitHub';
+  } catch {
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'SERVICE_UNAVAILABLE',
-          message,
+          message: 'Failed to connect to GitHub API or request timed out.',
         },
       },
       { status: 503 }
