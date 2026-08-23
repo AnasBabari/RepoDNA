@@ -220,3 +220,37 @@ describe('/api/analyze Route Handler', () => {
     vi.restoreAllMocks();
   });
 });
+
+describe('/api/feedback Route Handler', () => {
+  it('rejects feedback submissions exceeding 16 KB', async () => {
+    const { POST: postFeedback } = await import('../../app/api/feedback/route');
+    const oversizedComment = 'x'.repeat(20 * 1024);
+    const req = new NextRequest('http://localhost:3000/api/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ usefulnessScore: 5, comments: oversizedComment }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await postFeedback(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(413);
+    expect(data.success).toBe(false);
+    expect(data.error).toContain('16 KB limit');
+  });
+
+  it('accepts valid feedback within 16 KB and bounds integer score', async () => {
+    const { POST: postFeedback } = await import('../../app/api/feedback/route');
+    const req = new NextRequest('http://localhost:3000/api/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ usefulnessScore: 5, primaryUsecase: 'Onboarding to new codebase' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await postFeedback(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+  });
+});

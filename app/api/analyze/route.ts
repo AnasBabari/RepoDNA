@@ -173,7 +173,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
 
     return createApiErrorResponse(
       'INVALID_REQUEST',
-      'Missing repository URL. Provide ?url=https://github.com/owner/repo or JSON body {"url": "..."}',
+      'Missing repository URL. Provide JSON body {"url": "https://github.com/owner/repository"}.',
       400,
       { requestId }
     );

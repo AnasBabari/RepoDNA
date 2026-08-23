@@ -9,7 +9,7 @@ Live Demo: **[repodna-one.vercel.app](https://repodna-one.vercel.app)**
 ### 🌟 What's New in v1.1.0
 
 #### 1. 🔒 Private Repository Ingestion (Beta)
-- **GitHub OAuth Integration**: Connect your GitHub account with read-only repository scope.
+- **GitHub OAuth Integration**: Connect your GitHub account with transparent scope handling (using OAuth `repo` scope required by GitHub OAuth Apps for private archive access; RepoDNA itself performs strictly read-only analysis in memory).
 - **Transience by Design**: Private archives are parsed strictly in memory and never stored to disk or databases.
 - **Interactive Repository Selector**: Search, filter, and analyze private and public repos with explicit scope disclosure and one-click disconnect.
 
@@ -21,8 +21,8 @@ Live Demo: **[repodna-one.vercel.app](https://repodna-one.vercel.app)**
 
 #### 3. 🎨 Draggable Architecture Graph & Persistent Saved Views
 - **Draggable Components**: Freely reposition nodes across the interactive React Flow canvas.
-- **Per-Repository View Persistence**: Your custom node layout, zoom/pan viewport, and active layer filter automatically persist per repository in your browser tab.
-- **Non-Reversible Storage Privacy**: Keys in `localStorage` use deterministic SHA-256 hashes (`repodna_view_v1_<hash>`) ensuring zero raw repository names or sensitive URLs are stored.
+- **Per-Repository View Persistence**: Your custom node layout, zoom/pan viewport, and active layer filter automatically persist locally in your browser per repository.
+- **Storage Key Privacy**: `localStorage` keys contain a deterministic repository/graph fingerprint (`repodna_view_v1_<hash>`) rather than the raw repository name or URL.
 - **1-Click Reset**: Dedicated `↺ Reset View` toolbar button instantly clears saved overrides and restores the default auto-calculated layout.
 
 #### 4. 🌐 Community Reliability & URL Normalization

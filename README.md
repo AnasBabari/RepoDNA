@@ -31,11 +31,11 @@ It is deterministic, local-first, and does not use an LLM. The analyzer reads so
 ### 1. Public GitHub Repositories
 Paste any public GitHub repository link to decode architecture layers, execution traces, dependency graphs, and entry points in seconds.
 - **Universal URL Support**: Accepts standard links (`https://github.com/owner/repo`), subpages (`.../tree/main`, `.../blob/develop/app.py`), issues/PRs, short syntax (`github.com/owner/repo`, `owner/repo`), and SSH URLs.
-- **Draggable Layout & Saved Views**: Freely reposition nodes on the canvas. Your custom layout, zoom level, and active layer filter automatically persist per repository in your browser (with a 1-click `↺ Reset View` option to restore defaults).
+- **Draggable Layout & Saved Views**: Freely reposition nodes on the canvas. Your custom layout, zoom level, and active layer filter automatically persist locally in your browser (with a 1-click `↺ Reset View` option to restore defaults).
 
 ### 2. Private Repositories (Beta)
 Sign in with GitHub to access your private repositories:
-- **Scope Transparency**: GitHub OAuth requires read-only repository scope to fetch repository archives. RepoDNA parses ASTs transiently in memory, isolated from ambient server tokens, and never modifies or stores code.
+- **Scope Transparency**: Private repository support currently uses GitHub OAuth's `repo` scope because OAuth Apps do not provide read-only private source-code access. RepoDNA itself strictly performs read-only analysis transiently in memory, isolated from ambient server tokens, and never modifies or stores code. Migration to fine-grained GitHub App read-only permissions is planned.
 - **Revocation**: Easily disconnect access at any time via the UI or GitHub Settings.
 - **Transience**: OAuth tokens and repository code are never saved to disk or databases.
 
@@ -76,7 +76,7 @@ Sign in with GitHub to access your private repositories:
 - Authenticated endpoint returning sanitized metadata (`fullName`, `isPrivate`, `language`, `defaultBranch`, `updatedAt`) for authorized user repositories with pagination and query search. Never logs or sends repo names to analytics.
 
 ### Feedback Survey (`POST /api/feedback`)
-- Collects usefulness scores (1-5), primary use cases, desired capabilities, and optional 500-char feedback without PII with enforced payload bounds (<= 16 KB).
+- Collects usefulness scores (1-5), primary use cases, desired capabilities, and optional 500-char feedback without PII with enforced streaming payload bounds (<= 16 KB).
 
 ---
 

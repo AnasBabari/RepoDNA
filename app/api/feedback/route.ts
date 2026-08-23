@@ -11,6 +11,52 @@ export interface FeedbackPayload {
   comments?: string;
 }
 
+const MAX_FEEDBACK_BYTES = 16 * 1024;
+
+async function readBoundedJson<T>(request: NextRequest, maxBytes: number): Promise<T> {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength && parseInt(contentLength, 10) > maxBytes) {
+    throw new Error('PAYLOAD_TOO_LARGE');
+  }
+
+  if (!request.body) {
+    const text = await request.text();
+    if (new TextEncoder().encode(text).length > maxBytes) {
+      throw new Error('PAYLOAD_TOO_LARGE');
+    }
+    return JSON.parse(text) as T;
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          await reader.cancel('PAYLOAD_TOO_LARGE');
+          throw new Error('PAYLOAD_TOO_LARGE');
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const decoder = new TextDecoder('utf-8');
+  let text = '';
+  for (const chunk of chunks) {
+    text += decoder.decode(chunk, { stream: true });
+  }
+  text += decoder.decode();
+  return JSON.parse(text) as T;
+}
+
 export async function POST(request: NextRequest) {
   const requestId = `req_fb_${crypto.randomUUID().slice(0, 12)}`;
   let session = null;
@@ -18,17 +64,23 @@ export async function POST(request: NextRequest) {
     session = await auth();
   } catch {}
 
-  const contentLength = request.headers.get('content-length');
-  if (contentLength && parseInt(contentLength, 10) > 16 * 1024) {
+  let body: Partial<FeedbackPayload>;
+  try {
+    body = await readBoundedJson<Partial<FeedbackPayload>>(request, MAX_FEEDBACK_BYTES);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === 'PAYLOAD_TOO_LARGE') {
+      return NextResponse.json(
+        { success: false, error: 'Request body exceeds 16 KB limit', requestId },
+        { status: 413 }
+      );
+    }
     return NextResponse.json(
-      { success: false, error: 'Request body exceeds 16 KB limit', requestId },
-      { status: 413 }
+      { success: false, error: 'Invalid or malformed JSON body.', requestId },
+      { status: 400 }
     );
   }
 
   try {
-    const body = (await request.json()) as Partial<FeedbackPayload>;
-
     const usefulnessScore =
       typeof body.usefulnessScore === 'number' && Number.isInteger(body.usefulnessScore)
         ? Math.min(5, Math.max(1, body.usefulnessScore))
