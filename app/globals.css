@@ -1681,6 +1681,29 @@ code, kbd {
   pointer-events: auto;
 }
 
+.arch-reset-btn {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  background: rgba(8, 14, 20, 0.92);
+  padding: 5px 12px;
+  color: #fbbf24;
+  font: 600 11px var(--font-geist-mono);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+}
+
+.arch-reset-btn:hover {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.6);
+  color: #fde68a;
+  transform: translateY(-1px);
+}
+
 .arch-legend-bar {
   position: absolute;
   bottom: 14px;

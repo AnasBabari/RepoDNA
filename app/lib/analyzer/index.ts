@@ -13,7 +13,8 @@ import {
   resolveCalls,
   resolveImports,
 } from './graph';
-import { extractFromFileList, extractFromZip, fetchGitHubRepo } from './ingestion';
+import { extractFromFileList, extractFromZip, fetchGitHubRepo, parseGitHubUrl, type ParsedGitHubUrl } from './ingestion';
+export { parseGitHubUrl, type ParsedGitHubUrl };
 import type {
   Diagnostic,
   DiscoveredFile,

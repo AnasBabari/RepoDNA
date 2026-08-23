@@ -8,7 +8,7 @@ import { ArchitectureGraph } from './ArchitectureGraph';
 import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
-import { analyzeGitHubUrl, analyzeUploadedFiles, analyzeZipBuffer } from '../lib/analyzer';
+import { analyzeGitHubUrl, analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import {
   ANALYSIS_COMPLETE_STEP,
   ANALYSIS_PROGRESS_STEPS,
@@ -1401,8 +1401,13 @@ function WorkspaceContent() {
 
   async function handleAnalyzeGitHub(url: string, forceClientOnly = false) {
     const cleanUrl = url.trim();
+    const parsed = parseGitHubUrl(cleanUrl);
+    const targetUrl = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}` : cleanUrl;
+    const shortKey = parsed ? `${parsed.owner.toLowerCase()}/${parsed.repo.toLowerCase()}` : '';
+    const canonicalFull = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}`.toLowerCase() : '';
+
     const startTime = Date.now();
-    const controller = beginAnalysis(cleanUrl);
+    const controller = beginAnalysis(targetUrl);
     let failureCode = 'CLIENT_ERROR';
     let loadedSample = false;
     trackAnalysisIntent('github_public');
@@ -1411,7 +1416,13 @@ function WorkspaceContent() {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
         // Check pre-cached sample artifacts without bypassing the shared progress lifecycle.
         if (!forceClientOnly) {
-          const samplePath = SAMPLE_ARTIFACTS[cleanUrl] || SAMPLE_ARTIFACTS[cleanUrl.replace(/\/$/, '')];
+          const samplePath =
+            SAMPLE_ARTIFACTS[targetUrl] ||
+            SAMPLE_ARTIFACTS[canonicalFull] ||
+            (shortKey ? SAMPLE_ARTIFACTS[shortKey] : undefined) ||
+            SAMPLE_ARTIFACTS[cleanUrl] ||
+            SAMPLE_ARTIFACTS[cleanUrl.replace(/\/$/, '')];
+
           if (samplePath) {
             try {
               const sampleRes = await fetch(samplePath, { signal: controller.signal });
@@ -1429,7 +1440,7 @@ function WorkspaceContent() {
           }
         }
 
-        if (forceClientOnly) return analyzeGitHubUrl(cleanUrl);
+        if (forceClientOnly) return analyzeGitHubUrl(targetUrl);
 
         // Try the serverless analyzer first, then transparently fall back to the browser.
         interface ApiResponse {
@@ -1445,7 +1456,7 @@ function WorkspaceContent() {
           const res = await fetch('/api/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: cleanUrl }),
+            body: JSON.stringify({ url: targetUrl }),
             signal: controller.signal,
           });
 
@@ -1805,10 +1816,12 @@ function WorkspaceContent() {
               </div>
             </section>
             <ArchitectureGraph
+              key={project.repository.source || project.repository.name}
               components={project.architecture.components}
               connections={project.architecture.connections}
               selectedId={selectedComponent?.id ?? null}
               onSelect={selectComponent}
+              repositoryId={project.repository.source || project.repository.name}
             />
           </div>
         )}

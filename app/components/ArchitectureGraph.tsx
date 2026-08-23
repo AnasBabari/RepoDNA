@@ -140,6 +140,18 @@ function computeTieredPositions(components: ArchitectureComponent[]) {
   return map;
 }
 
+function loadSavedPositions(repoId?: string): Record<string, { x: number; y: number }> {
+  if (typeof window === 'undefined' || !repoId) return {};
+  try {
+    const saved = localStorage.getItem(`repodna_layout_${repoId}`);
+    if (saved) {
+      const parsed = JSON.parse(saved) as Record<string, { x: number; y: number }>;
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch {}
+  return {};
+}
+
 type LayerFilter = 'all' | 'api' | 'services' | 'data' | 'infra';
 
 export function ArchitectureGraph({
@@ -147,13 +159,46 @@ export function ArchitectureGraph({
   connections,
   selectedId,
   onSelect,
+  repositoryId,
 }: {
   components: ArchitectureComponent[];
   connections: ArchitectureConnection[];
   selectedId: string | null;
   onSelect: (component: ArchitectureComponent) => void;
+  repositoryId?: string;
 }) {
   const [filter, setFilter] = useState<LayerFilter>('all');
+  const [customPositions, setCustomPositions] = useState<Record<string, { x: number; y: number }>>(() =>
+    loadSavedPositions(repositoryId)
+  );
+
+  const hasCustomLayout = useMemo(() => {
+    return Object.keys(customPositions).length > 0;
+  }, [customPositions]);
+
+  const handleResetLayout = () => {
+    setCustomPositions({});
+    if (typeof window !== 'undefined' && repositoryId) {
+      try {
+        localStorage.removeItem(`repodna_layout_${repositoryId}`);
+      } catch {}
+    }
+  };
+
+  const handleNodeDragStop = (_: React.MouseEvent, node: Node) => {
+    setCustomPositions((prev) => {
+      const next = {
+        ...prev,
+        [node.id]: { x: Math.round(node.position.x), y: Math.round(node.position.y) },
+      };
+      if (typeof window !== 'undefined' && repositoryId) {
+        try {
+          localStorage.setItem(`repodna_layout_${repositoryId}`, JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+  };
 
   const filteredComponents = useMemo(() => {
     if (filter === 'all') return components;
@@ -188,10 +233,13 @@ export function ArchitectureGraph({
         else relation = 'unrelated';
       }
 
+      const defaultPos = layout.get(component.id) ?? { x: 0, y: 0 };
+      const pos = customPositions[component.id] ?? defaultPos;
+
       return {
         id: component.id,
         type: 'architecture',
-        position: layout.get(component.id) ?? { x: 0, y: 0 },
+        position: pos,
         initialWidth: ARCHITECTURE_NODE_WIDTH,
         initialHeight: ARCHITECTURE_NODE_HEIGHT,
         data: {
@@ -260,11 +308,11 @@ export function ArchitectureGraph({
     });
 
     return { nodes: graphNodes, edges: graphEdges };
-  }, [filteredComponents, connections, selectedId, components]);
+  }, [filteredComponents, connections, selectedId, components, customPositions]);
 
   return (
     <div className="react-flow-shell" aria-label="Interactive architecture graph">
-      {/* Top Layer Filtering Toolbar */}
+      {/* Top Layer Filtering Toolbar & Custom Layout Actions */}
       <div className="arch-toolbar">
         <div className="arch-filter-group">
           <button
@@ -303,6 +351,19 @@ export function ArchitectureGraph({
             Infra & Config
           </button>
         </div>
+
+        {hasCustomLayout && (
+          <div className="arch-toolbar-actions">
+            <button
+              className="arch-reset-btn"
+              onClick={handleResetLayout}
+              type="button"
+              title="Reset to auto-calculated tiered layout"
+            >
+              ↺ Reset Layout
+            </button>
+          </div>
+        )}
       </div>
 
       <ReactFlow
@@ -310,6 +371,7 @@ export function ArchitectureGraph({
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelect(node.data)}
+        onNodeDragStop={handleNodeDragStop}
         fitView
         fitViewOptions={{ padding: 0.25 }}
         minZoom={0.25}

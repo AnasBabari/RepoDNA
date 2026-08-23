@@ -40,6 +40,12 @@ class IngestionTests(unittest.TestCase):
 
     def test_validates_public_github_urls(self) -> None:
         self.assertEqual(parse_github_url("https://github.com/openai/openai-python"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("github.com/openai/openai-python"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("www.github.com/openai/openai-python"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("git@github.com:openai/openai-python.git"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("https://github.com/openai/openai-python/tree/main"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("https://github.com/openai/openai-python?tab=readme-ov-file"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("openai/openai-python"), ("openai", "openai-python"))
         with self.assertRaises(IngestionError):
             parse_github_url("https://example.com/owner/repo")
 

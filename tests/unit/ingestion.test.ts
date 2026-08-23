@@ -7,12 +7,39 @@ import {
 import { IngestionError } from '../../app/lib/analyzer/types';
 
 describe('Ingestion & Resource Limits', () => {
-  it('validates public GitHub URLs and rejects invalid URLs', () => {
+  it('validates public GitHub URLs and handles all real-world URL formats', () => {
+    // Standard formats
     expect(parseGitHubUrl('https://github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
     expect(parseGitHubUrl('https://github.com/owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo' });
     expect(parseGitHubUrl('http://github.com/owner/repo/')).toEqual({ owner: 'owner', repo: 'repo' });
     expect(parseGitHubUrl('owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
 
+    // Missing protocol & www
+    expect(parseGitHubUrl('github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('www.github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('https://www.github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+
+    // SSH clone formats
+    expect(parseGitHubUrl('git@github.com:owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('git@github.com:owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('git+https://github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+
+    // Deep branch / tree / blob URLs copied from address bar
+    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main')).toEqual({ owner: 'owner', repo: 'repo', ref: 'main' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/tree/develop/src')).toEqual({ owner: 'owner', repo: 'repo', ref: 'develop' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/blob/main/README.md')).toEqual({ owner: 'owner', repo: 'repo', ref: 'main' });
+
+    // Query parameters & fragments
+    expect(parseGitHubUrl('https://github.com/owner/repo?tab=readme-ov-file')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo#readme')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main?tab=readme-ov-file#install')).toEqual({ owner: 'owner', repo: 'repo', ref: 'main' });
+
+    // Quoted strings and scoped prefix
+    expect(parseGitHubUrl('"https://github.com/owner/repo"')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl("'owner/repo'")).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('@owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+
+    // Rejections
     expect(parseGitHubUrl('https://gitlab.com/owner/repo')).toBeNull();
     expect(parseGitHubUrl('ftp://github.com/owner/repo')).toBeNull();
     expect(parseGitHubUrl('https://github.com/invalid url/repo')).toBeNull();

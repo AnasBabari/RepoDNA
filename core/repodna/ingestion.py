@@ -202,10 +202,49 @@ def discover_local(root: Path, limits: IngestionLimits | None = None) -> Discove
 
 
 def parse_github_url(url: str) -> tuple[str, str]:
-    match = GITHUB_RE.fullmatch(url.strip())
-    if not match:
-        raise IngestionError("GitHub source must be a public repository URL such as https://github.com/owner/repo")
-    return match.group("owner"), match.group("repo")
+    if not url or not isinstance(url, str):
+        raise IngestionError("GitHub source must be a valid repository URL or owner/repo format")
+
+    cleaned = url.strip().strip('"\'')
+    cleaned = re.sub(r'^(?:git\+|git://|ssh://)', '', cleaned, flags=re.IGNORECASE)
+
+    # SSH format: git@github.com:owner/repo(.git)
+    ssh_match = re.match(
+        r'^git@github\.com:(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?/?$',
+        cleaned,
+        re.IGNORECASE,
+    )
+    if ssh_match:
+        return ssh_match.group("owner"), re.sub(r'\.git$', '', ssh_match.group("repo"), flags=re.IGNORECASE)
+
+    # Normalize github.com / www.github.com
+    if re.match(r'^(?:www\.)?github\.com/', cleaned, re.IGNORECASE):
+        cleaned = "https://" + cleaned
+
+    # Full URL or tree/blob/query URL
+    url_match = re.match(
+        r'^https?://(?:www\.)?github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?(?:/(?:tree|blob)/[^/]+.*|/.*|\?.*|#.*)?$',
+        cleaned,
+        re.IGNORECASE,
+    )
+    if url_match:
+        return url_match.group("owner"), re.sub(r'\.git$', '', url_match.group("repo"), flags=re.IGNORECASE)
+
+    # Short format: owner/repo
+    short_clean = re.sub(r'^@', '', cleaned).split('?')[0].split('#')[0].rstrip('/')
+    parts = short_clean.split('/')
+    if len(parts) == 2:
+        owner, repo = parts
+        repo = re.sub(r'\.git$', '', repo, flags=re.IGNORECASE)
+        if (
+            re.fullmatch(r'[A-Za-z0-9_.-]+', owner)
+            and re.fullmatch(r'[A-Za-z0-9_.-]+', repo)
+            and ':' not in owner
+            and '.' not in owner
+        ):
+            return owner, repo
+
+    raise IngestionError(f"Invalid GitHub repository URL: '{url}'. Expected format: https://github.com/owner/repository")
 
 
 def _download_archive(owner: str, repo: str, limits: IngestionLimits) -> bytes:
@@ -255,7 +294,11 @@ def _safe_extract_zip(payload: bytes, destination: Path, limits: IngestionLimits
 def repository_source(source: str | Path, limits: IngestionLimits | None = None) -> Iterator[DiscoveryResult]:
     limits = limits or IngestionLimits()
     source_str = str(source)
-    if source_str.startswith(("https://github.com/", "http://github.com/")):
+    is_github = (
+        source_str.startswith(("https://", "http://", "github.com", "www.github.com", "git@github.com", "git+"))
+        or (not Path(source_str).exists() and "/" in source_str and len(source_str.split("/")) == 2)
+    )
+    if is_github:
         owner, repo = parse_github_url(source_str)
         with tempfile.TemporaryDirectory(prefix="repodna-") as temp:
             root = _safe_extract_zip(_download_archive(owner, repo, limits), Path(temp), limits)
