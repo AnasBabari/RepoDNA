@@ -140,19 +140,116 @@ function computeTieredPositions(components: ArchitectureComponent[]) {
   return map;
 }
 
-function loadSavedPositions(repoId?: string): Record<string, { x: number; y: number }> {
-  if (typeof window === 'undefined' || !repoId) return {};
-  try {
-    const saved = localStorage.getItem(`repodna_layout_${repoId}`);
-    if (saved) {
-      const parsed = JSON.parse(saved) as Record<string, { x: number; y: number }>;
-      if (parsed && typeof parsed === 'object') return parsed;
-    }
-  } catch {}
-  return {};
+export type LayerFilter = 'all' | 'api' | 'services' | 'data' | 'infra';
+
+export interface SavedArchitectureView {
+  version: 1;
+  graphFingerprint: string;
+  positions: Record<string, { x: number; y: number }>;
+  viewport?: { x: number; y: number; zoom: number };
+  filter?: LayerFilter;
 }
 
-type LayerFilter = 'all' | 'api' | 'services' | 'data' | 'infra';
+function hashString(str: string): string {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
+}
+
+function computeGraphFingerprint(
+  components: ArchitectureComponent[],
+  connections: ArchitectureConnection[]
+): string {
+  const compStr = components
+    .map((c) => `${c.id}:${c.type}:${c.files.length}`)
+    .sort()
+    .join('|');
+  const connStr = connections
+    .map((c) => `${c.source}->${c.target}:${c.type}`)
+    .sort()
+    .join('|');
+  return hashString(`${compStr}#${connStr}`);
+}
+
+function computeStorageKey(repoId: string, graphFingerprint: string): string {
+  const combined = `${repoId || 'anonymous'}:${graphFingerprint}`;
+  return `repodna_view_v1_${hashString(combined)}`;
+}
+
+function loadSavedView(
+  repoId: string | undefined,
+  graphFingerprint: string,
+  validComponentIds: Set<string>
+): SavedArchitectureView | null {
+  if (typeof window === 'undefined' || !repoId) return null;
+  const storageKey = computeStorageKey(repoId, graphFingerprint);
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const obj = parsed as Record<string, unknown>;
+    if (obj.version !== 1 || obj.graphFingerprint !== graphFingerprint) return null;
+    if (!obj.positions || typeof obj.positions !== 'object') return null;
+
+    const rawPositions = obj.positions as Record<string, unknown>;
+    const keys = Object.keys(rawPositions);
+    if (keys.length > 500) return null;
+
+    const positions: Record<string, { x: number; y: number }> = {};
+    for (const key of keys) {
+      if (!validComponentIds.has(key)) continue;
+      const pt = rawPositions[key];
+      if (pt && typeof pt === 'object') {
+        const x = (pt as { x?: unknown }).x;
+        const y = (pt as { y?: unknown }).y;
+        if (
+          typeof x === 'number' && Number.isFinite(x) && x >= -50000 && x <= 50000 &&
+          typeof y === 'number' && Number.isFinite(y) && y >= -50000 && y <= 50000
+        ) {
+          positions[key] = { x: Math.round(x), y: Math.round(y) };
+        }
+      }
+    }
+
+    let viewport: { x: number; y: number; zoom: number } | undefined;
+    if (obj.viewport && typeof obj.viewport === 'object') {
+      const v = obj.viewport as { x?: unknown; y?: unknown; zoom?: unknown };
+      if (
+        typeof v.x === 'number' && Number.isFinite(v.x) &&
+        typeof v.y === 'number' && Number.isFinite(v.y) &&
+        typeof v.zoom === 'number' && Number.isFinite(v.zoom) && v.zoom >= 0.1 && v.zoom <= 4
+      ) {
+        viewport = { x: v.x, y: v.y, zoom: v.zoom };
+      }
+    }
+
+    let filter: LayerFilter | undefined;
+    const validFilters = new Set(['all', 'api', 'services', 'data', 'infra']);
+    if (typeof obj.filter === 'string' && validFilters.has(obj.filter)) {
+      filter = obj.filter as LayerFilter;
+    }
+
+    return {
+      version: 1,
+      graphFingerprint,
+      positions,
+      viewport,
+      filter,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export function ArchitectureGraph({
   components,
@@ -167,20 +264,56 @@ export function ArchitectureGraph({
   onSelect: (component: ArchitectureComponent) => void;
   repositoryId?: string;
 }) {
-  const [filter, setFilter] = useState<LayerFilter>('all');
-  const [customPositions, setCustomPositions] = useState<Record<string, { x: number; y: number }>>(() =>
-    loadSavedPositions(repositoryId)
+  const componentIds = useMemo(() => new Set(components.map((c) => c.id)), [components]);
+  const graphFingerprint = useMemo(
+    () => computeGraphFingerprint(components, connections),
+    [components, connections]
   );
 
-  const hasCustomLayout = useMemo(() => {
-    return Object.keys(customPositions).length > 0;
-  }, [customPositions]);
+  const initialSavedView = useMemo(
+    () => loadSavedView(repositoryId, graphFingerprint, componentIds),
+    [repositoryId, graphFingerprint, componentIds]
+  );
 
-  const handleResetLayout = () => {
+  const [filter, setFilter] = useState<LayerFilter>(() => initialSavedView?.filter ?? 'all');
+  const [customPositions, setCustomPositions] = useState<Record<string, { x: number; y: number }>>(
+    () => initialSavedView?.positions ?? {}
+  );
+  const [viewport, setViewport] = useState<{ x: number; y: number; zoom: number } | undefined>(
+    () => initialSavedView?.viewport
+  );
+
+  const hasCustomView = useMemo(() => {
+    return Object.keys(customPositions).length > 0 || filter !== 'all' || viewport !== undefined;
+  }, [customPositions, filter, viewport]);
+
+  const persistCurrentView = (
+    nextPositions: Record<string, { x: number; y: number }>,
+    nextFilter: LayerFilter,
+    nextViewport?: { x: number; y: number; zoom: number }
+  ) => {
+    if (typeof window === 'undefined' || !repositoryId) return;
+    const storageKey = computeStorageKey(repositoryId, graphFingerprint);
+    try {
+      const payload: SavedArchitectureView = {
+        version: 1,
+        graphFingerprint,
+        positions: nextPositions,
+        filter: nextFilter,
+        viewport: nextViewport,
+      };
+      localStorage.setItem(storageKey, JSON.stringify(payload));
+    } catch {}
+  };
+
+  const handleResetView = () => {
     setCustomPositions({});
+    setFilter('all');
+    setViewport(undefined);
     if (typeof window !== 'undefined' && repositoryId) {
       try {
-        localStorage.removeItem(`repodna_layout_${repositoryId}`);
+        const storageKey = computeStorageKey(repositoryId, graphFingerprint);
+        localStorage.removeItem(storageKey);
       } catch {}
     }
   };
@@ -191,13 +324,19 @@ export function ArchitectureGraph({
         ...prev,
         [node.id]: { x: Math.round(node.position.x), y: Math.round(node.position.y) },
       };
-      if (typeof window !== 'undefined' && repositoryId) {
-        try {
-          localStorage.setItem(`repodna_layout_${repositoryId}`, JSON.stringify(next));
-        } catch {}
-      }
+      persistCurrentView(next, filter, viewport);
       return next;
     });
+  };
+
+  const handleFilterChange = (nextFilter: LayerFilter) => {
+    setFilter(nextFilter);
+    persistCurrentView(customPositions, nextFilter, viewport);
+  };
+
+  const handleMoveEnd = (_: unknown, nextViewport: { x: number; y: number; zoom: number }) => {
+    setViewport(nextViewport);
+    persistCurrentView(customPositions, filter, nextViewport);
   };
 
   const filteredComponents = useMemo(() => {
@@ -317,50 +456,50 @@ export function ArchitectureGraph({
         <div className="arch-filter-group">
           <button
             className={`arch-filter-btn ${filter === 'all' ? 'is-active' : ''}`}
-            onClick={() => setFilter('all')}
+            onClick={() => handleFilterChange('all')}
             type="button"
           >
             All Layers ({components.length})
           </button>
           <button
             className={`arch-filter-btn ${filter === 'api' ? 'is-active' : ''}`}
-            onClick={() => setFilter('api')}
+            onClick={() => handleFilterChange('api')}
             type="button"
           >
             Frontend & API
           </button>
           <button
             className={`arch-filter-btn ${filter === 'services' ? 'is-active' : ''}`}
-            onClick={() => setFilter('services')}
+            onClick={() => handleFilterChange('services')}
             type="button"
           >
             Services & Core
           </button>
           <button
             className={`arch-filter-btn ${filter === 'data' ? 'is-active' : ''}`}
-            onClick={() => setFilter('data')}
+            onClick={() => handleFilterChange('data')}
             type="button"
           >
             Data & Repos
           </button>
           <button
             className={`arch-filter-btn ${filter === 'infra' ? 'is-active' : ''}`}
-            onClick={() => setFilter('infra')}
+            onClick={() => handleFilterChange('infra')}
             type="button"
           >
             Infra & Config
           </button>
         </div>
 
-        {hasCustomLayout && (
+        {hasCustomView && (
           <div className="arch-toolbar-actions">
             <button
               className="arch-reset-btn"
-              onClick={handleResetLayout}
+              onClick={handleResetView}
               type="button"
-              title="Reset to auto-calculated tiered layout"
+              title="Reset to default auto-calculated layout and view"
             >
-              ↺ Reset Layout
+              ↺ Reset View
             </button>
           </div>
         )}
@@ -372,7 +511,9 @@ export function ArchitectureGraph({
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelect(node.data)}
         onNodeDragStop={handleNodeDragStop}
-        fitView
+        onMoveEnd={handleMoveEnd}
+        defaultViewport={viewport}
+        fitView={!viewport}
         fitViewOptions={{ padding: 0.25 }}
         minZoom={0.25}
         maxZoom={1.8}
