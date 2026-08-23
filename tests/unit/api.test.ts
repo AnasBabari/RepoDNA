@@ -253,4 +253,23 @@ describe('/api/feedback Route Handler', () => {
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
   });
+
+  it('rejects out-of-range or non-integer usefulnessScore (e.g. 999, 0, 4.5)', async () => {
+    const { POST: postFeedback } = await import('../../app/api/feedback/route');
+
+    for (const badScore of [999, 0, -1, 6, 3.5]) {
+      const req = new NextRequest('http://localhost:3000/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify({ usefulnessScore: badScore }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const res = await postFeedback(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain('integer between 1 and 5');
+    }
+  });
 });

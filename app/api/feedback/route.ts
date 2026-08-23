@@ -82,8 +82,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const usefulnessScore =
-      typeof body.usefulnessScore === 'number' && Number.isInteger(body.usefulnessScore)
-        ? Math.min(5, Math.max(1, body.usefulnessScore))
+      typeof body.usefulnessScore === 'number' &&
+      Number.isInteger(body.usefulnessScore) &&
+      body.usefulnessScore >= 1 &&
+      body.usefulnessScore <= 5
+        ? body.usefulnessScore
         : 0;
     const primaryUsecase =
       typeof body.primaryUsecase === 'string' ? body.primaryUsecase.trim().slice(0, 100) : 'unspecified';
