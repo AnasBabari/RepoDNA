@@ -1,4 +1,4 @@
-import JSZip from 'jszip';
+import * as fflate from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
 import { extractFromZip, fetchGitHubRepo } from '../../app/lib/analyzer/ingestion';
 import { IngestionError } from '../../app/lib/analyzer/types';
@@ -35,9 +35,9 @@ describe('Critical Security Invariants', () => {
   });
 
   it('rejects archive entries containing null-byte poison characters', async () => {
-    const zip = new JSZip();
-    zip.file('file\0.py', 'print("malicious")');
-    const buffer = await zip.generateAsync({ type: 'arraybuffer' });
+    const buffer = fflate.zipSync({
+      'file\0.py': fflate.strToU8('print("malicious")'),
+    });
 
     await expect(extractFromZip(buffer, 'test-repo')).rejects.toThrow(IngestionError);
     await expect(extractFromZip(buffer, 'test-repo')).rejects.toMatchObject({
@@ -47,11 +47,11 @@ describe('Critical Security Invariants', () => {
   });
 
   it('skips excessively deep directory path trees (>32 depth)', async () => {
-    const zip = new JSZip();
     const deepPath = Array(35).fill('deep').join('/') + '/nested.py';
-    zip.file(deepPath, 'print("deep")');
-    zip.file('valid.py', 'print("valid")');
-    const buffer = await zip.generateAsync({ type: 'arraybuffer' });
+    const buffer = fflate.zipSync({
+      [deepPath]: fflate.strToU8('print("deep")'),
+      'valid.py': fflate.strToU8('print("valid")'),
+    });
 
     const result = await extractFromZip(buffer, 'test-repo');
     expect(result.files.map((f) => f.path)).toEqual(['valid.py']);

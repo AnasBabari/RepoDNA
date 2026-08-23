@@ -1,4 +1,4 @@
-import JSZip from 'jszip';
+import * as fflate from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { analyzeRepositoryFiles, analyzeZipBuffer } from '../../app/lib/analyzer';
 import type { DiscoveredFile } from '../../app/lib/analyzer/types';
@@ -161,9 +161,9 @@ module.exports = router;
   });
 
   it('preserves the same coverage guarantees through the browser ZIP ingestion path', async () => {
-    const zip = new JSZip();
-    zip.file('package.json', '{"name":"dynamic-routes","dependencies":{"express":"^5.0.0"}}');
-    zip.file('src\\app.js', `
+    const buffer = fflate.zipSync({
+      'package.json': fflate.strToU8('{"name":"dynamic-routes","dependencies":{"express":"^5.0.0"}}'),
+      'src/app.js': fflate.strToU8(`
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -175,20 +175,20 @@ fs.readdirSync(path.join(__dirname, 'routes')).forEach((file) => {
   const router = require(\`./routes/\${file}\`);
   app.use(\`/api/\${file.replace('.js', '')}\`, router);
 });
-`);
-    zip.file('src\\routes\\health.js', `
+`),
+      'src/routes/health.js': fflate.strToU8(`
 const express = require('express');
 const router = express.Router();
 router.get('/status', handler);
 module.exports = router;
-`);
-    zip.file('src\\routes\\users.js', `
+`),
+      'src/routes/users.js': fflate.strToU8(`
 const express = require('express');
 const router = express.Router();
 router.get('/:id', handler);
 module.exports = router;
-`);
-    const buffer = await zip.generateAsync({ type: 'arraybuffer' });
+`),
+    });
 
     const project = await analyzeZipBuffer(buffer, 'dynamic-routes');
 

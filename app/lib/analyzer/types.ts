@@ -15,6 +15,7 @@ import type {
 
 export interface IngestionLimits {
   maxFiles: number;
+  maxArchiveEntries: number;
   maxFileBytes: number;
   maxArchiveBytes: number;
   maxTotalExtractedBytes: number;
@@ -23,6 +24,7 @@ export interface IngestionLimits {
 
 export const DEFAULT_INGESTION_LIMITS: IngestionLimits = {
   maxFiles: 10_000,
+  maxArchiveEntries: 20_000,
   maxFileBytes: 1_000_000, // 1 MB
   maxArchiveBytes: 25 * 1024 * 1024, // 25 MB
   maxTotalExtractedBytes: 100 * 1024 * 1024, // 100 MB
@@ -38,6 +40,8 @@ export type IngestionErrorCode =
   | 'ARCHIVE_TOO_LARGE'
   | 'EXTRACTED_TOO_LARGE'
   | 'TOO_MANY_FILES'
+  | 'TOO_MANY_ARCHIVE_ENTRIES'
+  | 'SUSPICIOUS_COMPRESSION_RATIO'
   | 'PATH_TRAVERSAL'
   | 'INVALID_ARCHIVE'
   | 'UNREADABLE_FILE';

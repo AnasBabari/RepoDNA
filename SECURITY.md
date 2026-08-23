@@ -27,9 +27,9 @@ RepoDNA is architected around **Zero Code Execution**:
    - Web server ingestion paths never inherit ambient server Personal Access Tokens (`GITHUB_TOKEN` / `GITHUB_PAT`).
    - Private repository support currently uses GitHub OAuth's `repo` scope because OAuth Apps do not provide read-only private source-code access. RepoDNA itself strictly performs read-only analysis transiently in memory and never modifies repositories or files. Migration to fine-grained GitHub App read-only permissions is planned.
 
-4. **Resource Bounds & Ingestion Defenses**:
+4. **Resource Bounds & Streaming Ingestion Defenses**:
    - Bounded download sizes with streaming network byte caps (25 MB default archive limit) that cancel downstream connections immediately upon breach.
-   - Ingestion defenses: ZIP ingestion applies candidate file count limits (10,000 max), path traversal rejection, null-byte path validation, path depth limits (32 max), individual file size limits (1 MB), and cumulative extracted content limits (100 MB). Additional streaming decompression hardening remains planned.
+   - Streaming Decompression Defense via `fflate`: Archive buffers are fed in bounded 64 KiB chunks with a hard all-entry cap (20,000 max entries) against header bombs, candidate file limits (10,000 max), path traversal rejection, null-byte path validation, path depth limits (32 max), per-entry uncompressed byte caps (1 MB max, skipping oversized entries early), declared compression-ratio heuristic guards (aborting on >200:1 ratio past 256 KB floor), and cumulative extracted content limits (100 MB max, counting all emitted bytes).
    - Syntax parsers operate under AST depth caps (`MAX_AST_DEPTH = 128`), node budgets (`MAX_AST_NODES = 25000`), item collection limits, and automatic Tree-sitter WASM cleanup (`tree.delete()`).
 
 ---

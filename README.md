@@ -86,8 +86,10 @@ Sign in with GitHub to access your private repositories:
 |---|---|---|
 | **Public Rate Limit** | 5 analyses / 10 min per IP | Returns `429 RATE_LIMITED` |
 | **Authenticated Rate Limit** | 20 analyses / 10 min per user | Returns `429 RATE_LIMITED` |
-| **Repository files** | 10,000 files | Returns `413 TOO_MANY_FILES` |
+| **Total archive entries** | 20,000 entries | Returns `413 TOO_MANY_ARCHIVE_ENTRIES` (header bomb defense) |
+| **Candidate repository files** | 10,000 files | Returns `413 TOO_MANY_FILES` |
 | **Individual file size** | 1 MB (1,000,000 bytes) | Skipped with diagnostic (`exceeds_file_size_limit`) |
+| **Declared compression ratio** | 200:1 (entries > 256 KB) | Returns `413 SUSPICIOUS_COMPRESSION_RATIO` |
 | **Compressed archive** | 25 MB (26,214,400 bytes) | Returns `413 ARCHIVE_TOO_LARGE` |
 | **Total extracted content** | 100 MB (104,857,600 bytes) | Returns `413 EXTRACTED_TOO_LARGE` (ZIP bomb protection) |
 | **GitHub fetch timeout** | 20 seconds | Returns `504 FETCH_TIMEOUT` |

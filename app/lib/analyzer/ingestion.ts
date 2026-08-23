@@ -1,5 +1,5 @@
-import JSZip from 'jszip';
-import { DEFAULT_INGESTION_LIMITS, IngestionError, type DiscoveredFile, type IngestionLimits } from './types';
+import * as fflate from 'fflate';
+import { DEFAULT_INGESTION_LIMITS, IngestionError, type DiscoveredFile, type IngestionLimits, type IngestionErrorCode } from './types';
 
 export const DEFAULT_IGNORES = new Set([
   '.git', '.hg', '.svn', 'node_modules', 'venv', '.venv', 'env',
@@ -175,13 +175,38 @@ async function sha256(content: string): Promise<string> {
   return Math.abs(hash).toString(16);
 }
 
+function combineChunks(chunks: Uint8Array[], totalBytes: number): Uint8Array {
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return combined;
+}
+
+function hasValidZipSignature(u8: Uint8Array): boolean {
+  if (u8.byteLength < 22) return false;
+  // A valid ZIP contains the End of Central Directory signature (PK\x05\x06) in the trailing bytes
+  const searchLen = Math.min(u8.byteLength, 65536 + 22);
+  const start = u8.byteLength - searchLen;
+  for (let i = u8.byteLength - 4; i >= start; i--) {
+    if (u8[i] === 0x50 && u8[i + 1] === 0x4b && u8[i + 2] === 0x05 && u8[i + 3] === 0x06) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function extractFromZip(
   zipBuffer: ArrayBuffer | Uint8Array,
   repoName = 'repository',
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS
 ): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string }> {
+  const u8 = zipBuffer instanceof Uint8Array ? zipBuffer : new Uint8Array(zipBuffer);
+  const byteLength = u8.byteLength;
+
   // 1. Check compressed archive size
-  const byteLength = zipBuffer.byteLength;
   if (byteLength > limits.maxArchiveBytes) {
     throw new IngestionError(
       'ARCHIVE_TOO_LARGE',
@@ -190,106 +215,274 @@ export async function extractFromZip(
     );
   }
 
-  let zip: JSZip;
-  try {
-    zip = await JSZip.loadAsync(zipBuffer);
-  } catch (err) {
-    throw new IngestionError('INVALID_ARCHIVE', `Failed to decompress ZIP archive: ${err instanceof Error ? err.message : 'Corrupt format'}`, 400);
+  // 2. Validate structural ZIP signature
+  if (!hasValidZipSignature(u8)) {
+    throw new IngestionError(
+      'INVALID_ARCHIVE',
+      'Corrupt or truncated ZIP archive: missing End of Central Directory record',
+      400
+    );
   }
 
-  const files: DiscoveredFile[] = [];
-  const skipped: { path: string; reason: string }[] = [];
-  let totalExtractedBytes = 0;
+  return new Promise((resolve, reject) => {
+    const unzipper = new fflate.Unzip();
+    unzipper.register(fflate.UnzipInflate);
+    unzipper.register(fflate.UnzipPassThrough);
 
-  // Determine zip root prefix (e.g. repo-name-HEAD/)
-  const archiveEntries = Object.entries(zip.files).map(([rawPath, entry]) => ({
-    rawPath,
-    path: normalizeArchivePath(rawPath),
-    entry,
-  }));
-  const allPaths = archiveEntries.map((item) => item.path);
-  let prefix = '';
-  const firstSlash = allPaths[0]?.indexOf('/');
-  if (firstSlash !== -1 && allPaths[0]) {
-    const potentialPrefix = allPaths[0].slice(0, firstSlash + 1);
-    if (allPaths.every((p) => p.startsWith(potentialPrefix) || p === potentialPrefix.slice(0, -1))) {
-  prefix = potentialPrefix;
-    }
-  }
+    let isAborted = false;
+    let totalExtractedBytes = 0;
+    let archiveEntryCount = 0;
+    let candidateFileCount = 0;
+    let pendingStreams = 0;
+    let zipInputComplete = false;
 
-  for (const { rawPath, path, entry } of archiveEntries) {
-    // 2. Validate against path traversal and null bytes
-    if (rawPath.includes('\0')) {
-      throw new IngestionError('PATH_TRAVERSAL', 'Archive path contains invalid null byte', 400);
-    }
-    validatePath(rawPath);
+    const files: DiscoveredFile[] = [];
+    const skipped: { path: string; reason: string }[] = [];
+    const discoveredPaths: string[] = [];
+    const activeStreams = new Set<{ terminate?: () => void }>();
 
-    if (entry.dir) continue;
-    const relPath = prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
-    if (!relPath || relPath.startsWith('/')) continue;
-
-    // Check maximum path depth
-    if (relPath.split('/').length > 32) {
-      skipped.push({ path: relPath, reason: 'path_too_deep' });
-      continue;
-    }
-
-    if (isIgnored(relPath)) {
-      continue;
-    }
-
-    if (!isCandidate(relPath)) {
-      continue;
-    }
-
-    // 3. Check total files limit
-    if (files.length >= limits.maxFiles) {
-      throw new IngestionError(
-        'TOO_MANY_FILES',
-        `Repository exceeds limit of ${limits.maxFiles.toLocaleString()} files`,
-        413
-      );
-    }
-
-    try {
-      const text = await entry.async('string');
-
-      // 4. Binary check
-      if (text.includes('\0')) {
-        skipped.push({ path: relPath, reason: 'binary' });
-        continue;
+    function abortArchive(code: IngestionErrorCode, message: string, status = 413) {
+      if (isAborted) return;
+      isAborted = true;
+      for (const stream of activeStreams) {
+        try { stream.terminate?.(); } catch {}
       }
+      activeStreams.clear();
+      reject(new IngestionError(code, message, status));
+    }
 
-      // 5. Individual file limit check
-      if (text.length > limits.maxFileBytes) {
-        skipped.push({ path: relPath, reason: 'exceeds_file_size_limit' });
-        continue;
+    async function checkCompletion() {
+      if (isAborted) return;
+      if (zipInputComplete && pendingStreams === 0) {
+        // Determine zip root prefix (e.g. repo-name-HEAD/)
+        let prefix = '';
+        const firstSlash = discoveredPaths[0]?.indexOf('/');
+        if (firstSlash !== -1 && discoveredPaths[0]) {
+          const potentialPrefix = discoveredPaths[0].slice(0, firstSlash + 1);
+          if (discoveredPaths.every((p) => p.startsWith(potentialPrefix) || p === potentialPrefix.slice(0, -1))) {
+            prefix = potentialPrefix;
+          }
+        }
+
+        const normalizedFiles: DiscoveredFile[] = [];
+        for (const f of files) {
+          const relPath = prefix && f.path.startsWith(prefix) ? f.path.slice(prefix.length) : f.path;
+          if (relPath && !relPath.startsWith('/')) {
+            normalizedFiles.push({ ...f, path: relPath });
+          }
+        }
+
+        const normalizedSkipped: { path: string; reason: string }[] = [];
+        for (const s of skipped) {
+          const relPath = prefix && s.path.startsWith(prefix) ? s.path.slice(prefix.length) : s.path;
+          normalizedSkipped.push({ ...s, path: relPath });
+        }
+
+        resolve({
+          files: normalizedFiles.sort((a, b) => a.path.localeCompare(b.path)),
+          skipped: normalizedSkipped,
+          name: repoName,
+        });
       }
+    }
 
-      // 6. Cumulative extracted size check (ZIP bomb protection)
-      totalExtractedBytes += text.length;
-      if (totalExtractedBytes > limits.maxTotalExtractedBytes) {
-        throw new IngestionError(
-          'EXTRACTED_TOO_LARGE',
-          `Extracted repository content (${(totalExtractedBytes / (1024 * 1024)).toFixed(1)} MB) exceeds limit of ${(limits.maxTotalExtractedBytes / (1024 * 1024)).toFixed(0)} MB`,
+    unzipper.onfile = (file: fflate.UnzipFile) => {
+      if (isAborted) return;
+
+      // 2. Enforce total archive entries budget (header bomb defense)
+      archiveEntryCount++;
+      if (archiveEntryCount > limits.maxArchiveEntries) {
+        abortArchive(
+          'TOO_MANY_ARCHIVE_ENTRIES',
+          `Archive contains ${archiveEntryCount.toLocaleString()} entries, exceeding limit of ${limits.maxArchiveEntries.toLocaleString()}`,
           413
         );
+        return;
       }
 
-      const hash = await sha256(text);
-      files.push({
-        path: relPath,
-        size: text.length,
-        content: text,
-        hash,
-      });
-    } catch (err) {
-      if (err instanceof IngestionError) throw err;
-      skipped.push({ path: relPath, reason: 'unreadable' });
-    }
-  }
+      const rawPath = file.name;
+      if (rawPath.includes('\0')) {
+        abortArchive('PATH_TRAVERSAL', 'Archive path contains invalid null byte', 400);
+        return;
+      }
 
-  return { files: files.sort((a, b) => a.path.localeCompare(b.path)), skipped, name: repoName };
+      try {
+        validatePath(rawPath);
+      } catch (err) {
+        if (err instanceof IngestionError) {
+          abortArchive(err.code, err.message, err.status);
+          return;
+        }
+        abortArchive('PATH_TRAVERSAL', `Invalid path: ${rawPath}`, 400);
+        return;
+      }
+
+      const normalizedPath = normalizeArchivePath(rawPath);
+      discoveredPaths.push(normalizedPath);
+
+      // Skip directory entries
+      if (rawPath.endsWith('/')) {
+        return;
+      }
+
+      // Check path depth
+      if (normalizedPath.split('/').length > 32) {
+        skipped.push({ path: normalizedPath, reason: 'path_too_deep' });
+        return;
+      }
+
+      if (isIgnored(normalizedPath)) {
+        return;
+      }
+
+      if (!isCandidate(normalizedPath)) {
+        return;
+      }
+
+      // 3. Enforce candidate files budget
+      candidateFileCount++;
+      if (candidateFileCount > limits.maxFiles) {
+        abortArchive(
+          'TOO_MANY_FILES',
+          `Repository exceeds limit of ${limits.maxFiles.toLocaleString()} candidate files`,
+          413
+        );
+        return;
+      }
+
+      // Early metadata size check (hint only)
+      if (typeof file.originalSize === 'number' && file.originalSize > limits.maxFileBytes) {
+        skipped.push({ path: normalizedPath, reason: 'exceeds_file_size_limit' });
+        return;
+      }
+
+      // 4. Stream and bound candidate file decompression
+      pendingStreams++;
+      activeStreams.add(file);
+
+      const chunks: Uint8Array[] = [];
+      let entryBytes = 0;
+      let entrySkippedReason: string | null = null;
+
+      file.ondata = (err, chunk, final) => {
+        if (isAborted) return;
+
+        if (err) {
+          if (!entrySkippedReason) {
+            skipped.push({ path: normalizedPath, reason: 'unreadable' });
+          }
+          activeStreams.delete(file);
+          pendingStreams--;
+          checkCompletion();
+          return;
+        }
+
+        if (chunk && chunk.byteLength > 0) {
+          entryBytes += chunk.byteLength;
+          // All emitted bytes count toward cumulative work budget (even if file later skipped)
+          totalExtractedBytes += chunk.byteLength;
+
+          // 5. Cumulative extracted archive limit check
+          if (totalExtractedBytes > limits.maxTotalExtractedBytes) {
+            abortArchive(
+              'EXTRACTED_TOO_LARGE',
+              `Extracted repository content exceeds limit of ${(limits.maxTotalExtractedBytes / (1024 * 1024)).toFixed(0)} MB`,
+              413
+            );
+            return;
+          }
+
+          // 6. Declared compression ratio heuristic guard (ratio > 200 on entries > 256 KB)
+          if (typeof file.size === 'number' && file.size > 0 && entryBytes > 256 * 1024) {
+            const ratio = entryBytes / file.size;
+            if (ratio > 200) {
+              abortArchive(
+                'SUSPICIOUS_COMPRESSION_RATIO',
+                `Archive rejected due to suspicious compression ratio (${ratio.toFixed(0)}:1 on ${normalizedPath})`,
+                413
+              );
+              return;
+            }
+          }
+
+          // 7. Individual file limit check
+          if (entryBytes > limits.maxFileBytes) {
+            if (!entrySkippedReason) {
+              entrySkippedReason = 'exceeds_file_size_limit';
+              skipped.push({ path: normalizedPath, reason: 'exceeds_file_size_limit' });
+            }
+            // Discard retained chunks immediately
+            chunks.length = 0;
+            try { file.terminate?.(); } catch {}
+          } else if (!entrySkippedReason) {
+            chunks.push(chunk);
+          }
+        }
+
+        if (final) {
+          activeStreams.delete(file);
+          if (!entrySkippedReason && !isAborted) {
+            const combined = combineChunks(chunks, entryBytes);
+            const text = fflate.strFromU8(combined);
+
+            // Binary check
+            if (text.includes('\0')) {
+              skipped.push({ path: normalizedPath, reason: 'binary' });
+            } else {
+              sha256(text).then((hash) => {
+                files.push({
+                  path: normalizedPath,
+                  size: entryBytes,
+                  content: text,
+                  hash,
+                });
+                pendingStreams--;
+                checkCompletion();
+              }).catch(() => {
+                skipped.push({ path: normalizedPath, reason: 'unreadable' });
+                pendingStreams--;
+                checkCompletion();
+              });
+              return;
+            }
+          }
+          pendingStreams--;
+          checkCompletion();
+        }
+      };
+
+      try {
+        file.start();
+      } catch {
+        if (!isAborted) {
+          activeStreams.delete(file);
+          skipped.push({ path: normalizedPath, reason: 'unreadable' });
+          pendingStreams--;
+          checkCompletion();
+        }
+      }
+    };
+
+    // 8. Feed archive buffer in bounded 64 KiB chunks to avoid stack overflow
+    try {
+      const CHUNK_SIZE = 64 * 1024;
+      for (let offset = 0; offset < u8.byteLength; offset += CHUNK_SIZE) {
+        if (isAborted) return;
+        const end = Math.min(offset + CHUNK_SIZE, u8.byteLength);
+        const slice = u8.subarray(offset, end);
+        const isLast = end >= u8.byteLength;
+        unzipper.push(slice, isLast);
+      }
+      zipInputComplete = true;
+      checkCompletion();
+    } catch (err) {
+      abortArchive(
+        'INVALID_ARCHIVE',
+        `Failed to decompress ZIP archive: ${err instanceof Error ? err.message : 'Corrupt format'}`,
+        400
+      );
+    }
+  });
 }
 
 async function streamBoundedArrayBuffer(

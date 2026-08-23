@@ -29,10 +29,10 @@ Live Demo: **[repodna-one.vercel.app](https://repodna-one.vercel.app)**
 - **Universal GitHub URL Semantics**: Automatically canonicalizes address-bar URLs (`https://github.com/owner/repo`), subpages (`/tree/...`, `/blob/...`), issues, PRs, missing-protocol shorthand (`github.com/owner/repo` or `owner/repo`), and SSH URLs directly to the repository root.
 - **Sanitized User Diagnostics**: Expandable diagnostics panel with a 1-click **📋 Copy Diagnostic** button for technical error reporting with zero confidential repository details.
 
-#### 5. 🛡️ Security Hardening & Credential Isolation
+#### 5. 🛡️ Security Hardening & Bounded Streaming Ingestion
 - **Isolated Ingestion**: Web server analysis strictly rejects ambient server PAT tokens (`GITHUB_TOKEN` / `GITHUB_PAT`). Private repository analysis uses only the explicit OAuth credential of the signed-in user.
+- **Bounded Streaming ZIP Decompression via `fflate`**: Replaced JSZip with chunk-fed `fflate` streaming decompression enforcing a hard 20,000 all-entry header budget, 1 MB per-file streaming caps with early abort, 200:1 declared compression-ratio heuristic protection, and 100 MB cumulative extracted work budgets counting all emitted bytes.
 - **Tree-sitter WASM Resource Lifecycle**: AST parsing wrapped with automatic `tree.delete()` memory cleanup and enforced node budget (`MAX_AST_NODES = 25000`) and depth limits (`MAX_AST_DEPTH = 128`).
-- **Archive Extraction Bounds**: Streaming downloads abort immediately on oversized payloads; extraction mitigates null bytes, path traversal, and deep path structures.
 - **POST-Only Analysis API**: Removed GET handler on `/api/analyze` to prevent query leakages in logs and proxies.
 - **Official Security Policy**: Published comprehensive security policy in [`SECURITY.md`](../SECURITY.md).
 
@@ -40,7 +40,7 @@ Live Demo: **[repodna-one.vercel.app](https://repodna-one.vercel.app)**
 
 ### 📊 Verification & Test Metrics
 
-- **Unit & Integration Suite**: 104 / 104 Vitest tests passing ✅
+- **Unit & Integration Suite**: 117 / 117 Vitest tests passing ✅
 - **Python Core Engine**: 28 / 28 unittest tests passing ✅
 - **E2E Browser Drag Smoke Test**: Automated Chrome CDP test passing ✅
 - **Linter & Typechecks**: 0 ESLint errors, clean production builds ✅
