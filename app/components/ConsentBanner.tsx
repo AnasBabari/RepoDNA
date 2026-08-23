@@ -1,23 +1,35 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import { getConsentStatus, setConsentStatus } from '../lib/analytics';
 
-export function ConsentBanner() {
-  const [show, setShow] = useState(() =>
-    typeof window !== 'undefined' ? getConsentStatus() === 'pending' : false
-  );
+function subscribe(callback: () => void) {
+  window.addEventListener('storage', callback);
+  return () => window.removeEventListener('storage', callback);
+}
 
-  if (!show) return null;
+function getSnapshot(): boolean {
+  return getConsentStatus() === 'pending';
+}
+
+function getServerSnapshot(): boolean {
+  return false;
+}
+
+export function ConsentBanner() {
+  const isPending = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (!isPending || dismissed) return null;
 
   function handleAccept() {
     setConsentStatus('granted');
-    setShow(false);
+    setDismissed(true);
   }
 
   function handleDecline() {
     setConsentStatus('denied');
-    setShow(false);
+    setDismissed(true);
   }
 
   return (
