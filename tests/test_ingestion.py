@@ -43,11 +43,29 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(parse_github_url("github.com/openai/openai-python"), ("openai", "openai-python"))
         self.assertEqual(parse_github_url("www.github.com/openai/openai-python"), ("openai", "openai-python"))
         self.assertEqual(parse_github_url("git@github.com:openai/openai-python.git"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("ssh://git@github.com/openai/openai-python.git"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("ssh://git@github.com:22/openai/openai-python.git"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("git+ssh://git@github.com/openai/openai-python.git"), ("openai", "openai-python"))
         self.assertEqual(parse_github_url("https://github.com/openai/openai-python/tree/main"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("https://github.com/openai/openai-python/tree/feature/sub-branch"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("https://github.com/openai/openai-python/blob/main/src/index.py"), ("openai", "openai-python"))
         self.assertEqual(parse_github_url("https://github.com/openai/openai-python?tab=readme-ov-file"), ("openai", "openai-python"))
         self.assertEqual(parse_github_url("openai/openai-python"), ("openai", "openai-python"))
+        self.assertEqual(parse_github_url("@openai/openai-python"), ("openai", "openai-python"))
+
+        # Strict security rejections
         with self.assertRaises(IngestionError):
-            parse_github_url("https://example.com/owner/repo")
+            parse_github_url("https://gitlab.com/owner/repo")
+        with self.assertRaises(IngestionError):
+            parse_github_url("https://attacker.github.com.evil.com/owner/repo")
+        with self.assertRaises(IngestionError):
+            parse_github_url("https://github.com.evil.com/owner/repo")
+        with self.assertRaises(IngestionError):
+            parse_github_url("http://169.254.169.254/owner/repo")
+        with self.assertRaises(IngestionError):
+            parse_github_url("https://user:pass@github.com/owner/repo")
+        with self.assertRaises(IngestionError):
+            parse_github_url("https://github.com/settings")
 
     def test_rejects_archive_path_traversal(self) -> None:
         payload = io.BytesIO()

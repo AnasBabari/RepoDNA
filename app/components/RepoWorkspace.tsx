@@ -373,12 +373,15 @@ function LandingView({
   );
 }
 
+const APP_BUILD_VERSION = 'v1.1.0-a91b35f';
+
 // Analyzing Progress Screen
 function AnalyzingView({
   target,
   step,
   error,
   errorCode,
+  requestId,
   retryAfter,
   onRetry,
   onClientFallback,
@@ -388,11 +391,35 @@ function AnalyzingView({
   step: number;
   error: string | null;
   errorCode?: string | null;
+  requestId?: string | null;
   retryAfter?: number | null;
   onRetry: () => void;
   onClientFallback?: () => void;
   onCancel: () => void;
 }) {
+  const [copiedDiagnostic, setCopiedDiagnostic] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  const diagnosticData = useMemo(() => {
+    return {
+      stage: step >= 0 && step < ANALYSIS_PROGRESS_STEPS.length ? ANALYSIS_PROGRESS_STEPS[step] : 'ingestion',
+      errorCode: errorCode || 'UNKNOWN_ERROR',
+      requestId: requestId || undefined,
+      analysisMode: onClientFallback ? 'server' : 'client',
+      appVersion: APP_BUILD_VERSION,
+      timestamp: new Date().toISOString(),
+      fallbackAvailable: Boolean(onClientFallback),
+    };
+  }, [step, errorCode, requestId, onClientFallback]);
+
+  const copyDiagnostic = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(diagnosticData, null, 2));
+      setCopiedDiagnostic(true);
+      setTimeout(() => setCopiedDiagnostic(false), 2500);
+    } catch {}
+  };
+
   return (
     <main className="landing-shell">
       <div className="analyzing-container">
@@ -407,6 +434,47 @@ function AnalyzingView({
               {error}
               {retryAfter ? <div style={{ marginTop: '6px', opacity: 0.85 }}>Retry available in {retryAfter}s.</div> : null}
             </div>
+
+            <div style={{ marginBottom: '20px', textAlign: 'left' }}>
+              <button
+                className="chip-button"
+                onClick={() => setShowDiagnostics((prev) => !prev)}
+                type="button"
+                style={{ fontSize: '11px', padding: '4px 10px', marginBottom: '8px' }}
+              >
+                {showDiagnostics ? '▲ Hide Diagnostics' : '▼ View Technical Diagnostics'}
+              </button>
+
+              {showDiagnostics && (
+                <div
+                  style={{
+                    background: 'rgba(6, 9, 13, 0.95)',
+                    border: '1px solid var(--line)',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    fontSize: '12px',
+                    color: '#94a3b8',
+                    fontFamily: 'var(--font-geist-mono)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ color: 'var(--cyan)', fontWeight: 600 }}>Sanitized Diagnostic Info</span>
+                    <button
+                      className="export-pill-btn"
+                      onClick={() => void copyDiagnostic()}
+                      type="button"
+                      style={{ fontSize: '11px', padding: '2px 8px' }}
+                    >
+                      {copiedDiagnostic ? '✓ Copied' : '📋 Copy Diagnostic'}
+                    </button>
+                  </div>
+                  <pre style={{ margin: 0, overflowX: 'auto', fontSize: '11px', color: '#cbd5e1' }}>
+                    {JSON.stringify(diagnosticData, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-wrap justify-center gap-3">
               {onClientFallback && (
                 <button className="primary-button" onClick={onClientFallback} type="button">
@@ -1278,6 +1346,7 @@ function WorkspaceContent() {
   const [analyzingStep, setAnalyzingStep] = useState(0);
   const [analyzingError, setAnalyzingError] = useState<string | null>(null);
   const [analyzingErrorCode, setAnalyzingErrorCode] = useState<string | null>(null);
+  const [analyzingRequestId, setAnalyzingRequestId] = useState<string | null>(null);
   const [analyzingRetryAfter, setAnalyzingRetryAfter] = useState<number | null>(null);
 
   const [view, setView] = useState<View>('overview');
@@ -1305,6 +1374,7 @@ function WorkspaceContent() {
     setAnalyzingStep(0);
     setAnalyzingError(null);
     setAnalyzingErrorCode(null);
+    setAnalyzingRequestId(null);
     setAnalyzingRetryAfter(null);
     return controller;
   }
@@ -1471,6 +1541,10 @@ function WorkspaceContent() {
         if (!isServerError) throw new Error('Analysis did not produce a valid project.');
 
         const errObj = apiData?.error ?? null;
+        if (errObj?.requestId) {
+          setAnalyzingRequestId(errObj.requestId);
+        }
+
         const shouldAutoFallback =
           !errObj ||
           errObj.code === 'RATE_LIMITED' ||
@@ -1481,11 +1555,11 @@ function WorkspaceContent() {
           errObj.fallbackAvailable;
 
         if (!shouldAutoFallback) {
-          failureCode = errObj.code || 'UNKNOWN';
-          setAnalyzingErrorCode(errObj.code ?? null);
-          setAnalyzingRetryAfter(errObj.retryAfter ?? null);
+          failureCode = errObj?.code || 'UNKNOWN';
+          setAnalyzingErrorCode(errObj?.code ?? null);
+          setAnalyzingRetryAfter(errObj?.retryAfter ?? null);
           trackAnalysisFailed('github_public', failureCode, 'server_error');
-          throw new Error(errObj.message || 'Analysis failed on server.');
+          throw new Error(errObj?.message || 'Analysis failed on server.');
         }
 
         const fallbackReason =
@@ -1499,7 +1573,7 @@ function WorkspaceContent() {
         trackFallbackUsed(fallbackReason);
 
         try {
-          return await analyzeGitHubUrl(cleanUrl);
+          return await analyzeGitHubUrl(targetUrl);
         } catch (clientError) {
           failureCode = errObj?.code || 'FALLBACK_FAILED';
           const message = errObj?.message || 'Server analysis failed and browser analysis could not complete.';
@@ -1646,6 +1720,7 @@ function WorkspaceContent() {
           step={analyzingStep}
           error={analyzingError}
           errorCode={analyzingErrorCode}
+          requestId={analyzingRequestId}
           retryAfter={analyzingRetryAfter}
           onRetry={() => {
             if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
@@ -1665,6 +1740,7 @@ function WorkspaceContent() {
             setAnalyzingTarget(null);
             setAnalyzingError(null);
             setAnalyzingErrorCode(null);
+            setAnalyzingRequestId(null);
             setAnalyzingRetryAfter(null);
           }}
         />

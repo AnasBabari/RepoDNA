@@ -7,41 +7,53 @@ import {
 import { IngestionError } from '../../app/lib/analyzer/types';
 
 describe('Ingestion & Resource Limits', () => {
-  it('validates public GitHub URLs and handles all real-world URL formats', () => {
+  it('validates public GitHub URLs and handles all real-world URL formats with canonical resolution', () => {
     // Standard formats
-    expect(parseGitHubUrl('https://github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('https://github.com/owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('http://github.com/owner/repo/')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('http://github.com/owner/repo/')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
 
     // Missing protocol & www
-    expect(parseGitHubUrl('github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('www.github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('https://www.github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('www.github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('https://www.github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
 
-    // SSH clone formats
-    expect(parseGitHubUrl('git@github.com:owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('git@github.com:owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('git+https://github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+    // SSH clone formats (colon, slash, port, git+ssh)
+    expect(parseGitHubUrl('git@github.com:owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('git@github.com:owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('ssh://git@github.com/owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('ssh://git@github.com:22/owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('git+ssh://git@github.com/owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('git+https://github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
 
-    // Deep branch / tree / blob URLs copied from address bar
-    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main')).toEqual({ owner: 'owner', repo: 'repo', ref: 'main' });
-    expect(parseGitHubUrl('https://github.com/owner/repo/tree/develop/src')).toEqual({ owner: 'owner', repo: 'repo', ref: 'develop' });
-    expect(parseGitHubUrl('https://github.com/owner/repo/blob/main/README.md')).toEqual({ owner: 'owner', repo: 'repo', ref: 'main' });
+    // Deep branch / tree / blob / issues URLs canonicalize to repo root
+    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/tree/feature/nested-path')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/blob/main/src/index.ts')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/issues/42')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/pull/123')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
 
     // Query parameters & fragments
-    expect(parseGitHubUrl('https://github.com/owner/repo?tab=readme-ov-file')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('https://github.com/owner/repo#readme')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main?tab=readme-ov-file#install')).toEqual({ owner: 'owner', repo: 'repo', ref: 'main' });
+    expect(parseGitHubUrl('https://github.com/owner/repo?tab=readme-ov-file')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo#readme')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main?tab=readme-ov-file#install')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
 
     // Quoted strings and scoped prefix
-    expect(parseGitHubUrl('"https://github.com/owner/repo"')).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl("'owner/repo'")).toEqual({ owner: 'owner', repo: 'repo' });
-    expect(parseGitHubUrl('@owner/repo')).toEqual({ owner: 'owner', repo: 'repo' });
+    expect(parseGitHubUrl('"https://github.com/owner/repo"')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl("'owner/repo'")).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('@owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
 
-    // Rejections
+    // Strict Rejections (SSRF, non-github, credentials, malformed)
     expect(parseGitHubUrl('https://gitlab.com/owner/repo')).toBeNull();
+    expect(parseGitHubUrl('https://attacker.github.com.evil.com/owner/repo')).toBeNull();
+    expect(parseGitHubUrl('https://github.com.evil.com/owner/repo')).toBeNull();
+    expect(parseGitHubUrl('http://169.254.169.254/owner/repo')).toBeNull();
+    expect(parseGitHubUrl('http://localhost:3000/owner/repo')).toBeNull();
+    expect(parseGitHubUrl('https://user:password@github.com/owner/repo')).toBeNull();
     expect(parseGitHubUrl('ftp://github.com/owner/repo')).toBeNull();
+    expect(parseGitHubUrl('https://github.com/settings')).toBeNull();
+    expect(parseGitHubUrl('https://github.com/explore')).toBeNull();
     expect(parseGitHubUrl('https://github.com/invalid url/repo')).toBeNull();
     expect(parseGitHubUrl('')).toBeNull();
   });

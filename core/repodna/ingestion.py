@@ -201,47 +201,89 @@ def discover_local(root: Path, limits: IngestionLimits | None = None) -> Discove
     return result
 
 
+RESERVED_GITHUB_ROOT_SEGMENTS = {
+    "settings", "explore", "pricing", "features", "pulls", "issues",
+    "notifications", "marketplace", "trending", "collections", "events",
+    "sponsors", "organizations", "account", "login", "signup", "logout",
+    "about", "contact", "security", "site", "privacy", "terms",
+}
+
+
+def _is_valid_owner_repo(owner: str, repo: str) -> bool:
+    if not owner or not repo:
+        return False
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", owner) or not re.fullmatch(r"[A-Za-z0-9_.-]+", repo):
+        return False
+    if owner in {".", ".."} or repo in {".", ".."}:
+        return False
+    if owner.lower() in RESERVED_GITHUB_ROOT_SEGMENTS:
+        return False
+    return True
+
+
 def parse_github_url(url: str) -> tuple[str, str]:
     if not url or not isinstance(url, str):
         raise IngestionError("GitHub source must be a valid repository URL or owner/repo format")
 
-    cleaned = url.strip().strip('"\'')
-    cleaned = re.sub(r'^(?:git\+|git://|ssh://)', '', cleaned, flags=re.IGNORECASE)
+    cleaned = url.strip().strip('"\'').strip()
+    if not cleaned:
+        raise IngestionError("Empty repository URL")
 
-    # SSH format: git@github.com:owner/repo(.git)
+    # Reject credential-bearing URLs (e.g. https://user:pass@github.com)
+    if "@" in cleaned and re.match(r"^https?://", cleaned, re.IGNORECASE):
+        raise IngestionError("Credential-bearing URLs are not permitted")
+
+    # SSH format:
+    # 1. git@github.com:owner/repo(.git)
+    # 2. ssh://git@github.com/owner/repo.git or ssh://git@github.com:22/owner/repo.git
+    # 3. git+ssh://git@github.com/owner/repo.git
     ssh_match = re.match(
-        r'^git@github\.com:(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?/?$',
+        r"^(?:git\+ssh://|ssh://)?git@github\.com(?::(?:\d+/)?|:|/)(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?/?$",
         cleaned,
         re.IGNORECASE,
     )
     if ssh_match:
-        return ssh_match.group("owner"), re.sub(r'\.git$', '', ssh_match.group("repo"), flags=re.IGNORECASE)
+        owner = ssh_match.group("owner")
+        repo = re.sub(r"\.git$", "", ssh_match.group("repo"), flags=re.IGNORECASE)
+        if _is_valid_owner_repo(owner, repo):
+            return owner, repo
+
+    # Strip prefixes
+    cleaned = re.sub(r"^(?:git\+|git://|ssh://)", "", cleaned, flags=re.IGNORECASE)
 
     # Normalize github.com / www.github.com
-    if re.match(r'^(?:www\.)?github\.com/', cleaned, re.IGNORECASE):
+    if re.match(r"^(?:www\.)?github\.com/", cleaned, re.IGNORECASE):
         cleaned = "https://" + cleaned
 
-    # Full URL or tree/blob/query URL
-    url_match = re.match(
-        r'^https?://(?:www\.)?github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?(?:/(?:tree|blob)/[^/]+.*|/.*|\?.*|#.*)?$',
-        cleaned,
-        re.IGNORECASE,
-    )
-    if url_match:
-        return url_match.group("owner"), re.sub(r'\.git$', '', url_match.group("repo"), flags=re.IGNORECASE)
+    # Full URL parsing
+    if re.match(r"^https?://", cleaned, re.IGNORECASE):
+        try:
+            parsed = urllib.parse.urlparse(cleaned)
+            hostname = (parsed.hostname or "").lower()
+            if hostname not in {"github.com", "www.github.com"}:
+                raise IngestionError(f"Host '{hostname}' is not supported. Only github.com is supported.")
+
+            if parsed.username or parsed.password:
+                raise IngestionError("Credential-bearing URLs are not permitted")
+
+            segments = [s for s in parsed.path.split("/") if s]
+            if len(segments) >= 2:
+                owner = segments[0]
+                repo = re.sub(r"\.git$", "", segments[1], flags=re.IGNORECASE)
+                if _is_valid_owner_repo(owner, repo):
+                    return owner, repo
+        except Exception as exc:
+            if isinstance(exc, IngestionError):
+                raise
+            raise IngestionError(f"Malformed repository URL: '{url}'") from exc
 
     # Short format: owner/repo
-    short_clean = re.sub(r'^@', '', cleaned).split('?')[0].split('#')[0].rstrip('/')
-    parts = short_clean.split('/')
+    short_clean = re.sub(r"^@", "", cleaned).split("?")[0].split("#")[0].rstrip("/")
+    parts = short_clean.split("/")
     if len(parts) == 2:
         owner, repo = parts
-        repo = re.sub(r'\.git$', '', repo, flags=re.IGNORECASE)
-        if (
-            re.fullmatch(r'[A-Za-z0-9_.-]+', owner)
-            and re.fullmatch(r'[A-Za-z0-9_.-]+', repo)
-            and ':' not in owner
-            and '.' not in owner
-        ):
+        repo = re.sub(r"\.git$", "", repo, flags=re.IGNORECASE)
+        if _is_valid_owner_repo(owner, repo) and ":" not in owner and "." not in owner:
             return owner, repo
 
     raise IngestionError(f"Invalid GitHub repository URL: '{url}'. Expected format: https://github.com/owner/repository")

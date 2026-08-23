@@ -24,10 +24,17 @@ export const SPECIAL_FILES = new Set([
 
 const OWNER_REPO_REGEX = /^[a-zA-Z0-9_.-]+$/;
 
+const RESERVED_GITHUB_ROOT_SEGMENTS = new Set([
+  'settings', 'explore', 'pricing', 'features', 'pulls', 'issues',
+  'notifications', 'marketplace', 'trending', 'collections', 'events',
+  'sponsors', 'organizations', 'account', 'login', 'signup', 'logout',
+  'about', 'contact', 'security', 'site', 'privacy', 'terms',
+]);
+
 export interface ParsedGitHubUrl {
   owner: string;
   repo: string;
-  ref?: string;
+  canonicalUrl: string;
 }
 
 export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
@@ -35,76 +42,86 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
   let trimmed = url.trim();
 
   // Strip wrapping quotes
-  trimmed = trimmed.replace(/^["']|["']$/g, '');
+  trimmed = trimmed.replace(/^["']|["']$/g, '').trim();
+  if (!trimmed) return null;
 
-  // Strip git+ or ssh:// or git:// prefixes
-  trimmed = trimmed.replace(/^(?:git\+|git:\/\/|ssh:\/\/)/i, '');
+  // Reject credential-bearing URLs (e.g. https://user:pass@github.com)
+  if (/@/.test(trimmed) && /^https?:\/\//i.test(trimmed)) {
+    return null;
+  }
 
-  // Handle SSH clone format: git@github.com:owner/repo(.git)
-  const sshMatch = trimmed.match(/^git@github\.com:([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+?)(?:\.git)?\/?$/i);
-  if (sshMatch) {
-    const owner = sshMatch[1];
-    const repo = sshMatch[2].replace(/\.git$/i, '');
-    if (OWNER_REPO_REGEX.test(owner) && OWNER_REPO_REGEX.test(repo)) {
-      return { owner, repo };
+  // Handle SSH formats:
+  // 1. git@github.com:owner/repo.git or git@github.com:owner/repo
+  // 2. ssh://git@github.com/owner/repo.git or ssh://git@github.com:22/owner/repo.git
+  // 3. git+ssh://git@github.com/owner/repo.git
+  const scpSshMatch = trimmed.match(/^(?:git\+ssh:\/\/|ssh:\/\/)?git@github\.com(?::(?:\d+\/)?|:|\/)([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+?)(?:\.git)?\/?$/i);
+  if (scpSshMatch) {
+    const owner = scpSshMatch[1];
+    const repo = scpSshMatch[2].replace(/\.git$/i, '');
+    if (isValidOwnerRepo(owner, repo)) {
+      return { owner, repo, canonicalUrl: `https://github.com/${owner}/${repo}` };
     }
   }
+
+  // Strip git+ or git:// or ssh:// prefixes
+  trimmed = trimmed.replace(/^(?:git\+|git:\/\/|ssh:\/\/)/i, '');
 
   // Prepend https:// if starts with github.com or www.github.com
   if (/^(?:www\.)?github\.com\//i.test(trimmed)) {
     trimmed = `https://${trimmed}`;
   }
 
-  // Full URL parsing with WHATWG URL
+  // Standard WHATWG URL Parsing for http/https
   if (/^https?:\/\//i.test(trimmed)) {
     try {
       const parsed = new URL(trimmed);
       const hostname = parsed.hostname.toLowerCase();
-      if (hostname === 'github.com' || hostname === 'www.github.com') {
-        const segments = parsed.pathname.split('/').filter(Boolean);
-        if (segments.length >= 2) {
-          const owner = segments[0];
-          const repo = segments[1].replace(/\.git$/i, '');
-          let ref: string | undefined;
 
-          // If URL contains /tree/<branch> or /blob/<branch>
-          if (segments.length >= 4 && (segments[2] === 'tree' || segments[2] === 'blob')) {
-            ref = segments[3];
-          }
+      // Strict host matching (rejects attacker.github.com.evil.com, github.com.evil.com, etc.)
+      if (hostname !== 'github.com' && hostname !== 'www.github.com') {
+        return null;
+      }
 
-          if (OWNER_REPO_REGEX.test(owner) && OWNER_REPO_REGEX.test(repo)) {
-            return ref ? { owner, repo, ref } : { owner, repo };
-          }
+      // Reject non-standard ports or username/password in URL object
+      if (parsed.username || parsed.password) {
+        return null;
+      }
+
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      if (segments.length >= 2) {
+        const owner = segments[0];
+        const repo = segments[1].replace(/\.git$/i, '');
+
+        if (isValidOwnerRepo(owner, repo)) {
+          return { owner, repo, canonicalUrl: `https://github.com/${owner}/${repo}` };
         }
       }
+      return null;
     } catch {
-      // fallback
-    }
-  }
-
-  // Regex fallback for full or partial URLs
-  const urlMatch = trimmed.match(/^https?:\/\/(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^/]+).*)?(?:\/.*|\?.*|#.*)?$/i);
-  if (urlMatch) {
-    const owner = urlMatch[1];
-    const repo = urlMatch[2].replace(/\.git$/i, '');
-    const ref = urlMatch[3];
-    if (OWNER_REPO_REGEX.test(owner) && OWNER_REPO_REGEX.test(repo)) {
-      return ref ? { owner, repo, ref } : { owner, repo };
+      return null;
     }
   }
 
   // Short format: owner/repo or @owner/repo (ignoring query/hash if any)
   const shortClean = trimmed.replace(/^@/, '').split(/[?#]/)[0].replace(/\/$/, '');
   const shortParts = shortClean.split('/');
-  if (shortParts.length >= 2) {
+  if (shortParts.length === 2) {
     const owner = shortParts[0];
     const repo = shortParts[1].replace(/\.git$/i, '');
-    if (OWNER_REPO_REGEX.test(owner) && OWNER_REPO_REGEX.test(repo) && !owner.includes(':') && !owner.includes('.')) {
-      return { owner, repo };
+    if (isValidOwnerRepo(owner, repo) && !owner.includes(':') && !owner.includes('.')) {
+      return { owner, repo, canonicalUrl: `https://github.com/${owner}/${repo}` };
     }
   }
 
   return null;
+}
+
+function isValidOwnerRepo(owner: string, repo: string): boolean {
+  if (!owner || !repo) return false;
+  if (!OWNER_REPO_REGEX.test(owner) || !OWNER_REPO_REGEX.test(repo)) return false;
+  if (owner === '.' || owner === '..' || repo === '.' || repo === '..') return false;
+  if (RESERVED_GITHUB_ROOT_SEGMENTS.has(owner.toLowerCase())) return false;
+  return true;
 }
 
 function isCandidate(path: string): boolean {
@@ -280,7 +297,7 @@ export async function fetchGitHubRepo(
     );
   }
 
-  const { owner, repo, ref } = parsed;
+  const { owner, repo } = parsed;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), limits.fetchTimeoutMs);
@@ -299,7 +316,7 @@ export async function fetchGitHubRepo(
   try {
     if (effectiveToken) {
       // For authenticated / private / token-backed requests, use GitHub API zipball endpoint
-      const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${ref || 'HEAD'}`;
+      const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
       response = await fetch(apiZipUrl, {
         signal: controller.signal,
         headers: {
@@ -309,32 +326,16 @@ export async function fetchGitHubRepo(
         },
       });
     } else {
-      // 1. Try branch/tag ref if explicitly present in URL, otherwise try HEAD
-      if (ref) {
-        const codeloadRef = `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/${ref}`;
-        response = await fetch(codeloadRef, {
-          signal: controller.signal,
-          headers: { 'User-Agent': 'RepoDNA-V1/1.0' },
-        });
-        if (!response.ok) {
-          const codeloadTag = `https://codeload.github.com/${owner}/${repo}/zip/refs/tags/${ref}`;
-          const resTag = await fetch(codeloadTag, {
-            signal: controller.signal,
-            headers: { 'User-Agent': 'RepoDNA-V1/1.0' },
-          });
-          if (resTag.ok) response = resTag;
-        }
-      } else {
-        const codeloadUrl = `https://codeload.github.com/${owner}/${repo}/zip/HEAD`;
-        response = await fetch(codeloadUrl, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent': 'RepoDNA-V1/1.0',
-          },
-        });
-      }
+      // 1. Try public codeload zip first (HEAD)
+      const codeloadUrl = `https://codeload.github.com/${owner}/${repo}/zip/HEAD`;
+      response = await fetch(codeloadUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'RepoDNA-V1/1.0',
+        },
+      });
 
-      // 2. If codeload HEAD/ref returned 404, try main/master/trunk/dev branches before API
+      // 2. If codeload HEAD returned 404, try main/master/trunk/dev branches before API
       if (response.status === 404) {
         const branchesToTry = ['main', 'master', 'trunk', 'dev', 'develop'];
         for (const branch of branchesToTry) {
@@ -352,7 +353,7 @@ export async function fetchGitHubRepo(
 
       // 3. Fallback to GitHub API zipball if codeload fails
       if (!response.ok && response.status !== 404) {
-        const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${ref || 'HEAD'}`;
+        const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
         response = await fetch(apiZipUrl, {
           signal: controller.signal,
           headers: {
