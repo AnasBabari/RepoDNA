@@ -213,17 +213,26 @@ export async function extractFromZip(
   if (firstSlash !== -1 && allPaths[0]) {
     const potentialPrefix = allPaths[0].slice(0, firstSlash + 1);
     if (allPaths.every((p) => p.startsWith(potentialPrefix) || p === potentialPrefix.slice(0, -1))) {
-      prefix = potentialPrefix;
+  prefix = potentialPrefix;
     }
   }
 
   for (const { rawPath, path, entry } of archiveEntries) {
-    // 2. Validate against path traversal
+    // 2. Validate against path traversal and null bytes
+    if (rawPath.includes('\0')) {
+      throw new IngestionError('PATH_TRAVERSAL', 'Archive path contains invalid null byte', 400);
+    }
     validatePath(rawPath);
 
     if (entry.dir) continue;
     const relPath = prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
     if (!relPath || relPath.startsWith('/')) continue;
+
+    // Check maximum path depth
+    if (relPath.split('/').length > 32) {
+      skipped.push({ path: relPath, reason: 'path_too_deep' });
+      continue;
+    }
 
     if (isIgnored(relPath)) {
       continue;
@@ -283,6 +292,56 @@ export async function extractFromZip(
   return { files: files.sort((a, b) => a.path.localeCompare(b.path)), skipped, name: repoName };
 }
 
+async function streamBoundedArrayBuffer(
+  response: Response,
+  maxBytes: number
+): Promise<ArrayBuffer> {
+  if (!response.body) {
+    const buf = await response.arrayBuffer();
+    if (buf.byteLength > maxBytes) {
+      throw new IngestionError(
+        'ARCHIVE_TOO_LARGE',
+        `Repository archive (${(buf.byteLength / (1024 * 1024)).toFixed(1)} MB) exceeds limit of ${(maxBytes / (1024 * 1024)).toFixed(0)} MB`,
+        413
+      );
+    }
+    return buf;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          await reader.cancel('ARCHIVE_TOO_LARGE');
+          throw new IngestionError(
+            'ARCHIVE_TOO_LARGE',
+            `Repository archive exceeds limit of ${(maxBytes / (1024 * 1024)).toFixed(0)} MB`,
+            413
+          );
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return combined.buffer;
+}
+
 export async function fetchGitHubRepo(
   urlOrOwnerRepo: string,
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS,
@@ -302,19 +361,15 @@ export async function fetchGitHubRepo(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), limits.fetchTimeoutMs);
 
-  const effectiveToken =
-    accessToken ||
-    (typeof process !== 'undefined' && process.env
-      ? process.env.GITHUB_TOKEN || process.env.GITHUB_PAT || process.env.GH_TOKEN
-      : undefined);
-
-  const authHeaders: Record<string, string> = effectiveToken
-    ? { Authorization: `Bearer ${effectiveToken}` }
+  // Security: In web environment, only use accessToken if explicitly passed from authorized user session.
+  // Never fall back to ambient server PATs.
+  const authHeaders: Record<string, string> = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
     : {};
 
   let response: Response;
   try {
-    if (effectiveToken) {
+    if (accessToken) {
       // For authenticated / private / token-backed requests, use GitHub API zipball endpoint
       const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
       response = await fetch(apiZipUrl, {
@@ -384,7 +439,7 @@ export async function fetchGitHubRepo(
   if (response.status === 404) {
     throw new IngestionError(
       'REPO_NOT_FOUND',
-      effectiveToken
+      accessToken
         ? `Repository "${owner}/${repo}" was not found or your GitHub account does not have access.`
         : `Repository "https://github.com/${owner}/${repo}" was not found or is private. Sign in to analyze private repositories.`,
       404
@@ -418,16 +473,16 @@ export async function fetchGitHubRepo(
   if (contentLength && parseInt(contentLength, 10) > limits.maxArchiveBytes) {
     throw new IngestionError(
       'ARCHIVE_TOO_LARGE',
-      `Repository archive (${(parseInt(contentLength, 10) / (1024 * 1024)).toFixed(1)} MB) exceeds maximum allowed size of ${(limits.maxArchiveBytes / (1024 * 1024)).toFixed(0)} MB`,
+      `Repository archive (${(parseInt(contentLength, 10) / (1024 * 1024)).toFixed(1)} MB) exceeds limit of ${(limits.maxArchiveBytes / (1024 * 1024)).toFixed(0)} MB`,
       413
     );
   }
 
-  const buffer = await response.arrayBuffer();
-  const extracted = await extractFromZip(buffer, repo, limits);
+  const zipBuffer = await streamBoundedArrayBuffer(response, limits.maxArchiveBytes);
+  const result = await extractFromZip(zipBuffer, repo, limits);
   return {
-    ...extracted,
-    source: `github:${owner}/${repo}`,
+    ...result,
+    source: `https://github.com/${owner}/${repo}`,
   };
 }
 

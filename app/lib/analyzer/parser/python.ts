@@ -15,11 +15,18 @@ import {
 
 const MAIN_GUARD_RE = /__name__\s*(?:==|is)\s*["']__main__["']/;
 
+const MAX_AST_NODES = 25000;
+const MAX_AST_DEPTH = 128;
+const MAX_SYMBOLS_PER_FILE = 1000;
+const MAX_IMPORTS_PER_FILE = 500;
+const MAX_CALLS_PER_FILE = 2000;
+
 interface WalkState {
   symbols: SyntaxSymbol[];
   imports: SyntaxImport[];
   calls: SyntaxCall[];
   errorNodes: number;
+  nodeCount: number;
   hasMainGuard: boolean;
 }
 
@@ -39,43 +46,50 @@ export class PythonSyntaxParser implements SyntaxParser {
   async parse(input: ParseInput): Promise<ParsedSyntax> {
     const parser = await getTreeSitterParser(this.language);
 
-    let root: SyntaxNode | null = null;
+    let tree: import('web-tree-sitter').Tree | null = null;
     try {
-      const tree = parser.parse(input.source);
-      root = tree?.rootNode ?? null;
+      tree = parser.parse(input.source);
+      const root = tree?.rootNode ?? null;
+
+      if (!root) {
+        return { facts: failedFacts() };
+      }
+
+      const state: WalkState = {
+        symbols: [],
+        imports: [],
+        calls: [],
+        errorNodes: 0,
+        nodeCount: 0,
+        hasMainGuard: false,
+      };
+
+      for (const child of root.namedChildren) {
+        walk(child, state, [], [], null, 1);
+      }
+
+      const hasErrors = state.errorNodes > 0 || root.hasError;
+      const quality = hasErrors ? 'partial' : 'complete';
+
+      const facts: SyntaxFacts = {
+        language: 'python',
+        symbols: state.symbols,
+        imports: state.imports,
+        calls: state.calls,
+        hasMainGuard: state.hasMainGuard,
+        parse: { success: true, hasErrors, errorNodes: state.errorNodes },
+        quality,
+      };
+      return { facts };
     } catch {
-      root = null;
-    }
-
-    if (!root) {
       return { facts: failedFacts() };
+    } finally {
+      if (tree) {
+        try {
+          tree.delete();
+        } catch {}
+      }
     }
-
-    const state: WalkState = {
-      symbols: [],
-      imports: [],
-      calls: [],
-      errorNodes: 0,
-      hasMainGuard: false,
-    };
-
-    for (const child of root.namedChildren) {
-      walk(child, state, [], [], null);
-    }
-
-    const hasErrors = state.errorNodes > 0 || root.hasError;
-    const quality = hasErrors ? 'partial' : 'complete';
-
-    const facts: SyntaxFacts = {
-      language: 'python',
-      symbols: state.symbols,
-      imports: state.imports,
-      calls: state.calls,
-      hasMainGuard: state.hasMainGuard,
-      parse: { success: true, hasErrors, errorNodes: state.errorNodes },
-      quality,
-    };
-    return { facts };
   }
 }
 
@@ -96,8 +110,15 @@ function walk(
   state: WalkState,
   stack: Frame[],
   decorators: SyntaxDecorator[],
-  assignmentTarget: string | null
+  assignmentTarget: string | null,
+  depth: number
 ): void {
+  state.nodeCount += 1;
+  if (state.nodeCount > MAX_AST_NODES || depth > MAX_AST_DEPTH) {
+    state.errorNodes += 1;
+    return;
+  }
+
   if (node.isError || node.isMissing) state.errorNodes += 1;
 
   switch (node.type) {
@@ -110,7 +131,7 @@ function walk(
           if (extracted) collected.push(extracted);
         }
       }
-      if (definition) walk(definition, state, stack, collected, assignmentTarget);
+      if (definition) walk(definition, state, stack, collected, assignmentTarget, depth + 1);
       return;
     }
 
@@ -123,35 +144,42 @@ function walk(
       const kind = isClass ? 'class' : parentFrame?.kind === 'class' ? 'method' : 'function';
       const qualifiedName = parentFrame ? `${parentFrame.qualifiedName}::${name}` : name;
 
-      const symbol: SyntaxSymbol = {
-        kind,
-        name,
-        qualifiedName,
-        range: rangeOf(node),
-        parent: parentFrame ? parentFrame.qualifiedName : null,
-        exported: true,
-        isAsync: node.children.some((child) => child.type === 'async'),
-        bases: isClass ? extractSuperclasses(node) : [],
-        decorators,
-      };
-      state.symbols.push(symbol);
+      if (state.symbols.length < MAX_SYMBOLS_PER_FILE) {
+        const symbol: SyntaxSymbol = {
+          kind,
+          name,
+          qualifiedName,
+          range: rangeOf(node),
+          parent: parentFrame ? parentFrame.qualifiedName : null,
+          exported: true,
+          isAsync: node.children.some((child) => child.type === 'async'),
+          bases: isClass ? extractSuperclasses(node) : [],
+          decorators,
+        };
+        state.symbols.push(symbol);
+      }
 
       stack.push({ qualifiedName, kind: isClass ? 'class' : 'callable' });
       for (const child of node.namedChildren) {
-        walk(child, state, stack, [], null);
+        walk(child, state, stack, [], null, depth + 1);
       }
       stack.pop();
       return;
     }
 
     case 'import_statement': {
-      state.imports.push(...extractPlainImports(node));
+      if (state.imports.length < MAX_IMPORTS_PER_FILE) {
+        const plain = extractPlainImports(node);
+        state.imports.push(...plain.slice(0, MAX_IMPORTS_PER_FILE - state.imports.length));
+      }
       return;
     }
 
     case 'import_from_statement': {
-      const extracted = extractFromImport(node);
-      if (extracted) state.imports.push(extracted);
+      if (state.imports.length < MAX_IMPORTS_PER_FILE) {
+        const extracted = extractFromImport(node);
+        if (extracted) state.imports.push(extracted);
+      }
       return;
     }
 
@@ -161,14 +189,14 @@ function walk(
       const target = left && left.type === 'identifier' ? left.text : null;
       for (const child of node.namedChildren) {
         const isRight = right !== null && child.id === right.id;
-        walk(child, state, stack, [], isRight ? target : assignmentTarget);
+        walk(child, state, stack, [], isRight ? target : assignmentTarget, depth + 1);
       }
       return;
     }
 
     case 'call': {
       const fn = node.childForFieldName('function');
-      if (fn && (fn.type === 'identifier' || fn.type === 'attribute')) {
+      if (fn && (fn.type === 'identifier' || fn.type === 'attribute') && state.calls.length < MAX_CALLS_PER_FILE) {
         const args = node.childForFieldName('arguments');
         state.calls.push({
           callee: fn.text,
@@ -196,7 +224,7 @@ function walk(
   }
 
   for (const child of node.namedChildren) {
-    walk(child, state, stack, [], null);
+    walk(child, state, stack, [], null, depth + 1);
   }
 }
 
