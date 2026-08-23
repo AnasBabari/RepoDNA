@@ -29,11 +29,13 @@ It is deterministic, local-first, and does not use an LLM. The analyzer reads so
 ## Web App & Analysis Options
 
 ### 1. Public GitHub Repositories
-Paste any public GitHub repository link (e.g. `https://github.com/usestrix/strix`, `https://github.com/karpathy/nanoGPT`, or `https://github.com/tiangolo/full-stack-fastapi-template`) to decode architecture layers, execution traces, dependency graphs, and entry points in seconds.
+Paste any public GitHub repository link to decode architecture layers, execution traces, dependency graphs, and entry points in seconds.
+- **Universal URL Support**: Accepts standard links (`https://github.com/owner/repo`), subpages (`.../tree/main`, `.../blob/develop/app.py`), issues/PRs, short syntax (`github.com/owner/repo`, `owner/repo`), and SSH URLs.
+- **Draggable Layout & Saved Views**: Freely reposition nodes on the canvas. Your custom layout, zoom level, and active layer filter automatically persist per repository in your browser (with a 1-click `↺ Reset View` option to restore defaults).
 
 ### 2. Private Repositories (Beta)
 Sign in with GitHub to access your private repositories:
-- **Scope Transparency**: GitHub OAuth requires the `repo` scope to read private repositories. RepoDNA executes read-only `GET` requests, parses ASTs transiently in memory, and never modifies or stores code.
+- **Scope Transparency**: GitHub OAuth requires read-only repository scope to fetch repository archives. RepoDNA parses ASTs transiently in memory, isolated from ambient server tokens, and never modifies or stores code.
 - **Revocation**: Easily disconnect access at any time via the UI or GitHub Settings.
 - **Transience**: OAuth tokens and repository code are never saved to disk or databases.
 
@@ -48,7 +50,7 @@ Sign in with GitHub to access your private repositories:
 
 ### Analysis Endpoint (`/api/analyze`)
 
-- **Method**: `POST` (or `GET ?url=https://github.com/owner/repo`)
+- **Method**: `POST` (POST-only for credential and query privacy)
 - **Headers**: `Content-Type: application/json`
 - **Body**:
   ```json
@@ -74,7 +76,7 @@ Sign in with GitHub to access your private repositories:
 - Authenticated endpoint returning sanitized metadata (`fullName`, `isPrivate`, `language`, `defaultBranch`, `updatedAt`) for authorized user repositories with pagination and query search. Never logs or sends repo names to analytics.
 
 ### Feedback Survey (`POST /api/feedback`)
-- Collects usefulness scores (1-5), primary use cases, desired capabilities, and optional 500-char feedback without PII.
+- Collects usefulness scores (1-5), primary use cases, desired capabilities, and optional 500-char feedback without PII with enforced payload bounds (<= 16 KB).
 
 ---
 
@@ -116,11 +118,14 @@ UPSTASH_REDIS_REST_TOKEN="your-upstash-token"
 ## Testing, Schema Parity & Quality Assurance
 
 ```bash
-# Run all 47 Vitest unit and cross-engine parity tests
+# Run all 104 Vitest unit, security invariant, and smoke tests
 npm run test:unit
 
-# Run Python core test suite (24 unit and conformance tests)
+# Run Python core test suite (28 unit, parity, and conformance tests)
 npm run test:python
+
+# Run Chrome E2E browser smoke test for drag & view persistence
+node tests/smoke/browser-drag-persistence.mjs
 
 # Run ESLint + Vitest + Next.js build
 npm test

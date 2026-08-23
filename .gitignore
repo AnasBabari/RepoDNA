@@ -60,9 +60,6 @@ repodna-*.json
 LAUNCH_POSTS.md
 launch_posts.md
 launch_*.md
-LAUNCH_*.md
-RELEASE_NOTES.md
-
 # Tooling, scripts & IDE clutter
 .vscode/
 scripts/
