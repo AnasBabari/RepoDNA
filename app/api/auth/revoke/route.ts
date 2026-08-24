@@ -1,22 +1,58 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '../../../lib/auth';
+import { revokeGitHubAccessToken } from '../../../lib/github-oauth';
+import { getGitHubAccessToken } from '../../../lib/github-session';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    const accessToken = await getGitHubAccessToken(request);
+    if (!session?.user || !accessToken) {
       return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    let result;
+    try {
+      result = await revokeGitHubAccessToken(accessToken, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!result.ok) {
+      const status = result.status === 0 ? 500 : 502;
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            result.status === 0
+              ? 'GitHub revocation is not configured correctly.'
+              : 'GitHub did not confirm token revocation. Your local session remains active.',
+        },
+        { status }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Revocation processed. You can also disconnect the app in your GitHub Settings if you wish to permanently remove permissions.',
-      githubSettingsUrl: 'https://github.com/settings/applications',
+      message: result.alreadyRevoked
+        ? 'GitHub access was already revoked.'
+        : 'GitHub access token revoked successfully.',
+      githubSettingsUrl: 'https://github.com/settings/installations',
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Revocation failed';
-    return NextResponse.json({ success: false, message }, { status: 500 });
+    const timedOut = err instanceof Error && err.name === 'AbortError';
+    return NextResponse.json(
+      {
+        success: false,
+        message: timedOut
+          ? 'GitHub revocation timed out. Your local session remains active.'
+          : 'GitHub revocation failed. Your local session remains active.',
+      },
+      { status: timedOut ? 504 : 502 }
+    );
   }
 }

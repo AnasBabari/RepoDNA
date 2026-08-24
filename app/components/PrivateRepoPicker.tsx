@@ -66,18 +66,25 @@ export function PrivateRepoPicker({
   if (!isOpen) return null;
 
   async function handleRevoke() {
-    if (!window.confirm('Disconnect GitHub OAuth and revoke RepoDNA access permissions?')) {
+    if (
+      !window.confirm(
+        'Revoke RepoDNA\'s current GitHub authorization and sign out? The GitHub App installation remains until you uninstall it in GitHub Settings.'
+      )
+    ) {
       return;
     }
     setRevoking(true);
     try {
-      await fetch('/api/auth/revoke', { method: 'POST' });
+      const response = await fetch('/api/auth/revoke', { method: 'POST' });
+      const data = (await response.json()) as { success?: boolean; message?: string };
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'GitHub did not confirm token revocation.');
+      }
       trackAuthFlow('scope_revoked');
       onSignOut();
       onClose();
-    } catch {
-      onSignOut();
-      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not revoke GitHub access.');
     } finally {
       setRevoking(false);
     }
@@ -142,7 +149,7 @@ export function PrivateRepoPicker({
                 textDecoration: 'underline',
               }}
             >
-              {revoking ? 'Disconnecting...' : 'Disconnect App'}
+              {revoking ? 'Revoking...' : 'Disconnect GitHub'}
             </button>
           </div>
         </div>
