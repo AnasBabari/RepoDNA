@@ -10,7 +10,7 @@ export const DEFAULT_IGNORES = new Set([
 
 export const SOURCE_EXTENSIONS = new Set([
   '.py', '.pyi', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx',
-  '.json', '.toml', '.yaml', '.yml', '.ini', '.cfg', '.sql',
+  '.go', '.json', '.toml', '.yaml', '.yml', '.ini', '.cfg', '.sql',
   '.prisma', '.md', '.mdx', '.html', '.css', '.scss', '.dockerfile',
   '.sh', '.bash', '.graphql', '.gql',
 ]);
@@ -563,31 +563,16 @@ export async function fetchGitHubRepo(
     ? { Authorization: `Bearer ${accessToken}` }
     : {};
 
-  let response: Response;
-  try {
-    if (accessToken) {
-      // For authenticated / private / token-backed requests, use GitHub API zipball endpoint
-      const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
-      response = await fetch(apiZipUrl, {
+  // Helpers that never send Authorization unless explicitly required
+  const fetchUnauthCodeload = async (): Promise<Response | null> => {
+    const codeloadUrl = `https://codeload.github.com/${owner}/${repo}/zip/HEAD`;
+    try {
+      const res = await fetch(codeloadUrl, {
         signal: controller.signal,
-        headers: {
-          'User-Agent': 'RepoDNA-V1/1.0',
-          Accept: 'application/vnd.github.v3+json',
-          ...authHeaders,
-        },
+        headers: { 'User-Agent': 'RepoDNA-V1/1.0' },
       });
-    } else {
-      // 1. Try public codeload zip first (HEAD)
-      const codeloadUrl = `https://codeload.github.com/${owner}/${repo}/zip/HEAD`;
-      response = await fetch(codeloadUrl, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'RepoDNA-V1/1.0',
-        },
-      });
-
-      // 2. If codeload HEAD returned 404, try main/master/trunk/dev branches before API
-      if (response.status === 404) {
+      if (res.ok) return res;
+      if (res.status === 404) {
         const branchesToTry = ['main', 'master', 'trunk', 'dev', 'develop'];
         for (const branch of branchesToTry) {
           const codeloadBranch = `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/${branch}`;
@@ -595,23 +580,104 @@ export async function fetchGitHubRepo(
             signal: controller.signal,
             headers: { 'User-Agent': 'RepoDNA-V1/1.0' },
           });
-          if (resBranch.ok) {
-            response = resBranch;
-            break;
+          if (resBranch.ok) return resBranch;
+        }
+      }
+      return res;
+    } catch (e) {
+      throw e;
+    }
+  };
+
+  const fetchUnauthApiZip = async (): Promise<Response | null> => {
+    const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
+    return fetch(apiZipUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'RepoDNA-V1/1.0',
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+  };
+
+  const fetchAuthApiZip = async (): Promise<Response | null> => {
+    const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
+    return fetch(apiZipUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'RepoDNA-V1/1.0',
+        Accept: 'application/vnd.github.v3+json',
+        ...authHeaders,
+      },
+    });
+  };
+
+  let response: Response | null = null;
+  let authApiResponse: Response | null = null;
+
+  try {
+    // Public path: always try unauthenticated codeload first, even when a token is present.
+    // This ensures an expired private token never breaks public analysis.
+    const unauthCodeload = await fetchUnauthCodeload();
+    if (unauthCodeload && unauthCodeload.ok) {
+      response = unauthCodeload;
+    } else if (accessToken) {
+      // Unauth codeload failed (likely 404 for private or missing HEAD). Try authenticated API.
+      const authRes = await fetchAuthApiZip();
+      authApiResponse = authRes;
+      if (authRes && authRes.ok) {
+        response = authRes;
+      } else if (authRes && (authRes.status === 401 || authRes.status === 403)) {
+        const rateLimitRemaining = authRes.headers.get('x-ratelimit-remaining');
+        const isRateLimited = authRes.status === 429 || (authRes.status === 403 && rateLimitRemaining === '0');
+        if (isRateLimited) {
+          response = authRes;
+        } else {
+          // Retry without credentials for public repos; if that succeeds the repo is public
+          // and the token was the problem. If it also 404s the repo is private + token is bad.
+          const unauthApi = await fetchUnauthApiZip();
+          if (unauthApi && unauthApi.ok) {
+            response = unauthApi;
+          } else if (unauthApi && unauthApi.status === 404) {
+            // Confirm true auth failure vs missing repo — surfaced as structured auth error
+            response = authRes;
+          } else if (unauthApi) {
+            response = unauthApi;
+          } else {
+            response = authRes;
+          }
+        }
+      } else if (authRes) {
+        // Non-auth failure (404, 429, 502 etc.) — keep it for error mapping below
+        response = authRes;
+      }
+
+      // If still no successful response after auth failure, also try unauth API directly
+      if ((!response || !response.ok) && accessToken && !response?.ok) {
+        // For cases where codeload 404 and authApi 404, also try unauth API directly
+        // (covers the scenario where codeload HEAD failed but API without token might succeed for public)
+        if (!authApiResponse || authApiResponse.status === 404) {
+          const fallbackUnauthApi = await fetchUnauthApiZip();
+          if (fallbackUnauthApi && fallbackUnauthApi.ok) {
+            response = fallbackUnauthApi;
+          } else if (!response) {
+            response = fallbackUnauthApi;
           }
         }
       }
-
-      // 3. Fallback to GitHub API zipball if codeload fails
-      if (!response.ok && response.status !== 404) {
-        const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
-        response = await fetch(apiZipUrl, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent': 'RepoDNA-V1/1.0',
-            Accept: 'application/vnd.github.v3+json',
-          },
-        });
+    } else {
+      // No token: classic public path
+      if (unauthCodeload && unauthCodeload.ok) {
+        response = unauthCodeload;
+      } else if (unauthCodeload && unauthCodeload.status !== 404) {
+        // Non-404 failure — try unauth API before giving up
+        const unauthApi = await fetchUnauthApiZip();
+        response = unauthApi && unauthApi.ok ? unauthApi : unauthCodeload;
+        if (!response.ok && unauthApi && !unauthApi.ok && unauthApi.status !== 404) response = unauthApi;
+      } else {
+        // 404 on codeload — try unauth API
+        const unauthApi = await fetchUnauthApiZip();
+        response = unauthApi;
       }
     }
   } catch (err: unknown) {
@@ -630,6 +696,10 @@ export async function fetchGitHubRepo(
     );
   } finally {
     clearTimeout(timeoutId);
+  }
+
+  if (!response) {
+    throw new IngestionError('UPSTREAM_GITHUB_ERROR', 'GitHub returned no response', 502);
   }
 
   if (response.status === 404) {
@@ -651,11 +721,20 @@ export async function fetchGitHubRepo(
         429
       );
     }
+    if (response.status === 401) {
+      throw new IngestionError(
+        'GITHUB_TOKEN_EXPIRED',
+        'GitHub token expired or revoked. Reconnect GitHub to continue. Public repositories remain available without signing in.',
+        401
+      );
+    }
     if (response.status === 403) {
       throw new IngestionError(
-        'UPSTREAM_GITHUB_ERROR',
-        'GitHub access denied (403). If this is an organization repository, check if OAuth App access is approved in your organization settings.',
-        502
+        'GITHUB_FORBIDDEN',
+        accessToken
+          ? 'GitHub access denied (403). If this is an organization repository, ensure the GitHub App is installed on the repository and the installation has contents:read.'
+          : 'GitHub access denied (403). If this is an organization repository, check if OAuth App access is approved in your organization settings.',
+        403
       );
     }
     throw new IngestionError(

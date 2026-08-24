@@ -21,12 +21,15 @@ export function PrivateRepoPicker({
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const fetchRepos = useCallback(async (searchQuery: string, pageNum: number) => {
     setLoading(true);
     setError(null);
+    setErrorCode(null);
     try {
       const params = new URLSearchParams({
         page: String(pageNum),
@@ -35,20 +38,25 @@ export function PrivateRepoPicker({
       const res = await fetch(`/api/github/repositories?${params.toString()}`);
       const data = (await res.json()) as {
         success?: boolean;
-        error?: { message?: string };
+        error?: { code?: string; message?: string };
         repositories?: SafeRepositoryItem[];
         hasMore?: boolean;
         page?: number;
       };
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error?.message || 'Failed to fetch repositories');
+        const code = data.error?.code || (res.status === 401 ? 'UNAUTHORIZED' : res.status === 403 ? 'FORBIDDEN' : res.status === 429 ? 'RATE_LIMITED' : null);
+        const err = new Error(data.error?.message || 'Failed to fetch repositories') as Error & { code?: string };
+        err.code = code || undefined;
+        throw err;
       }
 
       setRepos(data.repositories || []);
       setHasMore(Boolean(data.hasMore));
       setPage(data.page || pageNum);
     } catch (err) {
+      const code = (err as Error & { code?: string }).code || null;
+      setErrorCode(code);
       setError(err instanceof Error ? err.message : 'Could not load repositories');
     } finally {
       setLoading(false);
@@ -81,6 +89,8 @@ export function PrivateRepoPicker({
         throw new Error(data.message || 'GitHub did not confirm token revocation.');
       }
       trackAuthFlow('scope_revoked');
+      // Also clear Auth.js session cookie so stale JWT is not reused
+      try { await fetch('/api/auth/signout', { method: 'POST' }); } catch {}
       onSignOut();
       onClose();
     } catch (err) {
@@ -88,6 +98,20 @@ export function PrivateRepoPicker({
     } finally {
       setRevoking(false);
       setConfirmingRevoke(false);
+    }
+  }
+
+  async function handleReconnect() {
+    setReconnecting(true);
+    try {
+      // Clear invalid session before restarting authorization
+      try { await fetch('/api/auth/signout', { method: 'POST' }); } catch {}
+      try { await fetch('/api/auth/signout?callbackUrl=/', { method: 'POST' }); } catch {}
+      onSignOut();
+      trackAuthFlow('reconnect_triggered');
+      window.location.href = '/api/auth/signin?callbackUrl=/';
+    } finally {
+      setReconnecting(false);
     }
   }
 
@@ -213,12 +237,46 @@ export function PrivateRepoPicker({
             </div>
           ) : error ? (
             <div className="dialog-error" style={{ margin: '20px 0' }}>
-              {error}
-              <div style={{ marginTop: '8px' }}>
-                <button className="chip-button" onClick={() => fetchRepos(query, 1)}>
-                  Retry
-                </button>
+              <div style={{ marginBottom: errorCode === 'UNAUTHORIZED' || errorCode === 'GITHUB_TOKEN_EXPIRED' ? '10px' : '6px' }}>
+                {error}
+                {errorCode === 'FORBIDDEN' || errorCode === 'GITHUB_FORBIDDEN' ? (
+                  <div style={{ marginTop: '8px', fontSize: '0.78rem' }}>
+                    Install the GitHub App on the repositories you want to analyze:{' '}
+                    <a href="https://github.com/settings/installations" target="_blank" rel="noreferrer" style={{ color: 'var(--cyan-core)', textDecoration: 'underline' }}>
+                      github.com/settings/installations ↗
+                    </a>
+                  </div>
+                ) : null}
               </div>
+              <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {errorCode === 'UNAUTHORIZED' || errorCode === 'GITHUB_TOKEN_EXPIRED' ? (
+                  <button className="primary-button" onClick={handleReconnect} disabled={reconnecting} type="button" style={{ fontSize: '0.85rem', padding: '6px 14px' }}>
+                    {reconnecting ? 'Redirecting…' : 'Reconnect GitHub'}
+                  </button>
+                ) : errorCode === 'FORBIDDEN' || errorCode === 'GITHUB_FORBIDDEN' ? (
+                  <>
+                    <button className="primary-button" onClick={handleReconnect} disabled={reconnecting} type="button" style={{ fontSize: '0.85rem', padding: '6px 14px' }}>
+                      {reconnecting ? 'Redirecting…' : 'Reconnect GitHub'}
+                    </button>
+                    <button className="chip-button" onClick={() => fetchRepos(query, 1)} type="button">
+                      Retry
+                    </button>
+                  </>
+                ) : errorCode === 'RATE_LIMITED' ? (
+                  <button className="chip-button" onClick={() => fetchRepos(query, 1)} type="button">
+                    Retry after a minute
+                  </button>
+                ) : (
+                  <button className="chip-button" onClick={() => fetchRepos(query, 1)} type="button">
+                    Retry
+                  </button>
+                )}
+              </div>
+              {(errorCode === 'UNAUTHORIZED' || errorCode === 'GITHUB_TOKEN_EXPIRED') && (
+                <p style={{ marginTop: '8px', fontSize: '0.75rem', opacity: 0.8 }}>
+                  Your session was cleared because the token expired. Public repositories remain available without signing in.
+                </p>
+              )}
             </div>
           ) : repos.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-dim)' }}>
