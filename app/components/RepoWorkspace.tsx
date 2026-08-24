@@ -9,6 +9,7 @@ import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
 import { analyzeGitHubUrl, analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
+import { generateTextReport as generateTextReportImpl } from '../lib/export/text-report';
 import {
   ANALYSIS_COMPLETE_STEP,
   ANALYSIS_PROGRESS_STEPS,
@@ -76,6 +77,11 @@ function matchesProject(value: unknown): value is RepoDNAProject {
     Array.isArray(candidate.diagnostics) &&
     !!candidate.metadata?.fileComponents
   );
+}
+
+function generateTextReport(project: RepoDNAProject): string {
+  // Local import keeps the exporter out of the initial component graph.
+  return generateTextReportImpl(project);
 }
 
 function generateMermaid(project: RepoDNAProject): string {
@@ -1733,6 +1739,19 @@ function WorkspaceContent() {
     trackArtifactExported('json');
   }
 
+  function exportTextReport() {
+    if (!project) return;
+    const report = generateTextReport(project);
+    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${project.repository.name}-repodna-report.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+    trackArtifactExported('txt');
+  }
+
   // 1. If currently analyzing, show Analyzing Progress Screen
   if (analyzingTarget) {
     return (
@@ -1845,6 +1864,9 @@ function WorkspaceContent() {
           </button>
           <button className="chip-button" onClick={exportJsonArtifact} type="button" title="Download portable JSON analysis">
             <span>↓</span> JSON
+          </button>
+          <button className="chip-button" onClick={exportTextReport} type="button" title="Download plain-text architecture report">
+            <span>↓</span> TXT
           </button>
           <button className="analyse-button" onClick={() => setDialogOpen(true)} type="button">
             New analysis

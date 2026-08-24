@@ -186,7 +186,9 @@ export function trackViewChanged(view: string): void {
   captureEvent('workspace_view_changed', { view_name: view });
 }
 
-export function trackArtifactExported(format: 'json' | 'mermaid'): void {
+export type ExportFormat = 'json' | 'mermaid' | 'txt';
+
+export function trackArtifactExported(format: ExportFormat): void {
   captureEvent('artifact_exported', { format });
 }
 
