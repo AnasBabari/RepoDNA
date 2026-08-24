@@ -228,7 +228,7 @@ export async function extractFromZip(
   zipBuffer: ArrayBuffer | Uint8Array,
   repoName = 'repository',
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS
-): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; inventory: { totalFileCount: number; totalBytes: number; firstPartySourceFileCount: number; candidateFileCount: number; ignoredFileCount: number; generatedFileCount: number; unsupportedSourceFileCount: number; totalArchiveEntries: number; skippedByReason: Record<string, number> } }> {
+): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; inventory: import('./types').IngestionInventory }> {
   const u8 = zipBuffer instanceof Uint8Array ? zipBuffer : new Uint8Array(zipBuffer);
   const byteLength = u8.byteLength;
 
@@ -608,7 +608,7 @@ export async function fetchGitHubRepo(
   urlOrOwnerRepo: string,
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS,
   accessToken?: string
-): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string }> {
+): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory?: import('./types').IngestionInventory }> {
   const parsed = parseGitHubUrl(urlOrOwnerRepo);
   if (!parsed) {
     throw new IngestionError(

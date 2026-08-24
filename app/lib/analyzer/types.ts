@@ -13,6 +13,18 @@ import type {
   TechnologyBoundary,
 } from '../types';
 
+export interface IngestionInventory {
+  totalFileCount: number;
+  totalBytes: number;
+  firstPartySourceFileCount: number;
+  candidateFileCount: number;
+  ignoredFileCount: number;
+  generatedFileCount: number;
+  unsupportedSourceFileCount: number;
+  totalArchiveEntries: number;
+  skippedByReason: Record<string, number>;
+}
+
 export interface IngestionLimits {
   maxFiles: number;
   maxArchiveEntries: number;
