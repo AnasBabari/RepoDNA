@@ -15,6 +15,32 @@ export const SOURCE_EXTENSIONS = new Set([
   '.sh', '.bash', '.graphql', '.gql',
 ]);
 
+export const SUPPORTED_SOURCE_EXTENSIONS = new Set([
+  '.py', '.pyi', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.go',
+]);
+
+function isSupportedSource(path: string): boolean {
+  const filename = path.split('/').pop()!;
+  const dotIndex = filename.lastIndexOf('.');
+  if (dotIndex === -1) return SPECIAL_FILES.has(filename);
+  const ext = filename.slice(dotIndex).toLowerCase();
+  return SUPPORTED_SOURCE_EXTENSIONS.has(ext);
+}
+
+function isGeneratedPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return (
+    lower.includes('/generated/') ||
+    lower.includes('__generated__') ||
+    lower.endsWith('.generated.ts') ||
+    lower.endsWith('.generated.js') ||
+    lower.endsWith('.min.js') ||
+    lower.endsWith('.bundle.js') ||
+    lower.startsWith('dist/') ||
+    lower.startsWith('build/')
+  );
+}
+
 export const SPECIAL_FILES = new Set([
   'Dockerfile', 'Procfile', 'Makefile', 'Pipfile', 'package.json',
   'requirements.txt', 'pyproject.toml', 'poetry.lock', 'Pipfile.lock',
@@ -202,7 +228,7 @@ export async function extractFromZip(
   zipBuffer: ArrayBuffer | Uint8Array,
   repoName = 'repository',
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS
-): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string }> {
+): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; inventory: { totalFileCount: number; totalBytes: number; firstPartySourceFileCount: number; candidateFileCount: number; ignoredFileCount: number; generatedFileCount: number; unsupportedSourceFileCount: number; totalArchiveEntries: number; skippedByReason: Record<string, number> } }> {
   const u8 = zipBuffer instanceof Uint8Array ? zipBuffer : new Uint8Array(zipBuffer);
   const byteLength = u8.byteLength;
 
@@ -235,6 +261,12 @@ export async function extractFromZip(
     let candidateFileCount = 0;
     let pendingStreams = 0;
     let zipInputComplete = false;
+    let totalFileCount = 0;
+    let totalBytes = 0;
+    let ignoredFileCount = 0;
+    let generatedFileCount = 0;
+    let unsupportedFileCount = 0;
+    let firstPartySourceCandidateCount = 0;
 
     const files: DiscoveredFile[] = [];
     const skipped: { path: string; reason: string }[] = [];
@@ -278,11 +310,27 @@ export async function extractFromZip(
           normalizedSkipped.push({ ...s, path: relPath });
         }
 
+        const skippedByReason: Record<string, number> = {};
+        for (const s of normalizedSkipped) {
+          skippedByReason[s.reason] = (skippedByReason[s.reason] ?? 0) + 1;
+        }
+        const inventory = {
+          totalFileCount,
+          totalBytes,
+          firstPartySourceFileCount: firstPartySourceCandidateCount,
+          candidateFileCount,
+          ignoredFileCount,
+          generatedFileCount,
+          unsupportedSourceFileCount: unsupportedFileCount,
+          totalArchiveEntries: archiveEntryCount,
+          skippedByReason,
+        };
         resolve({
           files: normalizedFiles.sort((a, b) => a.path.localeCompare(b.path)),
           skipped: normalizedSkipped,
           name: repoName,
-        });
+          inventory,
+        } as unknown as { files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; inventory: typeof inventory });
       }
     }
 
@@ -325,6 +373,11 @@ export async function extractFromZip(
         return;
       }
 
+      totalFileCount++;
+      // Track total bytes where declared size is available (compressed hint)
+      const declaredSize = (file as unknown as { size?: number; originalSize?: number }).size ?? (file as unknown as { originalSize?: number }).originalSize;
+      if (typeof declaredSize === 'number' && Number.isFinite(declaredSize)) totalBytes += declaredSize;
+
       // Check path depth
       if (normalizedPath.split('/').length > 32) {
         skipped.push({ path: normalizedPath, reason: 'path_too_deep' });
@@ -332,11 +385,24 @@ export async function extractFromZip(
       }
 
       if (isIgnored(normalizedPath)) {
+        ignoredFileCount++;
+        return;
+      }
+
+      if (isGeneratedPath(normalizedPath)) {
+        generatedFileCount++;
         return;
       }
 
       if (!isCandidate(normalizedPath)) {
+        unsupportedFileCount++;
         return;
+      }
+
+      if (isSupportedSource(normalizedPath)) {
+        firstPartySourceCandidateCount++;
+      } else {
+        unsupportedFileCount++;
       }
 
       // 3. Enforce candidate files budget
