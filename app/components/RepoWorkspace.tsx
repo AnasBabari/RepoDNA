@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { ArchitectureGraph } from './ArchitectureGraph';
+import { CodeGraph } from './CodeGraph';
 import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
@@ -35,12 +36,13 @@ import type {
   RouteRecord,
 } from '../lib/types';
 
-type View = 'overview' | 'architecture' | 'routes' | 'dependencies' | 'files';
+type View = 'overview' | 'architecture' | 'graph' | 'routes' | 'dependencies' | 'files';
 type OverviewAudience = 'plain' | 'technical';
 
 const navigation: { id: View; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'architecture', label: 'Architecture' },
+  { id: 'graph', label: 'Code Graph' },
   { id: 'routes', label: 'Routes & trace' },
   { id: 'dependencies', label: 'Dependencies' },
   { id: 'files', label: 'Files & symbols' },
@@ -1950,6 +1952,7 @@ function WorkspaceContent() {
         )}
         {view === 'dependencies' && <DependenciesView project={project} />}
         {view === 'files' && <FilesView project={project} search={search} onSelect={selectFile} />}
+        {view === 'graph' && <CodeGraph project={project} />}
       </section>
 
       <DetailPanel
