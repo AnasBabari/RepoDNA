@@ -22,6 +22,7 @@ export function PrivateRepoPicker({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revoking, setRevoking] = useState(false);
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
   const fetchRepos = useCallback(async (searchQuery: string, pageNum: number) => {
     setLoading(true);
@@ -65,15 +66,14 @@ export function PrivateRepoPicker({
 
   if (!isOpen) return null;
 
+  function handleClose() {
+    setConfirmingRevoke(false);
+    onClose();
+  }
+
   async function handleRevoke() {
-    if (
-      !window.confirm(
-        'Revoke RepoDNA\'s current GitHub authorization and sign out? The GitHub App installation remains until you uninstall it in GitHub Settings.'
-      )
-    ) {
-      return;
-    }
     setRevoking(true);
+    setError(null);
     try {
       const response = await fetch('/api/auth/revoke', { method: 'POST' });
       const data = (await response.json()) as { success?: boolean; message?: string };
@@ -87,11 +87,12 @@ export function PrivateRepoPicker({
       setError(err instanceof Error ? err.message : 'Could not revoke GitHub access.');
     } finally {
       setRevoking(false);
+      setConfirmingRevoke(false);
     }
   }
 
   return (
-    <div className="dialog-backdrop" onClick={onClose}>
+    <div className="dialog-backdrop" onClick={handleClose}>
       <div
         className="dialog-card"
         style={{ maxWidth: '720px', width: '94%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
@@ -104,7 +105,7 @@ export function PrivateRepoPicker({
               Select any private or public repository to analyze.
             </p>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close repository picker">
+          <button className="icon-button" onClick={handleClose} aria-label="Close repository picker">
             ✕
           </button>
         </div>
@@ -137,7 +138,7 @@ export function PrivateRepoPicker({
             </span>
             <button
               type="button"
-              onClick={handleRevoke}
+              onClick={() => setConfirmingRevoke(true)}
               disabled={revoking}
               style={{
                 fontSize: '0.75rem',
@@ -152,6 +153,44 @@ export function PrivateRepoPicker({
               {revoking ? 'Revoking...' : 'Disconnect GitHub'}
             </button>
           </div>
+          {confirmingRevoke && (
+            <div
+              role="alertdialog"
+              aria-labelledby="disconnect-github-title"
+              aria-describedby="disconnect-github-description"
+              style={{
+                marginTop: '10px',
+                paddingTop: '10px',
+                borderTop: '1px solid rgba(248, 113, 113, 0.25)',
+              }}
+            >
+              <strong id="disconnect-github-title" style={{ color: '#fca5a5' }}>
+                Disconnect RepoDNA from GitHub?
+              </strong>
+              <p id="disconnect-github-description" style={{ margin: '4px 0 10px' }}>
+                This revokes the current GitHub token and signs you out. Your GitHub App installation and selected repositories remain until you remove them in GitHub Settings.
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="chip-button"
+                  onClick={() => setConfirmingRevoke(false)}
+                  disabled={revoking}
+                >
+                  Keep connected
+                </button>
+                <button
+                  type="button"
+                  className="chip-button"
+                  onClick={handleRevoke}
+                  disabled={revoking}
+                  style={{ color: '#fca5a5', borderColor: 'rgba(248, 113, 113, 0.45)' }}
+                >
+                  {revoking ? 'Revoking...' : 'Revoke and sign out'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Search input */}
