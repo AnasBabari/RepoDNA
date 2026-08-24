@@ -627,7 +627,7 @@ export async function fetchGitHubRepo(
       authApiResponse = authRes;
       if (authRes && authRes.ok) {
         response = authRes;
-      } else if (authRes && (authRes.status === 401 || authRes.status === 403)) {
+      } else if (authRes && (authRes.status === 401 || authRes.status === 403 || authRes.status === 429)) {
         const rateLimitRemaining = authRes.headers.get('x-ratelimit-remaining');
         const isRateLimited = authRes.status === 429 || (authRes.status === 403 && rateLimitRemaining === '0');
         if (isRateLimited) {

@@ -108,7 +108,7 @@ export function PrivateRepoPicker({
       try { await fetch('/api/auth/signout', { method: 'POST' }); } catch {}
       try { await fetch('/api/auth/signout?callbackUrl=/', { method: 'POST' }); } catch {}
       onSignOut();
-      trackAuthFlow('reconnect_triggered');
+      trackAuthFlow('sign_in_initiated');
       window.location.href = '/api/auth/signin?callbackUrl=/';
     } finally {
       setReconnecting(false);
