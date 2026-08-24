@@ -27,6 +27,10 @@ export async function GET(request: NextRequest) {
     const token = await getToken({
       req: request,
       secret: process.env.AUTH_SECRET,
+      // Auth.js prefixes the production HTTPS cookie with `__Secure-`.
+      // Without this, getToken() looks for the development cookie name and
+      // returns null even though auth() has a valid signed-in session.
+      secureCookie: process.env.NODE_ENV === 'production',
     });
     accessToken = (token?.accessToken as string) || (session as unknown as { accessToken?: string })?.accessToken;
   } catch {}
