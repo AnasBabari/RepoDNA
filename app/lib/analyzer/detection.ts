@@ -3,7 +3,7 @@ import type { DiscoveredFile } from './types';
 export const LANGUAGES: Record<string, string> = {
   '.py': 'Python', '.pyi': 'Python', '.js': 'JavaScript', '.jsx': 'JavaScript',
   '.mjs': 'JavaScript', '.cjs': 'JavaScript', '.ts': 'TypeScript', '.tsx': 'TypeScript',
-  '.sql': 'SQL', '.prisma': 'Prisma', '.html': 'HTML', '.css': 'CSS', '.scss': 'SCSS',
+  '.go': 'Go', '.sql': 'SQL', '.prisma': 'Prisma', '.html': 'HTML', '.css': 'CSS', '.scss': 'SCSS',
   '.json': 'Configuration', '.toml': 'Configuration', '.yaml': 'Configuration', '.yml': 'Configuration',
   '.md': 'Markdown', '.mdx': 'Markdown', '.graphql': 'GraphQL', '.gql': 'GraphQL',
   '.sh': 'Shell', '.bash': 'Shell', '.zsh': 'Shell',

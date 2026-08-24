@@ -207,7 +207,7 @@ export async function analyzeRepositoryFiles(
   ])).sort();
 
   const parsedCount = files.filter((f) => f.parsed).length;
-  const sourceCount = files.filter((f) => ['Python', 'JavaScript', 'TypeScript'].includes(f.language)).length;
+  const sourceCount = files.filter((f) => ['Python', 'JavaScript', 'TypeScript', 'Go'].includes(f.language)).length;
 
   const dbRecords: TechnologyBoundary[] = Array.from(databases).sort().map((dName) => ({
     name: dName,

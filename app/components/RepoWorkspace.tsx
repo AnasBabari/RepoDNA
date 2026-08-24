@@ -591,11 +591,25 @@ function Overview({
   const [audience, setAudience] = useState<OverviewAudience>('plain');
   const primaryEntry = project.entrypoints[0];
   const incompletePaths = project.diagnostics.filter((item) => item.code === 'EXPRESS_ROUTE_PATH_INCOMPLETE').length;
-  const codebaseSize = project.repository.sourceFileCount <= 25
-    ? 'Small codebase'
-    : project.repository.sourceFileCount <= 150
-      ? 'Medium codebase'
-      : 'Large codebase';
+  // Truthful size classification per spec: use first-party source files AND LOC
+  // Small: <50 files AND <10k LOC, Medium: 50–249 OR 10k–50k, Large: 250–999 OR 50k–250k, Very large: >=1000 OR >=250k
+  const firstPartyFileCount = project.repository.sourceFileCount;
+  const firstPartyLoc = project.files
+    .filter((f) => ['Python', 'JavaScript', 'TypeScript', 'Go'].includes(f.language))
+    .reduce((acc, f) => acc + f.lines, 0);
+  const codebaseSize = (() => {
+    if (firstPartyFileCount >= 1000 || firstPartyLoc >= 250_000) return 'Very large codebase';
+    if (firstPartyFileCount >= 250 || firstPartyLoc >= 50_000) return 'Large codebase';
+    if (firstPartyFileCount >= 50 || firstPartyLoc >= 10_000) return 'Medium codebase';
+    return 'Small codebase';
+  })();
+  // Never display "Fully mapped" unless all supported first-party files parsed and no limits/truncation
+  const hasSkippedDiagnostics = project.diagnostics.some(
+    (d) => d.code.startsWith('skipped_') || ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_PARSE_PARTIAL', 'SOURCE_PARSE_FAILED'].includes(d.code)
+  );
+  const hasUnresolvedRoutes = incompletePaths > 0;
+  const isFullyMapped = project.metrics.parseSuccessRate === 100 && !hasSkippedDiagnostics && !hasUnresolvedRoutes;
+  const mapQualityLabel = isFullyMapped ? 'Fully mapped' : hasUnresolvedRoutes || hasSkippedDiagnostics ? (project.metrics.parseSuccessRate < 70 ? 'Coverage limited' : 'Mostly mapped') : 'Mostly mapped';
   const primaryTechnology = project.technologies[0] ?? Object.keys(project.repository.languages)[0] ?? 'Custom application';
 
   return (
@@ -660,7 +674,7 @@ function Overview({
             <article>
               <span>Size</span>
               <strong>{codebaseSize}</strong>
-              <p>{formatNumber(project.repository.sourceFileCount)} source files were analyzed.</p>
+              <p>{formatNumber(firstPartyFileCount)} first-party files · {formatNumber(firstPartyLoc)} LOC</p>
             </article>
             <article>
               <span>Built with</span>
@@ -669,8 +683,16 @@ function Overview({
             </article>
             <article>
               <span>Map quality</span>
-              <strong>{incompletePaths ? 'Mostly mapped' : 'Fully mapped'}</strong>
-              <p>{incompletePaths ? `${incompletePaths} request path${incompletePaths === 1 ? '' : 's'} need verification.` : 'No unresolved request paths were found.'}</p>
+              <strong>{mapQualityLabel}</strong>
+              <p>
+                {isFullyMapped
+                  ? 'No unresolved relationships; all supported first-party files parsed.'
+                  : incompletePaths
+                    ? `${incompletePaths} request path${incompletePaths === 1 ? '' : 's'} need verification.`
+                    : hasSkippedDiagnostics
+                      ? 'Some files were skipped or partially parsed — see diagnostics.'
+                      : 'Most relationships resolved; see diagnostics for coverage.'}
+              </p>
             </article>
           </section>
 
@@ -701,9 +723,9 @@ function Overview({
         <>
           <section className="metric-grid" aria-label="Technical analysis summary">
             <article>
-              <span>Source files</span>
-              <strong>{formatNumber(project.repository.sourceFileCount)}</strong>
-              <i>{project.metrics.parseSuccessRate}% parsed</i>
+              <span>First-party source</span>
+              <strong>{formatNumber(firstPartyFileCount)}</strong>
+              <i>{formatNumber(firstPartyLoc)} LOC · {project.metrics.parseSuccessRate}% parsed · {formatNumber(project.repository.fileCount)} total files</i>
             </article>
             <article>
               <span>Dependencies</span>
