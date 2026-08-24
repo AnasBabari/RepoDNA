@@ -1,4 +1,4 @@
-export type SupportedLanguage = 'python' | 'javascript' | 'typescript' | 'tsx';
+export type SupportedLanguage = 'python' | 'javascript' | 'typescript' | 'tsx' | 'go';
 
 export type ParseQuality = 'complete' | 'partial' | 'failed';
 
@@ -26,7 +26,7 @@ export interface SourceRange {
   endColumn: number;
 }
 
-export type SyntaxSymbolKind = 'module' | 'function' | 'method' | 'class' | 'variable';
+export type SyntaxSymbolKind = 'module' | 'function' | 'method' | 'class' | 'interface' | 'type' | 'variable' | 'attribute' | 'component';
 
 export interface SyntaxDecorator {
   name: string;

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "generatedAt": "2026-08-22T12:11:16.782Z",
+  "generatedAt": "2026-08-24T15:58:47.777Z",
   "repository": {
     "name": "full-stack-fastapi-template",
     "source": "https://github.com/tiangolo/full-stack-fastapi-template",
@@ -209,7 +209,7 @@
       "name": "read_users",
       "file": "backend/app/api/routes/users.py",
       "line": 9,
-      "end_line": null,
+      "end_line": 10,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -220,7 +220,7 @@
       "name": "create_user",
       "file": "backend/app/api/routes/users.py",
       "line": 13,
-      "end_line": null,
+      "end_line": 14,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -242,7 +242,7 @@
       "name": "read_items",
       "file": "backend/app/api/routes/items.py",
       "line": 9,
-      "end_line": null,
+      "end_line": 10,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -253,7 +253,7 @@
       "name": "create_item",
       "file": "backend/app/api/routes/items.py",
       "line": 13,
-      "end_line": null,
+      "end_line": 14,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -275,7 +275,7 @@
       "name": "User",
       "file": "backend/app/models/user.py",
       "line": 5,
-      "end_line": null,
+      "end_line": 10,
       "parent": null,
       "exported": true,
       "evidence": [
@@ -288,7 +288,7 @@
       "name": "UserCreate",
       "file": "backend/app/models/user.py",
       "line": 12,
-      "end_line": null,
+      "end_line": 14,
       "parent": null,
       "exported": true,
       "evidence": [
@@ -301,7 +301,7 @@
       "name": "UserPublic",
       "file": "backend/app/models/user.py",
       "line": 16,
-      "end_line": null,
+      "end_line": 19,
       "parent": null,
       "exported": true,
       "evidence": [
@@ -325,7 +325,7 @@
       "name": "Item",
       "file": "backend/app/models/item.py",
       "line": 5,
-      "end_line": null,
+      "end_line": 9,
       "parent": null,
       "exported": true,
       "evidence": [
@@ -338,7 +338,7 @@
       "name": "ItemCreate",
       "file": "backend/app/models/item.py",
       "line": 11,
-      "end_line": null,
+      "end_line": 13,
       "parent": null,
       "exported": true,
       "evidence": [
@@ -351,7 +351,7 @@
       "name": "ItemPublic",
       "file": "backend/app/models/item.py",
       "line": 15,
-      "end_line": null,
+      "end_line": 18,
       "parent": null,
       "exported": true,
       "evidence": [
@@ -375,7 +375,7 @@
       "name": "CRUDUser",
       "file": "backend/app/crud/crud_user.py",
       "line": 4,
-      "end_line": null,
+      "end_line": 8,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -386,7 +386,7 @@
       "name": "get_multi",
       "file": "backend/app/crud/crud_user.py",
       "line": 5,
-      "end_line": null,
+      "end_line": 6,
       "parent": "backend/app/crud/crud_user.py::CRUDUser",
       "exported": true,
       "evidence": []
@@ -397,7 +397,7 @@
       "name": "create",
       "file": "backend/app/crud/crud_user.py",
       "line": 7,
-      "end_line": null,
+      "end_line": 8,
       "parent": "backend/app/crud/crud_user.py::CRUDUser",
       "exported": true,
       "evidence": []
@@ -419,7 +419,7 @@
       "name": "CRUDItem",
       "file": "backend/app/crud/crud_item.py",
       "line": 4,
-      "end_line": null,
+      "end_line": 8,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -430,7 +430,7 @@
       "name": "get_multi",
       "file": "backend/app/crud/crud_item.py",
       "line": 5,
-      "end_line": null,
+      "end_line": 6,
       "parent": "backend/app/crud/crud_item.py::CRUDItem",
       "exported": true,
       "evidence": []
@@ -441,7 +441,7 @@
       "name": "create",
       "file": "backend/app/crud/crud_item.py",
       "line": 7,
-      "end_line": null,
+      "end_line": 8,
       "parent": "backend/app/crud/crud_item.py::CRUDItem",
       "exported": true,
       "evidence": []
@@ -459,16 +459,14 @@
     },
     {
       "id": "frontend/src/App.tsx::App",
-      "type": "component",
+      "type": "function",
       "name": "App",
       "file": "frontend/src/App.tsx",
       "line": 4,
-      "end_line": null,
+      "end_line": 10,
       "parent": null,
       "exported": true,
-      "evidence": [
-        "capitalized JSX/TSX function"
-      ]
+      "evidence": []
     }
   ],
   "imports": [
@@ -838,8 +836,8 @@
       "confidence": 0.72
     },
     {
-      "id": "backend/app/crud/crud_user.py::CRUDUser::create:call:10:CRUDUser",
-      "source": "backend/app/crud/crud_user.py::CRUDUser::create",
+      "id": "backend/app/crud/crud_user.py:call:10:CRUDUser",
+      "source": "backend/app/crud/crud_user.py",
       "callee": "CRUDUser",
       "file": "backend/app/crud/crud_user.py",
       "line": 10,
@@ -856,21 +854,12 @@
       "confidence": 0.72
     },
     {
-      "id": "backend/app/crud/crud_item.py::CRUDItem::create:call:10:CRUDItem",
-      "source": "backend/app/crud/crud_item.py::CRUDItem::create",
+      "id": "backend/app/crud/crud_item.py:call:10:CRUDItem",
+      "source": "backend/app/crud/crud_item.py",
       "callee": "CRUDItem",
       "file": "backend/app/crud/crud_item.py",
       "line": 10,
       "target": "backend/app/crud/crud_item.py::CRUDItem",
-      "confidence": 0.88
-    },
-    {
-      "id": "frontend/src/App.tsx::App:call:4:App",
-      "source": "frontend/src/App.tsx::App",
-      "callee": "App",
-      "file": "frontend/src/App.tsx",
-      "line": 4,
-      "target": "frontend/src/App.tsx::App",
       "confidence": 0.88
     }
   ],
@@ -1331,7 +1320,7 @@
   },
   "diagnostics": [],
   "metadata": {
-    "analysisMode": "static-typescript",
+    "analysisMode": "static-typescript-tree-sitter",
     "executedRepositoryCode": false,
     "analyzerVersion": "1.2.0",
     "limits": {

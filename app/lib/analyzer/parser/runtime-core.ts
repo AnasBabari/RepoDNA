@@ -5,6 +5,10 @@ export type TreeSitterModule = typeof import('web-tree-sitter');
 
 const GRAMMAR_WASM_FILES: Partial<Record<SupportedLanguage, string>> = {
   python: 'tree-sitter-python.wasm',
+  javascript: 'tree-sitter-javascript.wasm',
+  typescript: 'tree-sitter-typescript.wasm',
+  tsx: 'tree-sitter-tsx.wasm',
+  go: 'tree-sitter-go.wasm',
 };
 
 export interface PlatformRuntime {

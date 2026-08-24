@@ -32,10 +32,10 @@ describe('Tree-sitter migration pipeline', () => {
     expect(result.diagnostics.some((d) => d.code.startsWith('SOURCE_PARSE_'))).toBe(false);
   });
 
-  it('keeps legacy mode untouched by default', async () => {
+  it('uses tree-sitter by default for deep JS/TS/Go extraction', async () => {
     const discovery = discoveryFor('tests/fixtures/fastapi-basic');
     const result = await analyzeRepositoryFiles(discovery);
-    expect(result.metadata.analysisMode).toBe('static-typescript');
+    expect(result.metadata.analysisMode).toBe('static-typescript-tree-sitter');
   });
 
   it('reports partial parse quality and diagnostics for malformed python', async () => {

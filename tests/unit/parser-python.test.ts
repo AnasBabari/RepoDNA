@@ -20,11 +20,17 @@ function importFor(facts: SyntaxFacts, module: string) {
 }
 
 describe('Tree-sitter runtime & registry', () => {
-  it('registers python and resolves it by extension', () => {
+  it('registers python, javascript/typescript/go and resolves them by extension', () => {
     expect(registeredLanguages()).toContain('python');
+    expect(registeredLanguages()).toContain('javascript');
+    expect(registeredLanguages()).toContain('typescript');
+    expect(registeredLanguages()).toContain('go');
     expect(languageForPath('src/main.py')).toBe('python');
     expect(languageForPath('src/main.pyi')).toBe('python');
-    expect(languageForPath('src/main.js')).toBeNull();
+    expect(languageForPath('src/main.js')).toBe('javascript');
+    expect(languageForPath('src/app.ts')).toBe('typescript');
+    expect(languageForPath('src/comp.tsx')).toBe('tsx');
+    expect(languageForPath('main.go')).toBe('go');
   });
 
   it('caches the parser instance per language', async () => {

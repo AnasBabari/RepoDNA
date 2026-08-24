@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "generatedAt": "2026-08-22T12:11:16.764Z",
+  "generatedAt": "2026-08-24T15:58:47.748Z",
   "repository": {
     "name": "strix",
     "source": "https://github.com/usestrix/strix",
@@ -187,7 +187,7 @@
       "name": "start_security_scan",
       "file": "strix/api/routes.py",
       "line": 10,
-      "end_line": null,
+      "end_line": 12,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -198,7 +198,7 @@
       "name": "get_scan_report",
       "file": "strix/api/routes.py",
       "line": 15,
-      "end_line": null,
+      "end_line": 17,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -220,7 +220,7 @@
       "name": "SecurityScanner",
       "file": "strix/core/scanner.py",
       "line": 6,
-      "end_line": null,
+      "end_line": 13,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -231,7 +231,7 @@
       "name": "__init__",
       "file": "strix/core/scanner.py",
       "line": 7,
-      "end_line": null,
+      "end_line": 9,
       "parent": "strix/core/scanner.py::SecurityScanner",
       "exported": true,
       "evidence": []
@@ -242,7 +242,7 @@
       "name": "scan_endpoints",
       "file": "strix/core/scanner.py",
       "line": 11,
-      "end_line": null,
+      "end_line": 13,
       "parent": "strix/core/scanner.py::SecurityScanner",
       "exported": true,
       "evidence": []
@@ -264,7 +264,7 @@
       "name": "PentestAgent",
       "file": "strix/services/agent.py",
       "line": 5,
-      "end_line": null,
+      "end_line": 12,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -275,7 +275,7 @@
       "name": "run_audit",
       "file": "strix/services/agent.py",
       "line": 6,
-      "end_line": null,
+      "end_line": 9,
       "parent": "strix/services/agent.py::PentestAgent",
       "exported": true,
       "evidence": []
@@ -286,7 +286,7 @@
       "name": "get_report",
       "file": "strix/services/agent.py",
       "line": 11,
-      "end_line": null,
+      "end_line": 12,
       "parent": "strix/services/agent.py::PentestAgent",
       "exported": true,
       "evidence": []
@@ -308,7 +308,7 @@
       "name": "ScanRequest",
       "file": "strix/models/scan.py",
       "line": 5,
-      "end_line": null,
+      "end_line": 7,
       "parent": null,
       "exported": true,
       "evidence": [
@@ -321,7 +321,7 @@
       "name": "VulnerabilityReport",
       "file": "strix/models/scan.py",
       "line": 9,
-      "end_line": null,
+      "end_line": 11,
       "parent": null,
       "exported": true,
       "evidence": [
@@ -334,7 +334,7 @@
       "name": "ScanResult",
       "file": "strix/models/scan.py",
       "line": 13,
-      "end_line": null,
+      "end_line": 16,
       "parent": null,
       "exported": true,
       "evidence": [
@@ -358,7 +358,7 @@
       "name": "WebCrawler",
       "file": "strix/tools/crawler.py",
       "line": 2,
-      "end_line": null,
+      "end_line": 7,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -369,7 +369,7 @@
       "name": "__init__",
       "file": "strix/tools/crawler.py",
       "line": 3,
-      "end_line": null,
+      "end_line": 4,
       "parent": "strix/tools/crawler.py::WebCrawler",
       "exported": true,
       "evidence": []
@@ -380,7 +380,7 @@
       "name": "discover_endpoints",
       "file": "strix/tools/crawler.py",
       "line": 6,
-      "end_line": null,
+      "end_line": 7,
       "parent": "strix/tools/crawler.py::WebCrawler",
       "exported": true,
       "evidence": []
@@ -402,7 +402,7 @@
       "name": "ApiFuzzer",
       "file": "strix/tools/fuzzer.py",
       "line": 4,
-      "end_line": null,
+      "end_line": 9,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -413,7 +413,7 @@
       "name": "__init__",
       "file": "strix/tools/fuzzer.py",
       "line": 5,
-      "end_line": null,
+      "end_line": 6,
       "parent": "strix/tools/fuzzer.py::ApiFuzzer",
       "exported": true,
       "evidence": []
@@ -424,7 +424,7 @@
       "name": "audit_routes",
       "file": "strix/tools/fuzzer.py",
       "line": 8,
-      "end_line": null,
+      "end_line": 9,
       "parent": "strix/tools/fuzzer.py::ApiFuzzer",
       "exported": true,
       "evidence": []
@@ -442,16 +442,14 @@
     },
     {
       "id": "app/page.tsx::Dashboard",
-      "type": "component",
+      "type": "function",
       "name": "Dashboard",
       "file": "app/page.tsx",
       "line": 4,
-      "end_line": null,
+      "end_line": 11,
       "parent": null,
       "exported": true,
-      "evidence": [
-        "capitalized JSX/TSX function"
-      ]
+      "evidence": []
     }
   ],
   "imports": [
@@ -777,15 +775,6 @@
       "line": 9,
       "target": "strix/models/scan.py::VulnerabilityReport",
       "confidence": 0.72
-    },
-    {
-      "id": "app/page.tsx::Dashboard:call:4:Dashboard",
-      "source": "app/page.tsx::Dashboard",
-      "callee": "Dashboard",
-      "file": "app/page.tsx",
-      "line": 4,
-      "target": "app/page.tsx::Dashboard",
-      "confidence": 0.88
     }
   ],
   "routes": [
@@ -1036,7 +1025,7 @@
         ],
         "confidence": 0.82,
         "evidence": [
-          "frontend path or component symbols"
+          "frontend container path"
         ]
       },
       {
@@ -1414,9 +1403,16 @@
     "components": 7,
     "parseSuccessRate": 100
   },
-  "diagnostics": [],
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "code": "SOURCE_PARSE_PARTIAL",
+      "message": "Python source contained syntax errors and was partially analyzed.",
+      "file": "app/page.tsx"
+    }
+  ],
   "metadata": {
-    "analysisMode": "static-typescript",
+    "analysisMode": "static-typescript-tree-sitter",
     "executedRepositoryCode": false,
     "analyzerVersion": "1.2.0",
     "limits": {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "generatedAt": "2026-08-22T12:11:16.769Z",
+  "generatedAt": "2026-08-24T15:58:47.767Z",
   "repository": {
     "name": "nanoGPT",
     "source": "https://github.com/karpathy/nanoGPT",
@@ -92,7 +92,7 @@
       "name": "GPTConfig",
       "file": "model.py",
       "line": 7,
-      "end_line": null,
+      "end_line": 14,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -103,7 +103,7 @@
       "name": "CausalSelfAttention",
       "file": "model.py",
       "line": 16,
-      "end_line": null,
+      "end_line": 30,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -114,7 +114,7 @@
       "name": "__init__",
       "file": "model.py",
       "line": 17,
-      "end_line": null,
+      "end_line": 24,
       "parent": "model.py::CausalSelfAttention",
       "exported": true,
       "evidence": []
@@ -125,7 +125,7 @@
       "name": "forward",
       "file": "model.py",
       "line": 26,
-      "end_line": null,
+      "end_line": 30,
       "parent": "model.py::CausalSelfAttention",
       "exported": true,
       "evidence": []
@@ -136,7 +136,7 @@
       "name": "MLP",
       "file": "model.py",
       "line": 32,
-      "end_line": null,
+      "end_line": 41,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -147,7 +147,7 @@
       "name": "__init__",
       "file": "model.py",
       "line": 33,
-      "end_line": null,
+      "end_line": 38,
       "parent": "model.py::MLP",
       "exported": true,
       "evidence": []
@@ -158,7 +158,7 @@
       "name": "forward",
       "file": "model.py",
       "line": 40,
-      "end_line": null,
+      "end_line": 41,
       "parent": "model.py::MLP",
       "exported": true,
       "evidence": []
@@ -169,7 +169,7 @@
       "name": "Block",
       "file": "model.py",
       "line": 43,
-      "end_line": null,
+      "end_line": 54,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -180,7 +180,7 @@
       "name": "__init__",
       "file": "model.py",
       "line": 44,
-      "end_line": null,
+      "end_line": 49,
       "parent": "model.py::Block",
       "exported": true,
       "evidence": []
@@ -191,7 +191,7 @@
       "name": "forward",
       "file": "model.py",
       "line": 51,
-      "end_line": null,
+      "end_line": 54,
       "parent": "model.py::Block",
       "exported": true,
       "evidence": []
@@ -202,7 +202,7 @@
       "name": "GPT",
       "file": "model.py",
       "line": 56,
-      "end_line": null,
+      "end_line": 71,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -213,7 +213,7 @@
       "name": "__init__",
       "file": "model.py",
       "line": 57,
-      "end_line": null,
+      "end_line": 67,
       "parent": "model.py::GPT",
       "exported": true,
       "evidence": []
@@ -224,7 +224,7 @@
       "name": "forward",
       "file": "model.py",
       "line": 69,
-      "end_line": null,
+      "end_line": 71,
       "parent": "model.py::GPT",
       "exported": true,
       "evidence": []
@@ -246,7 +246,7 @@
       "name": "train_gpt",
       "file": "train.py",
       "line": 7,
-      "end_line": null,
+      "end_line": 11,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -268,7 +268,7 @@
       "name": "generate_sample",
       "file": "sample.py",
       "line": 5,
-      "end_line": null,
+      "end_line": 9,
       "parent": null,
       "exported": true,
       "evidence": []
@@ -390,18 +390,18 @@
   ],
   "calls": [
     {
-      "id": "model.py::CausalSelfAttention::__init__:call:18:super",
+      "id": "model.py::CausalSelfAttention::__init__:call:18:super().__init__",
       "source": "model.py::CausalSelfAttention::__init__",
-      "callee": "super",
+      "callee": "super().__init__",
       "file": "model.py",
       "line": 18,
       "target": null,
       "confidence": 0.55
     },
     {
-      "id": "model.py::CausalSelfAttention::__init__:call:18:__init__",
+      "id": "model.py::CausalSelfAttention::__init__:call:18:super",
       "source": "model.py::CausalSelfAttention::__init__",
-      "callee": "__init__",
+      "callee": "super",
       "file": "model.py",
       "line": 18,
       "target": null,
@@ -453,18 +453,18 @@
       "confidence": 0.55
     },
     {
-      "id": "model.py::CausalSelfAttention::forward:call:28:self.c_attn",
+      "id": "model.py::CausalSelfAttention::forward:call:28:self.c_attn(x).split",
       "source": "model.py::CausalSelfAttention::forward",
-      "callee": "self.c_attn",
+      "callee": "self.c_attn(x).split",
       "file": "model.py",
       "line": 28,
       "target": null,
       "confidence": 0.55
     },
     {
-      "id": "model.py::CausalSelfAttention::forward:call:28:split",
+      "id": "model.py::CausalSelfAttention::forward:call:28:self.c_attn",
       "source": "model.py::CausalSelfAttention::forward",
-      "callee": "split",
+      "callee": "self.c_attn",
       "file": "model.py",
       "line": 28,
       "target": null,
@@ -498,18 +498,18 @@
       "confidence": 0.55
     },
     {
-      "id": "model.py::MLP::__init__:call:34:super",
+      "id": "model.py::MLP::__init__:call:34:super().__init__",
       "source": "model.py::MLP::__init__",
-      "callee": "super",
+      "callee": "super().__init__",
       "file": "model.py",
       "line": 34,
       "target": null,
       "confidence": 0.55
     },
     {
-      "id": "model.py::MLP::__init__:call:34:__init__",
+      "id": "model.py::MLP::__init__:call:34:super",
       "source": "model.py::MLP::__init__",
-      "callee": "__init__",
+      "callee": "super",
       "file": "model.py",
       "line": 34,
       "target": null,
@@ -588,18 +588,18 @@
       "confidence": 0.55
     },
     {
-      "id": "model.py::Block::__init__:call:45:super",
+      "id": "model.py::Block::__init__:call:45:super().__init__",
       "source": "model.py::Block::__init__",
-      "callee": "super",
+      "callee": "super().__init__",
       "file": "model.py",
       "line": 45,
       "target": null,
       "confidence": 0.55
     },
     {
-      "id": "model.py::Block::__init__:call:45:__init__",
+      "id": "model.py::Block::__init__:call:45:super",
       "source": "model.py::Block::__init__",
-      "callee": "__init__",
+      "callee": "super",
       "file": "model.py",
       "line": 45,
       "target": null,
@@ -678,18 +678,18 @@
       "confidence": 0.55
     },
     {
-      "id": "model.py::GPT::__init__:call:58:super",
+      "id": "model.py::GPT::__init__:call:58:super().__init__",
       "source": "model.py::GPT::__init__",
-      "callee": "super",
+      "callee": "super().__init__",
       "file": "model.py",
       "line": 58,
       "target": null,
       "confidence": 0.55
     },
     {
-      "id": "model.py::GPT::__init__:call:58:__init__",
+      "id": "model.py::GPT::__init__:call:58:super",
       "source": "model.py::GPT::__init__",
-      "callee": "__init__",
+      "callee": "super",
       "file": "model.py",
       "line": 58,
       "target": null,
@@ -840,8 +840,8 @@
       "confidence": 0.55
     },
     {
-      "id": "train.py::train_gpt:call:14:train_gpt",
-      "source": "train.py::train_gpt",
+      "id": "train.py:call:14:train_gpt",
+      "source": "train.py",
       "callee": "train_gpt",
       "file": "train.py",
       "line": 14,
@@ -1012,7 +1012,7 @@
   },
   "diagnostics": [],
   "metadata": {
-    "analysisMode": "static-typescript",
+    "analysisMode": "static-typescript-tree-sitter",
     "executedRepositoryCode": false,
     "analyzerVersion": "1.2.0",
     "limits": {

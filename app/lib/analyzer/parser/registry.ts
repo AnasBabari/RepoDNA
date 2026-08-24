@@ -1,4 +1,8 @@
+import { GoSyntaxParser } from './go';
+import { JavaScriptSyntaxParser } from './javascript';
 import { PythonSyntaxParser } from './python';
+import { TsxSyntaxParser } from './tsx';
+import { TypeScriptSyntaxParser } from './typescript';
 import type { SupportedLanguage, SyntaxParser } from './types';
 
 interface LanguageRegistration {
@@ -12,6 +16,26 @@ const REGISTRY: readonly LanguageRegistration[] = [
     language: 'python',
     extensions: ['.py', '.pyi'],
     factory: () => new PythonSyntaxParser(),
+  },
+  {
+    language: 'javascript',
+    extensions: ['.js', '.jsx', '.mjs', '.cjs'],
+    factory: () => new JavaScriptSyntaxParser(),
+  },
+  {
+    language: 'typescript',
+    extensions: ['.ts'],
+    factory: () => new TypeScriptSyntaxParser(),
+  },
+  {
+    language: 'tsx',
+    extensions: ['.tsx'],
+    factory: () => new TsxSyntaxParser(),
+  },
+  {
+    language: 'go',
+    extensions: ['.go'],
+    factory: () => new GoSyntaxParser(),
   },
 ];
 

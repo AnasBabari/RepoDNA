@@ -1,6 +1,7 @@
 import { analyzeJavaScript } from './analyzers/javascript';
 import { analyzePython } from './analyzers/python';
 import { analyzePythonTreeSitter } from './analyzers/python-treesitter';
+import { analyzeTreeSitter } from './analyzers/tree-sitter';
 import { environmentEvidence, fingerprint, languageFor, parseTsconfigPaths } from './detection';
 import { resolveExpressRouteMounts } from './express';
 import {
@@ -32,10 +33,10 @@ export interface AnalyzeOptions {
 
 export function resolveParserMode(options?: AnalyzeOptions): ParserMode {
   if (options?.parserMode) return options.parserMode;
-  if (typeof process !== 'undefined' && process.env?.REPODNA_PARSER_MODE === 'tree-sitter') {
-    return 'tree-sitter';
+  if (typeof process !== 'undefined' && process.env?.REPODNA_PARSER_MODE === 'legacy') {
+    return 'legacy';
   }
-  return 'legacy';
+  return 'tree-sitter';
 }
 
 export async function analyzeRepositoryFiles(
@@ -81,12 +82,23 @@ export async function analyzeRepositoryFiles(
     files.push(fileRec);
 
     let partial: PartialAnalysis;
-    if (discovered.path.endsWith('.py') || discovered.path.endsWith('.pyi')) {
-      partial =
-        parserMode === 'tree-sitter'
-          ? await analyzePythonTreeSitter(discovered)
-          : analyzePython(discovered);
-    } else if (['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'].some((ext) => discovered.path.endsWith(ext))) {
+    const ext = discovered.path.slice(discovered.path.lastIndexOf('.')).toLowerCase();
+    const isTreeSitterMode = parserMode === 'tree-sitter';
+    const isSupportedTreeSitter = ['.py', '.pyi', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.go'].includes(ext);
+    if (isTreeSitterMode && isSupportedTreeSitter) {
+      // Tree-sitter is default for Python/JS/TS/TSX/Go (spec phase 4). Falls back to legacy inside analyzer on failure.
+      if (ext === '.py' || ext === '.pyi') {
+        partial = await analyzePythonTreeSitter(discovered);
+        // If python tree-sitter failed, it already fell back; but if still failed try generic
+        if (partial.parseMeta?.quality === 'failed' && !partial.parserNotice) {
+          try { partial = await analyzeTreeSitter(discovered); } catch {}
+        }
+      } else {
+        partial = await analyzeTreeSitter(discovered);
+      }
+    } else if (discovered.path.endsWith('.py') || discovered.path.endsWith('.pyi')) {
+      partial = analyzePython(discovered);
+    } else if (['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'].some((e) => discovered.path.endsWith(e))) {
       partial = analyzeJavaScript(discovered);
     } else {
       partial = {

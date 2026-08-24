@@ -26,6 +26,10 @@ const ASSETS = [
   ['web-tree-sitter', 'web-tree-sitter.wasm'],
   ['web-tree-sitter', 'web-tree-sitter.js'],
   ['tree-sitter-python', 'tree-sitter-python.wasm'],
+  ['tree-sitter-javascript', 'tree-sitter-javascript.wasm'],
+  ['tree-sitter-typescript', 'tree-sitter-typescript.wasm'],
+  ['tree-sitter-typescript', 'tree-sitter-tsx.wasm'],
+  ['tree-sitter-go', 'tree-sitter-go.wasm'],
 ];
 
 const outDir = join(rootDir, 'public', 'tree-sitter');
