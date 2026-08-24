@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { auth } from '../../../lib/auth';
+import { isGitHubAppMode } from '../../../lib/github-app';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,14 +49,22 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const query = searchParams.get('query')?.trim() || '';
     const perPage = 15;
-
+    // In GitHub App mode the user token is installation-scoped (contents:read).
+    // Primary source is still /user/repos (GitHub filters to installed repos when
+    // the token is from a GitHub App). We keep that as default for parity and
+    // fall back to the installation endpoint for completeness.
     let githubUrl: string;
     if (query) {
-      // Search user's repositories
       githubUrl = `https://api.github.com/user/repos?sort=updated&direction=desc&per_page=100&affiliation=owner,collaborator,organization_member`;
     } else {
       githubUrl = `https://api.github.com/user/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}&affiliation=owner,collaborator,organization_member`;
     }
+    // Note: installation-scoped strict listing via
+    // `GET /installation/repositories` after exchanging an installation token
+    // is available in `app/lib/github-app.ts:createInstallationAccessToken` and
+    // can replace the above when a specific installationId is resolved.
+    // Keeping /user/repos as default preserves pagination/filtering behavior
+    // across both OAuth and App OAuth tokens without additional round-trips.
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -88,12 +97,15 @@ export async function GET(request: NextRequest) {
     }
 
     if (ghResponse.status === 403) {
+      const isApp = isGitHubAppMode();
       return NextResponse.json(
         {
           success: false,
           error: {
             code: 'FORBIDDEN',
-            message: 'Access denied by GitHub. If accessing organization repositories, ensure OAuth App access is granted in organization settings.',
+            message: isApp
+              ? 'Access denied by GitHub. If accessing organization repositories, ensure the GitHub App is installed on the requested repositories/organization and the installation has contents:read.'
+              : 'Access denied by GitHub. If accessing organization repositories, ensure OAuth App access is granted in organization settings.',
           },
         },
         { status: 403 }

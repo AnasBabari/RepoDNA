@@ -117,15 +117,15 @@ export function PrivateRepoPicker({
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
             <span>
-              🔒 <strong>Scope Transparency:</strong> GitHub OAuth requires the <code>repo</code> scope for private repositories.
+              🔒 <strong>Scope Transparency:</strong> Private access uses GitHub App <code>contents:read</code> + <code>metadata:read</code> (per-repository install, least-privilege). Legacy OAuth App <code>repo</code> scope is fallback only when the App is not configured.
               RepoDNA performs read-only GET requests, parses ASTs transiently in memory, and never modifies or stores code.{' '}
               <a
-                href="https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps"
+                href="https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps"
                 target="_blank"
                 rel="noreferrer"
                 style={{ color: 'var(--cyan-core)', textDecoration: 'underline' }}
               >
-                Learn about GitHub scopes ↗
+                Learn about GitHub Apps ↗
               </a>
             </span>
             <button
