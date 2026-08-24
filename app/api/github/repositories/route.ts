@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getToken } from 'next-auth/jwt';
 import { auth } from '../../../lib/auth';
 import { isGitHubAppMode } from '../../../lib/github-app';
+import { getGitHubAccessToken } from '../../../lib/github-session';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,15 +24,7 @@ export async function GET(request: NextRequest) {
 
   try {
     session = await auth();
-    const token = await getToken({
-      req: request,
-      secret: process.env.AUTH_SECRET,
-      // Auth.js prefixes the production HTTPS cookie with `__Secure-`.
-      // Without this, getToken() looks for the development cookie name and
-      // returns null even though auth() has a valid signed-in session.
-      secureCookie: process.env.NODE_ENV === 'production',
-    });
-    accessToken = (token?.accessToken as string) || (session as unknown as { accessToken?: string })?.accessToken;
+    accessToken = await getGitHubAccessToken(request);
   } catch {}
 
   if (!session?.user || !accessToken) {

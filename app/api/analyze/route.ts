@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getToken } from 'next-auth/jwt';
 import crypto from 'crypto';
 import { analyzeGitHubUrl } from '../../lib/analyzer';
 import { IngestionError } from '../../lib/analyzer/types';
@@ -7,6 +6,7 @@ import { auth } from '../../lib/auth';
 import { checkAnalysisRateLimit } from '../../lib/ratelimit';
 import { createApiErrorResponse } from '../../lib/api-error';
 import { validateRepoDNAProject } from '../../lib/schema/validator';
+import { getGitHubAccessToken } from '../../lib/github-session';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,13 +76,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
   let accessToken: string | undefined;
   try {
     session = await auth();
-    const token = await getToken({
-      req: request,
-      secret: process.env.AUTH_SECRET,
-    });
-    if (token?.accessToken) {
-      accessToken = token.accessToken as string;
-    }
+    accessToken = await getGitHubAccessToken(request);
   } catch {
     // Graceful unauthenticated fallback
   }
