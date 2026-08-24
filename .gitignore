@@ -64,3 +64,4 @@ launch_*.md
 # Tooling, scripts & IDE clutter
 .vscode/
 scripts/
+tsconfig.tsbuildinfo
