@@ -52,6 +52,7 @@ public/cache.json
 .repodna/
 repodna.json
 repodna-*.json
+!schema/repodna-*.json
 *.local.json
 /scratch/
 /benchmark_results/

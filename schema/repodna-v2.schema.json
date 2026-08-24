@@ -1,0 +1,444 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RepoDNAProjectV2",
+  "description": "Canonical graph contract v2 for RepoDNA deterministic code-intelligence. Preserves v1.1 compatibility via artifact-loader.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "repository",
+    "inventory",
+    "coverage",
+    "nodes",
+    "edges",
+    "architecture",
+    "flows",
+    "communities",
+    "dependencyCycles",
+    "centrality",
+    "unresolved",
+    "diagnostics",
+    "timings",
+    "parsers",
+    "security",
+    "completeness"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "2.0.0" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "repository": {
+      "type": "object",
+      "required": ["name", "source", "commitSha", "analyzedRef"],
+      "properties": {
+        "name": { "type": "string" },
+        "source": { "type": "string" },
+        "commitSha": { "type": ["string", "null"], "description": "Resolved commit SHA or null when local/zip" },
+        "analyzedRef": { "type": ["string", "null"], "description": "Ref used for archive (HEAD, branch)" },
+        "languages": { "type": "object", "additionalProperties": { "type": "number" } },
+        "fingerprint": {
+          "type": "object",
+          "required": ["languages", "frameworks", "infrastructure", "databases", "externalSystems", "testing", "buildTools"],
+          "properties": {
+            "languages": { "type": "array", "items": { "type": "string" } },
+            "frameworks": { "type": "array", "items": { "type": "string" } },
+            "infrastructure": { "type": "array", "items": { "type": "string" } },
+            "databases": { "type": "array", "items": { "type": "string" } },
+            "externalSystems": { "type": "array", "items": { "type": "string" } },
+            "testing": { "type": "array", "items": { "type": "string" } },
+            "buildTools": { "type": "array", "items": { "type": "string" } },
+            "tooling": { "type": "array", "items": { "type": "string" } },
+            "languageFileCounts": { "type": "object", "additionalProperties": { "type": "integer" } }
+          }
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "required": [
+        "totalFileCount",
+        "totalBytes",
+        "firstPartySourceFileCount",
+        "firstPartyLoc",
+        "candidateFileCount",
+        "parsedFileCount",
+        "partiallyParsedFileCount",
+        "failedFileCount",
+        "unsupportedSourceFileCount",
+        "ignoredFileCount",
+        "generatedFileCount",
+        "packageCount",
+        "declaredDependencyCount",
+        "skippedByReason",
+        "languageCoverage"
+      ],
+      "properties": {
+        "totalFileCount": { "type": "integer", "minimum": 0, "description": "Every archive entry before filtering" },
+        "totalBytes": { "type": "integer", "minimum": 0 },
+        "firstPartySourceFileCount": { "type": "integer", "minimum": 0 },
+        "firstPartyLoc": { "type": "integer", "minimum": 0 },
+        "candidateFileCount": { "type": "integer", "minimum": 0 },
+        "parsedFileCount": { "type": "integer", "minimum": 0 },
+        "partiallyParsedFileCount": { "type": "integer", "minimum": 0 },
+        "failedFileCount": { "type": "integer", "minimum": 0 },
+        "unsupportedSourceFileCount": { "type": "integer", "minimum": 0 },
+        "ignoredFileCount": { "type": "integer", "minimum": 0 },
+        "generatedFileCount": { "type": "integer", "minimum": 0 },
+        "packageCount": { "type": "integer", "minimum": 0 },
+        "declaredDependencyCount": { "type": "integer", "minimum": 0 },
+        "skippedByReason": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "languageCoverage": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "truncation": {
+          "type": "object",
+          "properties": {
+            "hitLimits": { "type": "array", "items": { "type": "string" } },
+            "maxFilesReached": { "type": "boolean" },
+            "maxBytesReached": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["percentage", "parsed", "partial", "unsupported", "ignored", "skipped", "truncationReasons"],
+      "properties": {
+        "percentage": { "type": "number", "minimum": 0, "maximum": 100 },
+        "parsed": { "type": "integer", "minimum": 0 },
+        "partial": { "type": "integer", "minimum": 0 },
+        "unsupported": { "type": "integer", "minimum": 0 },
+        "ignored": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "truncationReasons": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "name", "path", "language", "qualifiedName", "range"],
+        "properties": {
+          "id": { "type": "string", "description": "Stable ID: hash(repo+commit+path+kind+qname+range)" },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "repository",
+              "workspace",
+              "package",
+              "directory",
+              "module",
+              "file",
+              "class",
+              "interface",
+              "function",
+              "method",
+              "attribute",
+              "variable",
+              "route",
+              "controller",
+              "service",
+              "repository_layer",
+              "component",
+              "data_model",
+              "table",
+              "dependency",
+              "configuration",
+              "external_system"
+            ]
+          },
+          "name": { "type": "string" },
+          "qualifiedName": { "type": "string" },
+          "path": { "type": "string" },
+          "language": { "type": "string" },
+          "range": {
+            "type": "object",
+            "required": ["startLine", "startCol", "endLine", "endCol"],
+            "properties": {
+              "startLine": { "type": "integer", "minimum": 1 },
+              "startCol": { "type": "integer", "minimum": 0 },
+              "endLine": { "type": "integer", "minimum": 1 },
+              "endCol": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "metadata": { "type": "object" }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source", "target", "type", "status", "confidence", "evidence", "explanation", "resolver"],
+        "properties": {
+          "id": { "type": "string", "description": "Stable edge ID from source+target+type+range" },
+          "source": { "type": "string" },
+          "target": { "type": ["string", "null"], "description": "null when unresolved/ambiguous" },
+          "type": {
+            "type": "string",
+            "enum": [
+              "CONTAINS",
+              "DEFINES",
+              "IMPORTS",
+              "CALLS",
+              "INHERITS",
+              "IMPLEMENTS",
+              "READS",
+              "WRITES",
+              "EXPOSES_ROUTE",
+              "HANDLES",
+              "INVOKES",
+              "DEPENDS_ON",
+              "CONFIGURES"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["extracted", "resolved", "inferred", "ambiguous", "unresolved"]
+          },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "evidence": {
+            "type": "object",
+            "required": ["file", "range"],
+            "properties": {
+              "file": { "type": "string" },
+              "range": {
+                "type": "object",
+                "required": ["startLine", "startCol", "endLine", "endCol"],
+                "properties": {
+                  "startLine": { "type": "integer", "minimum": 1 },
+                  "startCol": { "type": "integer", "minimum": 0 },
+                  "endLine": { "type": "integer", "minimum": 1 },
+                  "endCol": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
+          },
+          "explanation": { "type": "string", "description": "Deterministic human-readable resolver explanation" },
+          "resolver": {
+            "type": "object",
+            "required": ["name", "version"],
+            "properties": {
+              "name": { "type": "string" },
+              "version": { "type": "string" }
+            }
+          },
+          "alternativeCandidates": { "type": "array", "items": { "type": "string" } },
+          "unresolvedExpression": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "required": ["components", "connections"],
+      "properties": {
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "type", "files", "confidence", "evidence"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "files": { "type": "array", "items": { "type": "string" } },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "evidence": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "source", "target", "type", "weight"],
+            "properties": {
+              "id": { "type": "string" },
+              "source": { "type": "string" },
+              "target": { "type": "string" },
+              "type": { "type": "string" },
+              "weight": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      },
+      "description": "Derived projection of the canonical graph, not independent source of truth"
+    },
+    "flows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "confidence", "nodes", "edges"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "type", "label", "file", "line"],
+              "properties": {
+                "id": { "type": "string" },
+                "type": { "type": "string" },
+                "label": { "type": "string" },
+                "file": { "type": "string" },
+                "line": { "type": "integer" }
+              }
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["source", "target", "type"],
+              "properties": {
+                "source": { "type": "string" },
+                "target": { "type": "string" },
+                "type": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "communities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "members", "label", "cohesion"],
+        "properties": {
+          "id": { "type": "string" },
+          "members": { "type": "array", "items": { "type": "string" } },
+          "label": { "type": "string" },
+          "cohesion": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "dependencyCycles": {
+      "type": "array",
+      "items": { "type": "array", "items": { "type": "string" } }
+    },
+    "centrality": {
+      "type": "object",
+      "required": ["mostConnected", "highCoupling", "godNodes"],
+      "properties": {
+        "mostConnected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["nodeId", "inDegree", "outDegree", "score"],
+            "properties": {
+              "nodeId": { "type": "string" },
+              "inDegree": { "type": "integer" },
+              "outDegree": { "type": "integer" },
+              "score": { "type": "number" }
+            }
+          }
+        },
+        "highCoupling": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["nodeId", "connections"],
+            "properties": {
+              "nodeId": { "type": "string" },
+              "connections": { "type": "integer" }
+            }
+          }
+        },
+        "godNodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["nodeId", "reason"],
+            "properties": {
+              "nodeId": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edgeId", "reason", "candidates"],
+        "properties": {
+          "edgeId": { "type": "string" },
+          "reason": { "type": "string" },
+          "candidates": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["info", "warning", "error"] },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "file": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "timings": {
+      "type": "object",
+      "required": ["stages"],
+      "properties": {
+        "stages": {
+          "type": "object",
+          "additionalProperties": { "type": "number" },
+          "description": "stage -> durationMs"
+        },
+        "totalMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "parsers": {
+      "type": "object",
+      "required": ["versions", "mode"],
+      "properties": {
+        "versions": { "type": "object", "additionalProperties": { "type": "string" } },
+        "mode": { "type": "string", "enum": ["tree-sitter", "legacy", "mixed"] }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": ["limits", "truncated"],
+      "properties": {
+        "limits": {
+          "type": "object",
+          "properties": {
+            "maxArchiveEntries": { "type": "integer" },
+            "maxFiles": { "type": "integer" },
+            "maxFileBytes": { "type": "integer" },
+            "maxArchiveBytes": { "type": "integer" },
+            "maxTotalExtractedBytes": { "type": "integer" },
+            "maxAstNodes": { "type": "integer" },
+            "maxAstDepth": { "type": "integer" }
+          }
+        },
+        "truncated": { "type": "array", "items": { "type": "string" } },
+        "executedRepositoryCode": { "type": "boolean", "const": false }
+      }
+    },
+    "completeness": {
+      "type": "object",
+      "required": ["status", "reasons"],
+      "properties": {
+        "status": { "type": "string", "enum": ["FULLY_MAPPED", "MOSTLY_MAPPED", "PARTIAL", "COVERAGE_LIMITED"] },
+        "reasons": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "analyzerVersion": { "type": "string" },
+        "analysisMode": { "type": "string" },
+        "cache": { "type": "object" }
+      }
+    }
+  }
+}
