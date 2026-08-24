@@ -392,21 +392,24 @@ export async function extractFromZip(
             return;
           }
 
-          // 6. Declared compression ratio heuristic guard (ratio > 200 on entries > 256 KB)
-          if (typeof file.size === 'number' && file.size > 0 && entryBytes > 256 * 1024) {
-            const ratio = entryBytes / file.size;
-            if (ratio > 200) {
-              abortArchive(
-                'SUSPICIOUS_COMPRESSION_RATIO',
-                `Archive rejected due to suspicious compression ratio (${ratio.toFixed(0)}:1 on ${normalizedPath})`,
-                413
-              );
-              return;
-            }
-          }
+          // 6. Quarantine a suspicious high-ratio entry without discarding every
+          // safe file in the repository. Absolute entry and cumulative byte caps
+          // still bound all emitted data, including quarantined entries.
+          const suspiciousCompressionRatio =
+            typeof file.size === 'number' &&
+            file.size > 0 &&
+            entryBytes > 256 * 1024 &&
+            entryBytes / file.size > 200;
 
+          if (suspiciousCompressionRatio) {
+            if (!entrySkippedReason) {
+              entrySkippedReason = 'suspicious_compression_ratio';
+              skipped.push({ path: normalizedPath, reason: entrySkippedReason });
+            }
+            chunks.length = 0;
+            try { file.terminate?.(); } catch {}
           // 7. Individual file limit check
-          if (entryBytes > limits.maxFileBytes) {
+          } else if (entryBytes > limits.maxFileBytes) {
             if (!entrySkippedReason) {
               entrySkippedReason = 'exceeds_file_size_limit';
               skipped.push({ path: normalizedPath, reason: 'exceeds_file_size_limit' });

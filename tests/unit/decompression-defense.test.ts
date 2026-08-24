@@ -51,11 +51,12 @@ describe('True Bounded Decompression Defense & Adversarial ZIP Protection', () =
     );
   });
 
-  it('aborts entire archive on suspicious compression ratio (>200:1 past 256 KB floor)', async () => {
+  it('quarantines a suspicious high-ratio entry while preserving safe archive files', async () => {
     // 8 MB of zeroes compressed to ~8 KB (ratio ~1000:1)
     const eightMbZeroes = new Uint8Array(8 * 1024 * 1024);
     const buffer = fflate.zipSync({
       'repo-main/ratio-bomb.py': eightMbZeroes,
+      'repo-main/valid.py': fflate.strToU8('print("valid code")'),
     });
 
     const customLimits = {
@@ -67,9 +68,12 @@ describe('True Bounded Decompression Defense & Adversarial ZIP Protection', () =
       fetchTimeoutMs: 20_000,
     };
 
-    await expect(extractFromZip(buffer, 'ratio-bomb-repo', customLimits)).rejects.toMatchObject({
-      code: 'SUSPICIOUS_COMPRESSION_RATIO',
-      status: 413,
+    const result = await extractFromZip(buffer, 'ratio-bomb-repo', customLimits);
+
+    expect(result.files.map((file) => file.path)).toEqual(['valid.py']);
+    expect(result.skipped).toContainEqual({
+      path: 'ratio-bomb.py',
+      reason: 'suspicious_compression_ratio',
     });
   });
 
