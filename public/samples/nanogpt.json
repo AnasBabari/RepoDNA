@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "generatedAt": "2026-08-24T15:58:47.767Z",
+  "generatedAt": "2026-08-25T14:57:53.289Z",
   "repository": {
     "name": "nanoGPT",
     "source": "https://github.com/karpathy/nanoGPT",
@@ -998,10 +998,6 @@
       {
         "file": "train.py",
         "connections": 1
-      },
-      {
-        "file": "requirements.txt",
-        "connections": 0
       }
     ],
     "highCouplingFiles": [],

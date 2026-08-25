@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "generatedAt": "2026-08-24T15:58:47.777Z",
+  "generatedAt": "2026-08-25T14:57:53.299Z",
   "repository": {
     "name": "full-stack-fastapi-template",
     "source": "https://github.com/tiangolo/full-stack-fastapi-template",
@@ -1270,48 +1270,7 @@
     "localDependencies": 0,
     "externalDependencies": 18,
     "dependencyCycles": [],
-    "mostConnectedFiles": [
-      {
-        "file": "backend/app/api/main.py",
-        "connections": 0
-      },
-      {
-        "file": "backend/app/api/routes/items.py",
-        "connections": 0
-      },
-      {
-        "file": "backend/app/api/routes/users.py",
-        "connections": 0
-      },
-      {
-        "file": "backend/app/crud/crud_item.py",
-        "connections": 0
-      },
-      {
-        "file": "backend/app/crud/crud_user.py",
-        "connections": 0
-      },
-      {
-        "file": "backend/app/main.py",
-        "connections": 0
-      },
-      {
-        "file": "backend/app/models/item.py",
-        "connections": 0
-      },
-      {
-        "file": "backend/app/models/user.py",
-        "connections": 0
-      },
-      {
-        "file": "frontend/package.json",
-        "connections": 0
-      },
-      {
-        "file": "frontend/src/App.tsx",
-        "connections": 0
-      }
-    ],
+    "mostConnectedFiles": [],
     "highCouplingFiles": [],
     "symbols": 26,
     "routes": 4,

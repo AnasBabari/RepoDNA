@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1.0",
-  "generatedAt": "2026-08-24T15:58:47.748Z",
+  "generatedAt": "2026-08-25T14:57:53.230Z",
   "repository": {
     "name": "strix",
     "source": "https://github.com/usestrix/strix",
@@ -1383,18 +1383,6 @@
       {
         "file": "strix/tools/crawler.py",
         "connections": 1
-      },
-      {
-        "file": "app/page.tsx",
-        "connections": 0
-      },
-      {
-        "file": "package.json",
-        "connections": 0
-      },
-      {
-        "file": "pyproject.toml",
-        "connections": 0
       }
     ],
     "highCouplingFiles": [],
