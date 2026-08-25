@@ -1,15 +1,6 @@
-import Ajv from 'ajv';
-import addFormats from 'ajv-formats';
-import v1Schema from '../../../schema/repodna.schema.json';
-import v2Schema from '../../../schema/repodna-v2.schema.json';
+import { validateAnyArtifact } from './safe-validator';
 import type { RepoDNAProject } from '../types';
 import type { RepoDNAProjectV2 } from '../analyzer/v2/types';
-
-const ajv = new Ajv({ allErrors: true, strict: false });
-addFormats(ajv);
-
-const validateV1 = ajv.compile(v1Schema as unknown as Record<string, unknown>);
-const validateV2 = ajv.compile(v2Schema as unknown as Record<string, unknown>);
 
 export type AnyRepoDNAArtifact = RepoDNAProject | RepoDNAProjectV2;
 export type ArtifactVersion = '1.1.0' | '2.0.0' | 'unknown';
@@ -19,6 +10,17 @@ export interface LoadedArtifact {
   project: AnyRepoDNAArtifact;
   isV2: boolean;
   isV1: boolean;
+}
+
+/**
+ * Schema validation via the CSP-safe lazy engine: full Ajv where code
+ * generation is permitted, structural enforcement in browsers. Kept for
+ * error-message compatibility with the previous compiled-validator API.
+ */
+function validationErrorText(data: unknown, version: '1.1.0' | '2.0.0', label: string): string | null {
+  const result = validateAnyArtifact(data, version);
+  if (result.valid) return null;
+  return `Invalid RepoDNA ${label} artifact: ${result.errors.slice(0, 5).join('; ')}`;
 }
 
 export function detectArtifactVersion(data: unknown): ArtifactVersion {
@@ -36,12 +38,12 @@ export function detectArtifactVersion(data: unknown): ArtifactVersion {
 export function validateArtifact(data: unknown): { valid: boolean; version: ArtifactVersion; errors: unknown } {
   const version = detectArtifactVersion(data);
   if (version === '2.0.0') {
-    const valid = validateV2(data) as boolean;
-    return { valid, version, errors: validateV2.errors };
+    const err = validationErrorText(data, '2.0.0', 'v2');
+    return { valid: err === null, version, errors: err ? [{ message: err }] : null };
   }
   if (version === '1.1.0') {
-    const valid = validateV1(data) as boolean;
-    return { valid, version, errors: validateV1.errors };
+    const err = validationErrorText(data, '1.1.0', 'v1');
+    return { valid: err === null, version, errors: err ? [{ message: err }] : null };
   }
   return { valid: false, version: 'unknown', errors: [{ message: 'Unknown schemaVersion' }] };
 }
@@ -49,15 +51,13 @@ export function validateArtifact(data: unknown): { valid: boolean; version: Arti
 export function loadRepoDNAArtifact(data: unknown): LoadedArtifact {
   const version = detectArtifactVersion(data);
   if (version === '2.0.0') {
-    if (!validateV2(data)) {
-      throw new Error(`Invalid RepoDNA v2 artifact: ${ajv.errorsText(validateV2.errors)}`);
-    }
+    const err = validationErrorText(data, '2.0.0', 'v2');
+    if (err) throw new Error(err);
     return { version: '2.0.0', project: data as RepoDNAProjectV2, isV2: true, isV1: false };
   }
   if (version === '1.1.0') {
-    if (!validateV1(data)) {
-      throw new Error(`Invalid RepoDNA v1 artifact: ${ajv.errorsText(validateV1.errors)}`);
-    }
+    const err = validationErrorText(data, '1.1.0', 'v1');
+    if (err) throw new Error(err);
     return { version: '1.1.0', project: data as RepoDNAProject, isV2: false, isV1: true };
   }
   throw new Error('Unsupported or missing schemaVersion — expected 1.1.0 or 2.0.0');
