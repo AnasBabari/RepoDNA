@@ -65,3 +65,4 @@ launch_*.md
 .vscode/
 scripts/
 tsconfig.tsbuildinfo
+/.swc

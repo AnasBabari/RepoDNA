@@ -29,6 +29,7 @@
   "dependencies": {
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.2",
+    "@vercel/blob": "^2.8.0",
     "@xyflow/react": "^12.8.4",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
@@ -41,7 +42,8 @@
     "tree-sitter-go": "^0.25.0",
     "tree-sitter-javascript": "^0.25.0",
     "tree-sitter-typescript": "^0.23.2",
-    "web-tree-sitter": "^0.26.12"
+    "web-tree-sitter": "^0.26.12",
+    "workflow": "^4.8.4"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.53.1",
@@ -67,6 +69,14 @@
     "vite": "^8.2.2",
     "vitest": "^4.1.11",
     "wrangler": "^4.125.0"
+  },
+  "overrides": {
+    "@workflow/world-local": {
+      "undici": "7.29.0"
+    },
+    "@workflow/world-vercel": {
+      "undici": "7.29.0"
+    }
   },
   "type": "module"
 }
