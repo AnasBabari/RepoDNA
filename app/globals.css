@@ -2850,6 +2850,9 @@ button.file-row:hover {
 
 @media (max-width: 820px) {
   .app-shell { display: block; }
+  .landing-topbar { padding: 12px 14px; gap: 10px; }
+  .landing-nav-center { display: none; }
+  .landing-auth-right { gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 58vw; }
   .topbar { height: 64px; display: flex; justify-content: space-between; padding: 0 14px; }
   .topbar-actions { gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 62vw; }
   .topbar-actions .chip-button { padding: 6px 8px; font-size: 11px; }
