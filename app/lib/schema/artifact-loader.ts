@@ -161,7 +161,10 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     qualifiedName: name,
     path: '',
     language: 'External',
-    range: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+    // Synthetic dependency nodes have no source location. The v2 contract
+    // still requires source ranges to use 1-based line numbers, so use the
+    // conventional sentinel line without implying a real source location.
+    range: { startLine: 1, startCol: 0, endLine: 1, endCol: 0 },
     confidence: 1,
   }));
 

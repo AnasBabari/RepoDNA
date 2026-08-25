@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { auditArchitectureConsistency } from '../../app/lib/analysis-lifecycle';
-import { adaptV1ToV2Viewer } from '../../app/lib/schema/artifact-loader';
+import { adaptV1ToV2Viewer, validateArtifact } from '../../app/lib/schema/artifact-loader';
 import { projectV2ForWorkspace } from '../../app/lib/schema/v2-viewer-projection';
 import type { RepoDNAProject } from '../../app/lib/types';
 
@@ -42,5 +42,12 @@ describe('v2 semantic graph adapter', () => {
     expect(viewer.routes).toHaveLength(v1.routes.length);
     expect(viewer.calls).toHaveLength(v1.calls.length);
     expect(viewer.imports).toHaveLength(v1.imports.length);
+  });
+
+  it('keeps synthetic dependency nodes valid under the v2 schema', () => {
+    const v2 = adaptV1ToV2Viewer(loadStrixFixture());
+
+    expect(validateArtifact(v2)).toMatchObject({ valid: true, version: '2.0.0' });
+    expect(v2.nodes.filter((node) => node.kind === 'dependency').every((node) => node.range.startLine >= 1 && node.range.endLine >= 1)).toBe(true);
   });
 });
