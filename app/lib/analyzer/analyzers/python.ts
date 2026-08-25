@@ -1,4 +1,5 @@
 import type { DiscoveredFile, PartialAnalysis } from '../types';
+import { isTestFile } from '../detection';
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'websocket']);
 const EXTERNALS: Record<string, string> = {
@@ -212,8 +213,9 @@ export function analyzePython(file: DiscoveredFile): PartialAnalysis {
         evidence: [],
       });
 
-      // Check pending decorators for routes
-      for (const dec of pendingDecorators) {
+      // Check pending decorators for routes (skip test fixtures — their mock
+      // routes are not the repository's real HTTP surface)
+      for (const dec of isTestFile(file.path) ? [] : pendingDecorators) {
         const decParts = dec.name.split('.');
         const methodCandidate = decParts.pop()?.toLowerCase() ?? '';
         const routerVar = decParts[0] ?? '';

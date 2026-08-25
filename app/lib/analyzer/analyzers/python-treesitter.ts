@@ -1,6 +1,7 @@
 import type { SyntaxDecorator, SyntaxSymbol } from '../parser/types';
 import { ParserError } from '../parser/types';
 import { getSyntaxParser, languageForPath } from '../parser/registry';
+import { isTestFile } from '../detection';
 import { analyzePython } from './python';
 import type { DiscoveredFile, PartialAnalysis } from '../types';
 
@@ -77,7 +78,10 @@ function buildPartialAnalysis(file: DiscoveredFile, facts: import('../parser/typ
   };
 
   extractSymbols(file, facts, result);
-  extractRoutes(facts, result);
+  if (!isTestFile(file.path)) {
+    // Test fixtures register throwaway mock routes; skip them.
+    extractRoutes(facts, result);
+  }
   extractImports(file, facts, result);
   extractCalls(file, facts, result);
 

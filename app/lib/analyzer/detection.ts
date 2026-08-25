@@ -94,6 +94,17 @@ export function languageFor(path: string): string {
   return LANGUAGES[suffix] ?? 'Configuration';
 }
 
+const TEST_FILE_RE = /(?:^|\/)(?:__tests__)(?:\/|$)|[._-]test\.[cm]?[jt]sx?$|[._-]spec\.[cm]?[jt]sx?$|_test\.go$|(?:^|\/)test_[^/]*\.py$|(?:^|\/)[^/]*_test\.py$|(?:^|\/)conftest\.py$/i;
+
+/**
+ * True for test fixtures (unit/e2e test sources). Test files frequently spin up
+ * mock servers and register throwaway routes; those are fixtures, not the
+ * repository's real HTTP surface, so route extraction skips them.
+ */
+export function isTestFile(path: string): boolean {
+  return TEST_FILE_RE.test(path);
+}
+
 export function parseTsconfigPaths(files: DiscoveredFile[]): Record<string, string> {
   const configFile = files.find((f) => f.path === 'tsconfig.json' || f.path === 'jsconfig.json');
   if (!configFile) return {};

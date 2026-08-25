@@ -1,4 +1,5 @@
 import type { DiscoveredFile, ExpressMountRecord, PartialAnalysis, SymbolRecord } from '../types';
+import { isTestFile } from '../detection';
 
 const IMPORT_RE = /(?:import\s+([\s\S]*?)\s+from\s+|import\s*\(|require\s*\()["']([^"']+)["']/g;
 const EXPORT_RE = /^\s*export\s+(?:default\s+)?/;
@@ -204,6 +205,7 @@ export function analyzeJavaScript(file: DiscoveredFile): PartialAnalysis {
   const source = file.content;
   const lines = source.split(/\r?\n/);
   const lineCount = lines.length;
+  const skipRoutes = isTestFile(file.path);
 
   const result: PartialAnalysis = {
     file: {
@@ -332,7 +334,7 @@ export function analyzeJavaScript(file: DiscoveredFile): PartialAnalysis {
   const expressReceivers = collectExpressReceivers(source);
   EXPRESS_ROUTE_RE.lastIndex = 0;
   let expMatch: RegExpExecArray | null;
-  while ((expMatch = EXPRESS_ROUTE_RE.exec(source)) !== null) {
+  while (!skipRoutes && (expMatch = EXPRESS_ROUTE_RE.exec(source)) !== null) {
     if (!expressReceivers.has(expMatch[1])) continue;
     const line = getLineNumber(source, expMatch.index);
     const method = expMatch[2].toUpperCase();
@@ -356,7 +358,7 @@ export function analyzeJavaScript(file: DiscoveredFile): PartialAnalysis {
   result.expressMounts = extractExpressMounts(source, file, expressReceivers);
 
   // 5. NestJS Controller Routes
-  const nestController = NEST_CONTROLLER_RE.exec(source);
+  const nestController = skipRoutes ? null : NEST_CONTROLLER_RE.exec(source);
   if (nestController) {
     result.frameworks.add('NestJS');
     let prefix = nestController[1] || '';

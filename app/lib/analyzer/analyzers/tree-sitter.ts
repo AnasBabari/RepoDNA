@@ -1,4 +1,5 @@
 import type { DiscoveredFile, PartialAnalysis } from '../types';
+import { isTestFile } from '../detection';
 import { getSyntaxParser, languageForPath } from '../parser/registry';
 import type { SyntaxCall, SyntaxImport, SyntaxSymbol } from '../parser/types';
 import { ParserError } from '../parser/types';
@@ -212,8 +213,12 @@ function buildPartialAnalysis(
     if (call.callee === 'express' || call.callee.includes('Router')) result.frameworks.add('Express');
   }
 
-  // Routes — language specific
-  if (['javascript', 'typescript', 'tsx'].includes(language)) {
+  // Routes — language specific. Test files register throwaway mock routes;
+  // those are fixtures, not the repository's HTTP surface, so skip them.
+  if (isTestFile(file.path)) {
+    // still keep express mount evidence for architecture composition
+    result.expressMounts = extractExpressMountsForTreeSitter(file);
+  } else if (['javascript', 'typescript', 'tsx'].includes(language)) {
     extractJsRoutes(file, symbols, result);
     // Express mount extraction for prefix composition (mirrors legacy javascript.ts)
     result.expressMounts = extractExpressMountsForTreeSitter(file);
