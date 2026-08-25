@@ -96,3 +96,59 @@ describe('CSP-safe schema fallback', () => {
     expect(empty.valid).toBe(false);
   });
 });
+
+describe('v1→v2 adapter edge integrity', () => {
+  it('normalizes import source/target to file: node IDs so edges resolve', async () => {
+    const { adaptV1ToV2Viewer } = await import('../../app/lib/schema/artifact-loader');
+    const { resolveImports } = await import('../../app/lib/analyzer/graph');
+
+    const project = {
+      schemaVersion: '1.1.0',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      repository: {
+        name: 'x', source: 'https://github.com/x/x',
+        languages: { Go: 100 }, fileCount: 2, sourceFileCount: 2, parsedFileCount: 2, lines: 20,
+        fingerprint: {
+          languages: [], frameworks: [], infrastructure: [], databases: [],
+          externalSystems: [], testing: [], buildTools: [],
+        },
+      },
+      technologies: [],
+      files: [
+        { id: 'file:main.go', path: 'main.go', language: 'Go', lines: 10, bytes: 100, hash: 'h1', role: 'source', parsed: true, error: null },
+        { id: 'file:render/json.go', path: 'render/json.go', language: 'Go', lines: 10, bytes: 100, hash: 'h2', role: 'source', parsed: true, error: null },
+      ],
+      symbols: [], imports: [
+        { id: 'i1', source: 'main.go', module: 'example.com/x/render', names: [], line: 3, target: null, external: false },
+      ], calls: [], routes: [],
+      databases: [], external_systems: [],
+      entrypoints: [], flows: [],
+      architecture: { components: [], connections: [] },
+      important_files: [], onboarding: [],
+      metrics: {
+        complexityScore: 1, localDependencies: 0, externalDependencies: 0,
+        dependencyCycles: [], mostConnectedFiles: [], highCouplingFiles: [],
+        symbols: 0, routes: 0, components: 0, parseSuccessRate: 100,
+      },
+      diagnostics: [],
+      metadata: {
+        analysisMode: 'test', executedRepositoryCode: false,
+        limits: { maxFiles: 10, maxFileBytes: 100 },
+        fileComponents: {}, cache: { hits: 0, misses: 0 },
+      },
+    };
+
+    resolveImports(project.imports as never, project.files as never);
+    const v2 = adaptV1ToV2Viewer(project as never);
+
+    expect(v2.edges).toHaveLength(1);
+    const edge = v2.edges[0];
+    expect(edge.source).toBe('file:main.go');
+    expect(edge.target).toBe('file:render/json.go');
+    expect(edge.status).toBe('resolved');
+    // Every edge endpoint must reference an existing node ID.
+    const nodeIds = new Set(v2.nodes.map((n) => n.id));
+    expect(nodeIds.has(edge.source)).toBe(true);
+    expect(nodeIds.has(edge.target ?? '')).toBe(true);
+  });
+});

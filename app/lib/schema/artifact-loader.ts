@@ -146,8 +146,13 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     })),
     edges: project.imports.map((imp) => ({
       id: imp.id,
-      source: imp.source,
-      target: imp.target,
+      // Adapter nodes use `file:<path>` IDs; imports carry raw paths.
+      source: imp.source.startsWith('file:') ? imp.source : `file:${imp.source}`,
+      target: imp.target
+        ? imp.target.startsWith('file:')
+          ? imp.target
+          : `file:${imp.target}`
+        : null,
       type: 'IMPORTS' as const,
       status: imp.target ? ('resolved' as const) : ('unresolved' as const),
       confidence: imp.target ? 0.9 : 0.4,
