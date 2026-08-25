@@ -1,5 +1,6 @@
 import { analyzeRepositoryFiles, type AnalyzeOptions } from '../index';
 import type { DiscoveredFile } from '../types';
+import type { IngestionInventory } from '../types';
 import { adaptV1ToV2Viewer } from '../../schema/artifact-loader';
 import type { RepoDNAProjectV2 } from './types';
 import { detectCentrality, detectCommunities, detectDependencyCycles } from './analytics';
@@ -16,7 +17,7 @@ export interface V2AnalyzeOptions extends AnalyzeOptions {
 }
 
 export async function analyzeRepositoryV2(
-  discovery: { files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory?: Record<string, unknown> },
+  discovery: { files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory?: IngestionInventory },
   options?: V2AnalyzeOptions
 ): Promise<RepoDNAProjectV2> {
   const start = Date.now();

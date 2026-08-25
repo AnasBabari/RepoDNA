@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
     });
 
     const project = await analyzeRepositoryV2(
-      { ...discovery, inventory: inventory as unknown as Record<string, unknown> },
+      { ...discovery, inventory },
       { commitSha }
     );
 

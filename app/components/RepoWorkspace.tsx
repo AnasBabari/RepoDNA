@@ -11,6 +11,7 @@ import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
 import { analyzeGitHubUrl, analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import { generateTextReport as generateTextReportImpl } from '../lib/export/text-report';
+import { analyzePrivateRepositoryInBrowser, isDeepScanFailure } from '../lib/deep-scan-client';
 import {
   ANALYSIS_COMPLETE_STEP,
   ANALYSIS_PROGRESS_STEPS,
@@ -1585,6 +1586,27 @@ function WorkspaceContent() {
           errObj.fallbackAvailable;
 
         if (!shouldAutoFallback) {
+          // Private-repository rescue: if the server cannot read this repo but
+          // the user is signed in, analyze transiently in this browser.
+          const rescueable = errObj?.code === 'GITHUB_TOKEN_EXPIRED' || errObj?.code === 'GITHUB_FORBIDDEN' || errObj?.code === 'REPO_NOT_FOUND';
+          if (rescueable && !forceClientOnly) {
+            const outcome = await analyzePrivateRepositoryInBrowser({
+              url: targetUrl,
+              signal: controller.signal,
+              onProgress: (p) => {
+                const stepByStage: Record<string, number> = { download: 1, inventory: 2, parse: 3, resolve_relationships: 4, analytics: 5 };
+                const step = stepByStage[p.stage];
+                if (typeof step === 'number' && isActiveAnalysis(controller)) setAnalyzingStep(step);
+              },
+            });
+            if (!isDeepScanFailure(outcome)) return outcome.project as RepoDNAProject;
+            if (outcome.authState !== 'expired') {
+              failureCode = outcome.code;
+              setAnalyzingErrorCode(outcome.code);
+              throw new Error(outcome.message);
+            }
+            // expired → surface structured code so UI offers Reconnect GitHub
+          }
           failureCode = errObj?.code || 'UNKNOWN';
           setAnalyzingErrorCode(errObj?.code ?? null);
           setAnalyzingRetryAfter(errObj?.retryAfter ?? null);
