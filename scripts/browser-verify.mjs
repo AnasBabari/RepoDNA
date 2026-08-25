@@ -91,7 +91,11 @@ async function main() {
         if (leaked.length > 0) {
           report.errors.push(`PRIVACY LEAK in analytics payload: ${leaked.join(', ')}`);
         }
-        req.respond({ status: 200, body: '{}', contentType: 'application/json' }).catch(() => {});
+        req.respond({
+          status: 200,
+          headers: { 'access-control-allow-origin': APP_URL, 'content-type': 'application/json' },
+          body: '{}',
+        }).catch(() => {});
         return;
       }
       void req.continue();
