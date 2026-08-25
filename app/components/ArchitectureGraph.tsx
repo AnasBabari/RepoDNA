@@ -11,6 +11,7 @@ import {
   type Edge,
   type Node,
   type NodeProps,
+  type OnNodeDrag,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useMemo, useState } from 'react';
@@ -318,7 +319,7 @@ export function ArchitectureGraph({
     }
   };
 
-  const handleNodeDragStop = (_: React.MouseEvent, node: Node) => {
+  const handleNodeDragStop: OnNodeDrag<ArchitectureNode> = (_, node) => {
     setCustomPositions((prev) => {
       const next = {
         ...prev,
