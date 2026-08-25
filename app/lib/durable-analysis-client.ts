@@ -129,6 +129,10 @@ async function consumeProgress(
   if (!response.ok || !response.body) return;
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  const cancelReader = () => {
+    void reader.cancel('progress stream no longer needed').catch(() => undefined);
+  };
+  signal.addEventListener('abort', cancelReader, { once: true });
   let buffer = '';
   try {
     while (true) {
@@ -150,6 +154,7 @@ async function consumeProgress(
       }
     }
   } finally {
+    signal.removeEventListener('abort', cancelReader);
     reader.releaseLock();
   }
 }
@@ -232,17 +237,21 @@ export async function analyzePublicRepositoryDurably(options: {
   saveRun(run);
   options.onRun?.(run);
 
-  const progress = consumeProgress(run, options.signal, options.onProgress).catch((error: unknown) => {
+  const progressController = new AbortController();
+  const progressSignal = AbortSignal.any([options.signal, progressController.signal]);
+  const progress = consumeProgress(run, progressSignal, options.onProgress).catch((error: unknown) => {
     if (options.signal.aborted) throw error;
     // Status polling remains authoritative if the optional live stream drops.
   });
 
   try {
     const artifact = await awaitArtifact(run, options.signal);
-    await progress;
+    progressController.abort();
+    await progress.catch(() => undefined);
     clearPendingDurableRun();
     return artifact;
   } catch (error) {
+    progressController.abort();
     await progress.catch(() => undefined);
     if (!options.signal.aborted) clearPendingDurableRun();
     throw error;
