@@ -188,14 +188,18 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
   const rfNodes: Node<CodeGraphNodeData>[] = useMemo(() => {
     const byKind = new Map<string, number>();
     tierOrder.forEach((k, i) => byKind.set(k, i));
-    const columns = new Map<number, number>();
+    // Grid within each kind-tier so single-kind subgraphs stay readable.
+    const COLS_PER_TIER = 10;
+    const counters = new Map<number, number>();
     return visibleNodes.map((n) => {
       const tier = byKind.get(n.kind) ?? 99;
-      const col = (columns.get(tier) ?? 0) + 1;
-      columns.set(tier, col);
+      const idx = counters.get(tier) ?? 0;
+      counters.set(tier, idx + 1);
+      const gx = idx % COLS_PER_TIER;
+      const gy = Math.floor(idx / COLS_PER_TIER);
       return {
         id: n.id,
-        position: { x: tier * 260, y: col * 90 },
+        position: { x: tier * 320 + gx * 210, y: gy * 110 },
         data: {
           label: shortLabel(n),
           kind: n.kind,
