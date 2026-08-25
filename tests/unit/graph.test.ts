@@ -102,3 +102,30 @@ describe('Graph Resolution & Architecture Engine', () => {
     expect(metrics.localDependencies).toBe(2);
   });
 });
+
+describe('graphMetrics ranking', () => {
+  it('excludes files with zero connections and resolves Go package imports', () => {
+    const files: FileRecord[] = [
+      { id: 'f0', path: 'main.go', language: 'Go', lines: 50, bytes: 500, hash: 'h0', role: 'source', parsed: true, error: null },
+      { id: 'f1', path: 'render/json.go', language: 'Go', lines: 100, bytes: 1000, hash: 'h1', role: 'source', parsed: true, error: null },
+      { id: 'f2', path: 'render/yaml.go', language: 'Go', lines: 80, bytes: 800, hash: 'h2', role: 'source', parsed: true, error: null },
+      { id: 'f3', path: '.github/dependabot.yml', language: 'YAML', lines: 10, bytes: 100, hash: 'h3', role: 'config', parsed: true, error: null },
+    ];
+
+    const imports: ImportRecord[] = [
+      { id: 'i1', source: 'main.go', module: 'github.com/example/project/render', names: ['render'], line: 3, target: null, external: false },
+      { id: 'i2', source: 'render/json.go', module: 'github.com/example/project', names: ['project'], line: 5, target: null, external: false },
+    ];
+    resolveImports(imports, files);
+
+    // Longest-suffix match targets the render package deterministically.
+    expect(imports[0].target).toBe('render/json.go');
+
+    const metrics = graphMetrics(files, imports, []);
+    expect(metrics.mostConnectedFiles.length).toBeGreaterThan(0);
+    for (const entry of metrics.mostConnectedFiles) {
+      expect(entry.connections).toBeGreaterThan(0);
+      expect(entry.file).not.toMatch(/^\.github\//);
+    }
+  });
+});

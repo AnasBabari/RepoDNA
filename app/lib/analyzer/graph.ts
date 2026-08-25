@@ -143,6 +143,28 @@ function resolveJavaScriptImport(edge: ImportRecord, available: Set<string>, pat
   return null;
 }
 
+/**
+ * Resolve Go-style package imports. Go imports reference package directories
+ * (often fully qualified, e.g. github.com/owner/repo/render); we match the
+ * longest suffix of the module path against directories containing non-test
+ * Go files and target the lexicographically first file deterministically.
+ */
+function resolveGoImport(edge: ImportRecord, available: Set<string>): string | null {
+  const segments = edge.module.split('/').filter(Boolean);
+  const maxTake = Math.min(segments.length, 4);
+  for (let take = maxTake; take >= 1; take--) {
+    const suffix = segments.slice(-take).join('/');
+    const matches: string[] = [];
+    for (const path of available) {
+      if (!path.endsWith('.go') || path.endsWith('_test.go')) continue;
+      const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      if (dir === suffix || dir.endsWith(`/${suffix}`)) matches.push(path);
+    }
+    if (matches.length > 0) return matches.sort()[0];
+  }
+  return null;
+}
+
 export function resolveImports(imports: ImportRecord[], files: FileRecord[], pathAliases: Record<string, string> = {}): void {
   const available = new Set(files.map((f) => f.path));
   const packageRoots = detectPackageRoots(available);
@@ -150,6 +172,9 @@ export function resolveImports(imports: ImportRecord[], files: FileRecord[], pat
   for (const edge of imports) {
     if (edge.source.endsWith('.py') || edge.source.endsWith('.pyi')) {
       edge.target = resolvePythonImport(edge, available, packageRoots);
+      edge.external = edge.target === null && !edge.module.startsWith('.');
+    } else if (edge.source.endsWith('.go')) {
+      edge.target = resolveGoImport(edge, available);
       edge.external = edge.target === null && !edge.module.startsWith('.');
     } else {
       edge.target = resolveJavaScriptImport(edge, available, pathAliases);
@@ -585,6 +610,7 @@ export function graphMetrics(files: FileRecord[], imports: ImportRecord[], symbo
       file: f.path,
       connections: (inbound.get(f.path) ?? 0) + (outbound.get(f.path) ?? 0),
     }))
+    .filter((item) => item.connections > 0)
     .sort((a, b) => b.connections - a.connections || a.file.localeCompare(b.file));
 
   const complexity = Math.min(
