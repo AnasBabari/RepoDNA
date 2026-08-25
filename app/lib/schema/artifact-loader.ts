@@ -1,6 +1,6 @@
 import { validateAnyArtifact } from './safe-validator';
 import type { RepoDNAProject } from '../types';
-import type { RepoDNAProjectV2 } from '../analyzer/v2/types';
+import type { GraphEdge, GraphNode, GraphNodeKind, RepoDNAProjectV2 } from '../analyzer/v2/types';
 
 export type AnyRepoDNAArtifact = RepoDNAProject | RepoDNAProjectV2;
 export type ArtifactVersion = '1.1.0' | '2.0.0' | 'unknown';
@@ -78,6 +78,200 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
   const parsed = project.files.filter((f) => f.parsed).length;
   const coveragePct = project.metrics.parseSuccessRate ?? (totalFiles ? Math.round((parsed / totalFiles) * 1000) / 10 : 100);
 
+  const fileNodes: GraphNode[] = project.files.map((file) => ({
+    id: file.id,
+    kind: 'file',
+    name: file.path.split('/').pop() || file.path,
+    qualifiedName: file.path,
+    path: file.path,
+    language: file.language,
+    range: { startLine: 1, startCol: 0, endLine: file.lines, endCol: 0 },
+    confidence: file.parsed ? 1 : 0.5,
+    metadata: {
+      bytes: file.bytes,
+      hash: file.hash,
+      role: file.role,
+      parsed: file.parsed,
+      error: file.error,
+    },
+  }));
+  const fileNodeIds = new Set(fileNodes.map((node) => node.id));
+  const fileLanguages = new Map(project.files.map((file) => [file.path, file.language]));
+
+  const symbolKind = (type: string): GraphNodeKind => {
+    if (type === 'class') return 'class';
+    if (type === 'interface') return 'interface';
+    if (type === 'method') return 'method';
+    if (type === 'database_model' || type === 'orm_model') return 'data_model';
+    if (type === 'component') return 'component';
+    if (type === 'variable' || type === 'constant') return 'variable';
+    if (type === 'module') return 'module';
+    return 'function';
+  };
+  const symbolNodes: GraphNode[] = project.symbols.map((symbol) => ({
+    id: symbol.id,
+    kind: symbolKind(symbol.type),
+    name: symbol.name,
+    qualifiedName: symbol.id,
+    path: symbol.file,
+    language: fileLanguages.get(symbol.file) ?? 'Unknown',
+    range: {
+      startLine: symbol.line,
+      startCol: 0,
+      endLine: symbol.endLine ?? symbol.end_line ?? symbol.line,
+      endCol: 0,
+    },
+    evidence: symbol.evidence,
+    confidence: 1,
+    metadata: {
+      originalType: symbol.type,
+      parent: symbol.parent,
+      exported: symbol.exported,
+    },
+  }));
+  const symbolNodeIds = new Set(symbolNodes.map((node) => node.id));
+
+  const routeNodes: GraphNode[] = project.routes.map((route) => ({
+    id: route.id,
+    kind: 'route',
+    name: `${route.method} ${route.path}`,
+    qualifiedName: route.id,
+    path: route.file,
+    language: fileLanguages.get(route.file) ?? 'Unknown',
+    range: { startLine: route.line, startCol: 0, endLine: route.line, endCol: 0 },
+    confidence: route.confidence,
+    metadata: {
+      method: route.method,
+      routePath: route.path,
+      handler: route.handler,
+      framework: route.framework,
+    },
+  }));
+
+  const dependencyNames = [...new Set(
+    project.imports
+      .filter((record) => record.external)
+      .map((record) => record.module.split(/[/.]/)[0])
+      .filter(Boolean)
+  )].sort();
+  const dependencyNodes: GraphNode[] = dependencyNames.map((name) => ({
+    id: `dependency:${name}`,
+    kind: 'dependency',
+    name,
+    qualifiedName: name,
+    path: '',
+    language: 'External',
+    range: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+    confidence: 1,
+  }));
+
+  const defineEdges: GraphEdge[] = project.symbols.map((symbol) => ({
+    id: `defines:${symbol.id}`,
+    source: `file:${symbol.file}`,
+    target: symbol.id,
+    type: 'DEFINES',
+    status: 'extracted',
+    confidence: 1,
+    evidence: {
+      file: symbol.file,
+      range: {
+        startLine: symbol.line,
+        startCol: 0,
+        endLine: symbol.endLine ?? symbol.end_line ?? symbol.line,
+        endCol: 0,
+      },
+    },
+    explanation: `${symbol.file} defines ${symbol.type} ${symbol.name}`,
+    resolver: { name: 'syntax-extractor', version: '2.0.0' },
+  }));
+
+  const importEdges: GraphEdge[] = project.imports.map((record) => {
+    const externalName = record.module.split(/[/.]/)[0];
+    const target = record.external
+      ? `dependency:${externalName}`
+      : record.target
+        ? record.target.startsWith('file:') ? record.target : `file:${record.target}`
+        : null;
+    return {
+      id: record.id,
+      source: record.source.startsWith('file:') ? record.source : `file:${record.source}`,
+      target,
+      type: record.external ? 'DEPENDS_ON' : 'IMPORTS',
+      status: target ? 'resolved' : 'unresolved',
+      confidence: target ? 0.9 : 0.4,
+      evidence: { file: record.source, range: { startLine: record.line, startCol: 0, endLine: record.line, endCol: 0 } },
+      explanation: target ? `Import ${record.module} resolves to ${target}` : `Import ${record.module} could not be resolved`,
+      resolver: { name: 'legacy-import-resolver', version: '1.2.0' },
+      alternativeCandidates: [],
+      unresolvedExpression: target ? null : record.module,
+      metadata: { module: record.module, names: record.names, external: record.external },
+    };
+  });
+
+  const callEdges: GraphEdge[] = project.calls.map((call) => {
+    const source = symbolNodeIds.has(call.source)
+      ? call.source
+      : fileNodeIds.has(call.source)
+        ? call.source
+        : `file:${call.file}`;
+    const target = call.target && symbolNodeIds.has(call.target) ? call.target : null;
+    return {
+      id: call.id,
+      source,
+      target,
+      type: 'CALLS',
+      status: target ? 'resolved' : 'unresolved',
+      confidence: call.confidence,
+      evidence: { file: call.file, range: { startLine: call.line, startCol: 0, endLine: call.line, endCol: 0 } },
+      explanation: target ? `${call.source} calls ${target}` : `${call.source} calls unresolved expression ${call.callee}`,
+      resolver: { name: 'call-resolver', version: '1.2.0' },
+      alternativeCandidates: [],
+      unresolvedExpression: target ? null : call.callee,
+      metadata: { callee: call.callee },
+    };
+  });
+
+  const routeEdges: GraphEdge[] = project.routes.flatMap((route) => {
+    const fileEdge: GraphEdge = {
+      id: `exposes:${route.id}`,
+      source: `file:${route.file}`,
+      target: route.id,
+      type: 'EXPOSES_ROUTE',
+      status: 'extracted',
+      confidence: route.confidence,
+      evidence: { file: route.file, range: { startLine: route.line, startCol: 0, endLine: route.line, endCol: 0 } },
+      explanation: `${route.file} exposes ${route.method} ${route.path}`,
+      resolver: { name: 'route-extractor', version: '1.2.0' },
+    };
+    const handlerTarget = symbolNodeIds.has(route.handler) ? route.handler : null;
+    const handlerEdge: GraphEdge = {
+      id: `handles:${route.id}`,
+      source: route.id,
+      target: handlerTarget,
+      type: 'HANDLES',
+      status: handlerTarget ? 'resolved' : 'unresolved',
+      confidence: handlerTarget ? route.confidence : Math.min(route.confidence, 0.5),
+      evidence: { file: route.file, range: { startLine: route.line, startCol: 0, endLine: route.line, endCol: 0 } },
+      explanation: handlerTarget
+        ? `${route.method} ${route.path} is handled by ${route.handler}`
+        : `Handler ${route.handler} could not be linked to an extracted symbol`,
+      resolver: { name: 'route-handler-resolver', version: '2.0.0' },
+      unresolvedExpression: handlerTarget ? null : route.handler,
+      alternativeCandidates: [],
+    };
+    return [fileEdge, handlerEdge];
+  });
+
+  const graphNodes = [...fileNodes, ...symbolNodes, ...routeNodes, ...dependencyNodes];
+  const graphEdges = [...defineEdges, ...importEdges, ...callEdges, ...routeEdges];
+  const unresolved = graphEdges
+    .filter((edge) => edge.status === 'unresolved' || edge.status === 'ambiguous')
+    .map((edge) => ({
+      edgeId: edge.id,
+      reason: edge.type === 'CALLS' ? 'unresolved call' : edge.type === 'HANDLES' ? 'unresolved route handler' : 'unresolved import',
+      candidates: edge.alternativeCandidates ?? [],
+    }));
+
   return {
     schemaVersion: '2.0.0',
     generatedAt: project.generatedAt || now,
@@ -134,34 +328,8 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
         .filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE'].includes(d.code))
         .map((d) => d.code),
     },
-    nodes: project.files.map((f) => ({
-      id: f.id,
-      kind: 'file' as const,
-      name: f.path.split('/').pop() || f.path,
-      qualifiedName: f.path,
-      path: f.path,
-      language: f.language,
-      range: { startLine: 1, startCol: 0, endLine: f.lines, endCol: 0 },
-      confidence: f.parsed ? 1 : 0.5,
-    })),
-    edges: project.imports.map((imp) => ({
-      id: imp.id,
-      // Adapter nodes use `file:<path>` IDs; imports carry raw paths.
-      source: imp.source.startsWith('file:') ? imp.source : `file:${imp.source}`,
-      target: imp.target
-        ? imp.target.startsWith('file:')
-          ? imp.target
-          : `file:${imp.target}`
-        : null,
-      type: 'IMPORTS' as const,
-      status: imp.target ? ('resolved' as const) : ('unresolved' as const),
-      confidence: imp.target ? 0.9 : 0.4,
-      evidence: { file: imp.source, range: { startLine: imp.line, startCol: 0, endLine: imp.line, endCol: 0 } },
-      explanation: imp.target ? `Import ${imp.module} resolves to ${imp.target}` : `Import ${imp.module} could not be resolved`,
-      resolver: { name: 'legacy-import-resolver', version: '1.1.0' },
-      alternativeCandidates: [],
-      unresolvedExpression: imp.target ? null : imp.module,
-    })),
+    nodes: graphNodes,
+    edges: graphEdges,
     architecture: project.architecture,
     flows: project.flows,
     communities: [],
@@ -176,9 +344,7 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
       highCoupling: project.metrics.highCouplingFiles.map((f) => ({ nodeId: `file:${f.file}`, connections: f.connections })),
       godNodes: [],
     },
-    unresolved: project.imports
-      .filter((imp) => !imp.target && !imp.external)
-      .map((imp) => ({ edgeId: imp.id, reason: 'unresolved import', candidates: [] })),
+    unresolved,
     diagnostics: project.diagnostics,
     timings: { stages: {}, totalMs: 0 },
     parsers: { versions: {}, mode: 'legacy' },

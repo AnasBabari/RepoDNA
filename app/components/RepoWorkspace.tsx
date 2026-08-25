@@ -10,8 +10,18 @@ import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
 import { analyzeGitHubUrl, analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
+import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
+import {
+  analyzePublicRepositoryDurably,
+  clearPendingDurableRun,
+  DurableAnalysisUnavailableError,
+  isRepoDNAProjectV2,
+  readPendingDurableRun,
+  type DurableRunReference,
+} from '../lib/durable-analysis-client';
 import { generateTextReport as generateTextReportImpl } from '../lib/export/text-report';
 import { analyzePrivateRepositoryInBrowser, isDeepScanFailure } from '../lib/deep-scan-client';
+import { projectV2ForWorkspace } from '../lib/schema/v2-viewer-projection';
 import {
   ANALYSIS_COMPLETE_STEP,
   ANALYSIS_PROGRESS_STEPS,
@@ -49,6 +59,17 @@ const navigation: { id: View; label: string }[] = [
   { id: 'files', label: 'Files & symbols' },
 ];
 
+const DURABLE_STAGE_STEPS: Record<string, number> = {
+  resolve: 0,
+  download: 1,
+  inventory: 2,
+  parse: 3,
+  resolve_relationships: 4,
+  analytics: 5,
+  validate: 5,
+  complete: ANALYSIS_COMPLETE_STEP,
+};
+
 const methodTone: Record<string, string> = {
   GET: 'method-get',
   POST: 'method-post',
@@ -82,7 +103,7 @@ function matchesProject(value: unknown): value is RepoDNAProject {
   );
 }
 
-function generateTextReport(project: RepoDNAProject): string {
+function generateTextReport(project: RepoDNAProject | RepoDNAProjectV2): string {
   // Local import keeps the exporter out of the initial component graph.
   return generateTextReportImpl(project);
 }
@@ -1373,6 +1394,7 @@ function useAuthSession() {
 function WorkspaceContent() {
   const { session, setSession } = useAuthSession();
   const [project, setProject] = useState<RepoDNAProject | null>(null);
+  const [deepProject, setDeepProject] = useState<RepoDNAProjectV2 | null>(null);
   const [analyzingTarget, setAnalyzingTarget] = useState<string | null>(null);
   const [analyzingStep, setAnalyzingStep] = useState(0);
   const [analyzingError, setAnalyzingError] = useState<string | null>(null);
@@ -1407,6 +1429,7 @@ function WorkspaceContent() {
     setAnalyzingErrorCode(null);
     setAnalyzingRequestId(null);
     setAnalyzingRetryAfter(null);
+    setDeepProject(null);
     return controller;
   }
 
@@ -1423,16 +1446,21 @@ function WorkspaceContent() {
       validate: assertArchitectureConsistency,
       signal: controller.signal,
       onStep: (step) => {
-        if (isActiveAnalysis(controller)) setAnalyzingStep(step);
+        if (isActiveAnalysis(controller)) setAnalyzingStep((current) => Math.max(current, step));
       },
     });
   }
 
-  function revealProject(controller: AbortController, analyzedProject: RepoDNAProject) {
+  function revealProject(
+    controller: AbortController,
+    analyzedProject: RepoDNAProject,
+    canonicalProject: RepoDNAProjectV2 | null = null
+  ) {
     if (!isActiveAnalysis(controller)) return;
     activeAnalysisRef.current = null;
     setAnalyzingTarget(null);
     setProject(analyzedProject);
+    setDeepProject(canonicalProject);
     setView('overview');
     setSearch('');
     setSelectedComponent(
@@ -1455,10 +1483,39 @@ function WorkspaceContent() {
       const repoParam = params.get('repo') || params.get('url');
       if (repoParam) {
         void handleAnalyzeGitHub(repoParam);
+        return;
       }
+      const pendingRun = readPendingDurableRun();
+      if (pendingRun) void handleResumeDurableRun(pendingRun);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleResumeDurableRun(run: DurableRunReference) {
+    const controller = beginAnalysis(run.targetUrl);
+    setAnalyzingRequestId(run.runId);
+    try {
+      const canonicalProject = await analyzePublicRepositoryDurably({
+        targetUrl: run.targetUrl,
+        signal: controller.signal,
+        resume: run,
+        onProgress: (event) => {
+          const step = DURABLE_STAGE_STEPS[event.stage];
+          if (typeof step === 'number' && isActiveAnalysis(controller)) {
+            setAnalyzingStep((current) => Math.max(current, step));
+          }
+          if (event.status === 'failed' && isActiveAnalysis(controller)) {
+            setAnalyzingErrorCode(event.code ?? 'WORKFLOW_FAILED');
+          }
+        },
+      });
+      const viewerProject = projectV2ForWorkspace(canonicalProject);
+      assertArchitectureConsistency(viewerProject);
+      revealProject(controller, viewerProject, canonicalProject);
+    } catch (error) {
+      showAnalysisError(controller, error, 'Could not resume this repository analysis.');
+    }
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1511,6 +1568,7 @@ function WorkspaceContent() {
     const controller = beginAnalysis(targetUrl);
     let failureCode = 'CLIENT_ERROR';
     let loadedSample = false;
+    let canonicalProject: RepoDNAProjectV2 | null = null;
     trackAnalysisIntent('github_public');
 
     try {
@@ -1542,6 +1600,37 @@ function WorkspaceContent() {
         }
 
         if (forceClientOnly) return analyzeGitHubUrl(targetUrl);
+
+        try {
+          canonicalProject = await analyzePublicRepositoryDurably({
+            targetUrl,
+            signal: controller.signal,
+            onRun: (run) => {
+              if (isActiveAnalysis(controller)) setAnalyzingRequestId(run.runId);
+            },
+            onProgress: (event) => {
+              const step = DURABLE_STAGE_STEPS[event.stage];
+              if (typeof step === 'number' && isActiveAnalysis(controller)) {
+                setAnalyzingStep((current) => Math.max(current, step));
+              }
+              if (event.status === 'failed' && isActiveAnalysis(controller)) {
+                setAnalyzingErrorCode(event.code ?? 'WORKFLOW_FAILED');
+              }
+            },
+          });
+          return projectV2ForWorkspace(canonicalProject);
+        } catch (error) {
+          if (controller.signal.aborted) throw new AnalysisCancelledError();
+          if (error instanceof DurableAnalysisUnavailableError) {
+            failureCode = error.code;
+            setAnalyzingRetryAfter(error.retryAfter ?? null);
+            if (!error.fallbackAvailable) {
+              setAnalyzingErrorCode(error.code);
+            }
+          }
+          // Preserve the proven v1 server/browser route while deep analysis is
+          // disabled, unconfigured, or temporarily unavailable.
+        }
 
         // Try the serverless analyzer first, then transparently fall back to the browser.
         interface ApiResponse {
@@ -1596,10 +1685,18 @@ function WorkspaceContent() {
               onProgress: (p) => {
                 const stepByStage: Record<string, number> = { download: 1, inventory: 2, parse: 3, resolve_relationships: 4, analytics: 5 };
                 const step = stepByStage[p.stage];
-                if (typeof step === 'number' && isActiveAnalysis(controller)) setAnalyzingStep(step);
+                if (typeof step === 'number' && isActiveAnalysis(controller)) {
+                  setAnalyzingStep((current) => Math.max(current, step));
+                }
               },
             });
-            if (!isDeepScanFailure(outcome)) return outcome.project as RepoDNAProject;
+            if (!isDeepScanFailure(outcome)) {
+              if (!isRepoDNAProjectV2(outcome.project)) {
+                throw new Error('Private deep scan returned an invalid RepoDNA v2 artifact.');
+              }
+              canonicalProject = outcome.project;
+              return projectV2ForWorkspace(outcome.project);
+            }
             if (outcome.authState !== 'expired') {
               failureCode = outcome.code;
               setAnalyzingErrorCode(outcome.code);
@@ -1637,7 +1734,7 @@ function WorkspaceContent() {
       });
 
       if (!isActiveAnalysis(controller)) return;
-      revealProject(controller, analyzedProject);
+      revealProject(controller, analyzedProject, canonicalProject);
 
       trackAnalysisCompleted(
         loadedSample ? 'demo' : 'github_public',
@@ -1753,7 +1850,8 @@ function WorkspaceContent() {
 
   function exportJsonArtifact() {
     if (!project) return;
-    const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+    const canonicalArtifact = deepProject ?? project;
+    const blob = new Blob([JSON.stringify(canonicalArtifact, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -1765,7 +1863,7 @@ function WorkspaceContent() {
 
   function exportTextReport() {
     if (!project) return;
-    const report = generateTextReport(project);
+    const report = generateTextReport(deepProject ?? project);
     const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1802,6 +1900,7 @@ function WorkspaceContent() {
           onCancel={() => {
             activeAnalysisRef.current?.abort();
             activeAnalysisRef.current = null;
+            clearPendingDurableRun();
             setAnalyzingTarget(null);
             setAnalyzingError(null);
             setAnalyzingErrorCode(null);
@@ -1974,7 +2073,7 @@ function WorkspaceContent() {
         )}
         {view === 'dependencies' && <DependenciesView project={project} />}
         {view === 'files' && <FilesView project={project} search={search} onSelect={selectFile} />}
-        {view === 'graph' && <CodeGraph project={project} />}
+        {view === 'graph' && <CodeGraph project={deepProject ?? project} />}
       </section>
 
       <DetailPanel

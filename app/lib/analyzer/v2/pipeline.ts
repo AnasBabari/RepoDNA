@@ -89,8 +89,21 @@ export async function analyzeRepositoryV2(
 
   // Parsers
   v2.parsers = {
-    versions: { 'tree-sitter': '0.26.12', 'tree-sitter-python': '0.25.0', 'tree-sitter-javascript': '0.23.0', 'tree-sitter-go': '0.23.0' },
+    versions: {
+      'tree-sitter': '0.26.12',
+      'tree-sitter-python': '0.25.0',
+      'tree-sitter-javascript': '0.25.0',
+      'tree-sitter-typescript': '0.23.2',
+      'tree-sitter-tsx': '0.23.2',
+      'tree-sitter-go': '0.25.0',
+    },
     mode: 'tree-sitter',
+  };
+
+  v2.metadata = {
+    ...v2.metadata,
+    analyzerVersion: '2.0.0',
+    analysisMode: 'canonical-graph',
   };
 
   // Timings

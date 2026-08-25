@@ -80,6 +80,7 @@ export interface GraphEdge {
   resolver: { name: string; version: string };
   alternativeCandidates?: string[];
   unresolvedExpression?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Inventory {
