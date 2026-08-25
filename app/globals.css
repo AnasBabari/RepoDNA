@@ -2851,6 +2851,9 @@ button.file-row:hover {
 @media (max-width: 820px) {
   .app-shell { display: block; }
   .topbar { height: 64px; display: flex; justify-content: space-between; padding: 0 14px; }
+  .topbar-actions { gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 62vw; }
+  .topbar-actions .chip-button { padding: 6px 8px; font-size: 11px; }
+  .repo-pill { max-width: 96px; }
   .brand { border: 0; padding: 0; }
   .topbar-center, .sidebar { display: none; }
   .workspace { padding: 28px 16px 40px; }

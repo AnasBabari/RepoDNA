@@ -148,7 +148,7 @@ async function main() {
       async function visitTab(label, shotName) {
         const clicked = await page.evaluate((lbl) => {
           const buttons = Array.from(document.querySelectorAll('.nav-item'));
-          const target = buttons.find((b) => b.textContent.trim().toLowerCase() === lbl);
+          const target = buttons.find((b) => b.textContent.trim().toLowerCase().includes(lbl));
           if (target) {
             target.click();
             return true;
