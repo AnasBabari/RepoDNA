@@ -3104,3 +3104,333 @@ button.file-row:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Graph export + explicit on-device retention */
+.browser-retention-toggle {
+  width: min(760px, 100%);
+  margin: 14px auto 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(0, 229, 255, 0.045);
+  color: var(--text-dim);
+  cursor: pointer;
+  text-align: left;
+}
+
+.browser-retention-toggle input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--cyan-core);
+  flex: 0 0 auto;
+}
+
+.browser-retention-toggle span {
+  display: grid;
+  gap: 2px;
+}
+
+.browser-retention-toggle strong {
+  color: var(--text-bright);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.browser-retention-toggle small {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+}
+
+.browser-retention-toggle-dialog {
+  width: 100%;
+  margin: 0 0 12px;
+}
+
+.recent-analyses {
+  width: min(1120px, 100%);
+  margin: 28px auto 0;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: rgba(5, 15, 24, 0.72);
+}
+
+.recent-analyses-heading,
+.recent-analysis-card,
+.recent-analysis-actions {
+  display: flex;
+  align-items: center;
+}
+
+.recent-analyses-heading {
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 13px;
+}
+
+.recent-analyses-heading h2 {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+}
+
+.recent-analyses-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.recent-analysis-card {
+  min-width: 0;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px;
+  border: 1px solid rgba(0, 229, 255, 0.14);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  text-align: left;
+}
+
+.recent-analysis-card h3 {
+  margin: 7px 0 3px;
+  color: var(--text-bright);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.recent-analysis-card p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+}
+
+.recent-analysis-actions {
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chip-button.danger {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.32);
+}
+
+.graph-export-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 7, 13, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.graph-export-dialog {
+  width: min(780px, 100%);
+  max-height: min(88vh, 850px);
+  overflow-y: auto;
+  padding: 22px;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 14px;
+  background: #07111a;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.58), 0 0 40px rgba(0, 229, 255, 0.08);
+  color: var(--text-bright);
+}
+
+.graph-export-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.graph-export-header h2 {
+  margin: 2px 0 0;
+  font-size: 1.35rem;
+}
+
+.graph-export-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-bright);
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.graph-export-close:hover,
+.graph-export-close:focus-visible {
+  border-color: var(--cyan-border);
+  color: var(--cyan-core);
+}
+
+.graph-export-intro {
+  margin: 17px 0 3px;
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.graph-export-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.graph-export-stats {
+  margin: 15px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.graph-export-stats span,
+.graph-export-badge {
+  padding: 4px 7px;
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(0, 229, 255, 0.055);
+  color: var(--text-dim);
+  font-size: 0.66rem;
+}
+
+.graph-export-warning,
+.graph-export-fallback {
+  margin: 10px 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.graph-export-warning {
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  background: rgba(251, 191, 36, 0.07);
+  color: #fde68a;
+}
+
+.graph-export-fallback {
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(56, 189, 248, 0.07);
+  color: #bae6fd;
+}
+
+.graph-export-actions {
+  display: grid;
+  gap: 9px;
+}
+
+.graph-export-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 13px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: rgba(2, 10, 17, 0.72);
+}
+
+.graph-export-row-info {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.graph-export-row-info > strong {
+  font-size: 0.86rem;
+}
+
+.graph-export-row-info > span:not(.graph-export-meta):not(.graph-export-progress) {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+}
+
+.graph-export-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-dim);
+  font-size: 0.66rem;
+}
+
+.graph-export-progress {
+  position: relative;
+  min-height: 20px;
+  margin-top: 4px;
+  padding: 4px 7px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 229, 255, 0.16);
+  border-radius: 5px;
+  color: var(--text-bright);
+  font-size: 0.66rem;
+  isolation: isolate;
+}
+
+.graph-export-progress > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  background: rgba(0, 229, 255, 0.13);
+  transition: width 160ms ease;
+}
+
+.graph-export-error {
+  color: #fca5a5 !important;
+}
+
+.graph-export-row-buttons {
+  display: flex;
+  align-items: center;
+}
+
+.graph-export-foot {
+  margin-top: 14px;
+  padding-top: 12px;
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-dim);
+  font-size: 0.68rem;
+}
+
+@media (max-width: 640px) {
+  .graph-export-overlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .graph-export-dialog {
+    width: 100%;
+    max-height: 92vh;
+    padding: 17px;
+    border-radius: 14px 14px 0 0;
+  }
+
+  .graph-export-row {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-export-row-buttons .chip-button {
+    width: 100%;
+  }
+
+  .recent-analysis-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .recent-analysis-actions {
+    width: 100%;
+    flex-direction: row;
+  }
+}

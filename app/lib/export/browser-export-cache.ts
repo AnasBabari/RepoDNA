@@ -32,6 +32,7 @@ export interface BrowserCachedArtifact {
 export interface BrowserCachedExport {
   id: string;
   artifactKey: string;
+  sourceType: BrowserCacheSourceType;
   format: string;
   filename: string;
   mediaType: string;
@@ -139,10 +140,21 @@ export async function hashCacheKey(input: string): Promise<string> {
     .join('');
 }
 
+export async function createBrowserArtifactKey(
+  sourceType: BrowserCacheSourceType,
+  sourceDigest: string
+): Promise<string> {
+  return hashCacheKey(`${sourceType}:${sourceDigest}`);
+}
+
+export function createBrowserExportId(artifactKey: string, format: string): string {
+  return `${artifactKey}:1.0.0:${format}`;
+}
+
 export async function saveBrowserArtifact(entry: BrowserCachedArtifact): Promise<void> {
   if (!isBrowser()) return;
   await evictExpiredBrowserEntries();
-  await enforceBrowserLimits(entry.byteSize);
+  await enforceBrowserLimits(entry.byteSize, { artifactKey: entry.key });
   await withStore('artifacts', 'readwrite', async (store) => {
     const existing = await idbRequest(store.get(entry.key) as IDBRequest<BrowserCachedArtifact | undefined>);
     if (existing && existing.expiresAt > Date.now()) {
@@ -197,7 +209,7 @@ export async function deleteBrowserArtifact(key: string): Promise<void> {
 export async function saveBrowserExport(entry: BrowserCachedExport): Promise<void> {
   if (!isBrowser()) return;
   await evictExpiredBrowserEntries();
-  await enforceBrowserLimits(entry.byteSize);
+  await enforceBrowserLimits(entry.byteSize, { exportId: entry.id });
   await withStore('exports', 'readwrite', async (store) => {
     await idbRequest(store.put(entry));
   });
@@ -222,6 +234,13 @@ export async function getBrowserExport(id: string): Promise<BrowserCachedExport 
   return entry;
 }
 
+export async function deleteBrowserExport(id: string): Promise<void> {
+  if (!isBrowser()) return;
+  await withStore('exports', 'readwrite', async (store) => {
+    await idbRequest(store.delete(id));
+  });
+}
+
 export async function listBrowserArtifacts(): Promise<BrowserCachedArtifact[]> {
   if (!isBrowser()) return [];
   const entries = await withStore('artifacts', 'readonly', async (store) => {
@@ -234,6 +253,10 @@ export async function listBrowserArtifacts(): Promise<BrowserCachedArtifact[]> {
 
 export async function clearBrowserArtifactsBySourceType(sourceType: BrowserCacheSourceType): Promise<void> {
   if (!isBrowser()) return;
+  const artifactKeys = await withStore('artifacts', 'readonly', async (store) => {
+    const index = store.index('sourceType');
+    return (await idbRequest(index.getAllKeys(IDBKeyRange.only(sourceType)))) as IDBValidKey[];
+  });
   await withStore('artifacts', 'readwrite', async (store) => {
     const index = store.index('sourceType');
     const range = IDBKeyRange.only(sourceType);
@@ -252,11 +275,21 @@ export async function clearBrowserArtifactsBySourceType(sourceType: BrowserCache
     });
   });
   await withStore('exports', 'readwrite', async (store) => {
-    const all = (await idbRequest(store.getAll() as IDBRequest<BrowserCachedExport[]>)) ?? [];
-    for (const entry of all) {
-      if (entry.id.startsWith(`${sourceType}:`) || entry.artifactKey.includes(sourceType)) {
-        await idbRequest(store.delete(entry.id));
-      }
+    const index = store.index('artifactKey');
+    for (const key of artifactKeys) {
+      const request = index.openCursor(IDBKeyRange.only(key));
+      await new Promise<void>((resolve, reject) => {
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) {
+            resolve();
+            return;
+          }
+          cursor.delete();
+          cursor.continue();
+        };
+        request.onerror = () => reject(request.error);
+      });
     }
   });
 }
@@ -310,7 +343,10 @@ async function evictExpiredBrowserEntries(): Promise<void> {
   });
 }
 
-async function enforceBrowserLimits(incomingBytes: number): Promise<void> {
+async function enforceBrowserLimits(
+  incomingBytes: number,
+  replacing: { artifactKey?: string; exportId?: string } = {}
+): Promise<void> {
   if (!isBrowser()) return;
   let quotaBytes = MAX_BYTES_FALLBACK;
   try {
@@ -325,20 +361,27 @@ async function enforceBrowserLimits(incomingBytes: number): Promise<void> {
   const exportsList = await withStore('exports', 'readonly', async (store) => {
     return (await idbRequest(store.getAll() as IDBRequest<BrowserCachedExport[]>)) ?? [];
   });
+  const retainedArtifacts = artifacts.filter((entry) => entry.key !== replacing.artifactKey);
+  const retainedExports = exportsList.filter((entry) => entry.id !== replacing.exportId);
+  let artifactCount = retainedArtifacts.length;
   let totalBytes = incomingBytes;
-  for (const entry of artifacts) totalBytes += entry.byteSize;
-  for (const entry of exportsList) totalBytes += entry.byteSize;
+  for (const entry of retainedArtifacts) totalBytes += entry.byteSize;
+  for (const entry of retainedExports) totalBytes += entry.byteSize;
 
-  if (artifacts.length >= MAX_ARTIFACTS || totalBytes > quotaBytes) {
-    const sorted = [...artifacts].sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+  if (artifactCount >= MAX_ARTIFACTS || totalBytes > quotaBytes) {
+    const sorted = [...retainedArtifacts].sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
     for (const entry of sorted) {
-      if (artifacts.length < MAX_ARTIFACTS && totalBytes <= quotaBytes) break;
+      if (artifactCount < MAX_ARTIFACTS && totalBytes <= quotaBytes) break;
+      const relatedExportBytes = retainedExports
+        .filter((cachedExport) => cachedExport.artifactKey === entry.key)
+        .reduce((sum, cachedExport) => sum + cachedExport.byteSize, 0);
       await deleteBrowserArtifact(entry.key);
-      totalBytes -= entry.byteSize;
+      artifactCount--;
+      totalBytes -= entry.byteSize + relatedExportBytes;
     }
   }
   if (totalBytes > quotaBytes) {
-    const sortedExports = [...exportsList].sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+    const sortedExports = [...retainedExports].sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
     for (const entry of sortedExports) {
       if (totalBytes <= quotaBytes) break;
       await withStore('exports', 'readwrite', async (store) => {

@@ -3,17 +3,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { SafeRepositoryItem } from '../api/github/repositories/route';
 import { trackAuthFlow } from '../lib/analytics';
+import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 
 export function PrivateRepoPicker({
   isOpen,
   onClose,
   onSelectRepo,
   onSignOut,
+  retentionEnabled,
+  onRetentionChange,
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onSelectRepo: (repoFullName: string) => void;
+  onSelectRepo: (repoFullName: string, isPrivate: boolean) => void;
   onSignOut: () => void;
+  retentionEnabled: boolean;
+  onRetentionChange: (enabled: boolean) => void;
 }) {
   const [repos, setRepos] = useState<SafeRepositoryItem[]>([]);
   const [page, setPage] = useState(1);
@@ -217,6 +222,12 @@ export function PrivateRepoPicker({
           )}
         </div>
 
+        <BrowserRetentionToggle
+          checked={retentionEnabled}
+          onChange={onRetentionChange}
+          className="browser-retention-toggle-dialog"
+        />
+
         {/* Search input */}
         <div style={{ marginBottom: '12px' }}>
           <input
@@ -343,7 +354,7 @@ export function PrivateRepoPicker({
                     className="primary-button"
                     style={{ fontSize: '0.8rem', padding: '6px 14px', whiteSpace: 'nowrap' }}
                     onClick={() => {
-                      onSelectRepo(`https://github.com/${repo.fullName}`);
+                      onSelectRepo(`https://github.com/${repo.fullName}`, repo.isPrivate);
                       onClose();
                     }}
                   >

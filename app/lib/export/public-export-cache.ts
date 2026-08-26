@@ -1,29 +1,8 @@
-import { del, get, head, list, put } from '@vercel/blob';
-
-// `issueSignedToken` and `presignUrl` are available from the server entry but
-// are minified to single-letter exports in the published d.ts. The JS runtime
-// does export them under their real names, so we resolve them dynamically and
-// fall back to a direct URL when presigning is unavailable (e.g. in tests).
-async function getPresignHelpers(): Promise<{
-  issueSignedToken: typeof import('@vercel/blob')['issueSignedToken'];
-  presignUrl: typeof import('@vercel/blob')['presignUrl'];
-} | null> {
-  try {
-    const mod = (await import('@vercel/blob')) as unknown as Record<string, unknown>;
-    const issue = mod.issueSignedToken as unknown;
-    const presign = mod.presignUrl as unknown;
-    if (typeof issue === 'function' && typeof presign === 'function') {
-      return {
-        issueSignedToken: issue as never,
-        presignUrl: presign as never,
-      };
-    }
-  } catch {}
-  return null;
-}
+import { del, get, head, issueSignedToken, list, presignUrl, put } from '@vercel/blob';
 
 import { PUBLIC_ARTIFACT_TTL_SECONDS, V2_ANALYZER_VERSION, isPublicArtifactCacheConfigured } from '../analyzer/v2/artifact-cache';
 import { GRAPH_EXPORT_EXTENSIONS, type GraphExportFormat } from './graph/types';
+import { sha256Hex } from './graph/stable-json';
 
 const SIGNED_URL_TTL_MS = 5 * 60 * 1000;
 
@@ -70,25 +49,31 @@ export interface PublicExportPointer {
   cacheHit: boolean;
 }
 
-export async function createSignedDownloadUrl(pathname: string): Promise<{ url: string; expiresAt: string }> {
-  const validUntil = Date.now() + SIGNED_URL_TTL_MS;
-  const helpers = await getPresignHelpers();
-  if (helpers) {
-    try {
-      const token = await helpers.issueSignedToken({ pathname, operations: ['get'], validUntil });
-      const result = await helpers.presignUrl(
-        { clientSigningToken: (token as unknown as { clientSigningToken: string }).clientSigningToken, delegationToken: (token as unknown as { delegationToken: string }).delegationToken },
-        { operation: 'get', pathname, validUntil } as unknown as never
-      );
-      return { url: (result as unknown as { presignedUrl: string }).presignedUrl, expiresAt: new Date(validUntil).toISOString() };
-    } catch {}
-  }
-  const fallback = await get(pathname, { access: 'private' }).catch(() => null);
-  const url = fallback ? (fallback.blob as unknown as { downloadUrl?: string }).downloadUrl ?? fallback.blob.url : pathname;
-  return { url, expiresAt: new Date(validUntil).toISOString() };
+export interface PublicExportMetadata {
+  byteSize: number;
+  sha256: string;
+  mediaType: string;
 }
 
-export async function readCachedPublicExport(pathname: string): Promise<{ url: string; downloadUrl: string } | null> {
+export function publicExportMetadataPath(pathname: string): string {
+  return `${pathname}.metadata.json`;
+}
+
+export async function createSignedDownloadUrl(pathname: string): Promise<{ url: string; expiresAt: string }> {
+  const validUntil = Date.now() + SIGNED_URL_TTL_MS;
+  const token = await issueSignedToken({ pathname, operations: ['get'], validUntil });
+  const result = await presignUrl(token, {
+    operation: 'get',
+    pathname,
+    validUntil,
+    access: 'private',
+  });
+  return { url: result.presignedUrl, expiresAt: new Date(validUntil).toISOString() };
+}
+
+export async function readCachedPublicExport(
+  pathname: string
+): Promise<{ url: string; downloadUrl: string; metadata: PublicExportMetadata } | null> {
   if (!isPublicExportCacheConfigured()) return null;
   const result = await get(pathname, { access: 'private' }).catch(() => null);
   if (!result || result.statusCode !== 200) return null;
@@ -100,7 +85,35 @@ export async function readCachedPublicExport(pathname: string): Promise<{ url: s
       return null;
     }
   }
-  return { url: result.blob.url, downloadUrl: (result.blob as unknown as { downloadUrl?: string }).downloadUrl ?? result.blob.url };
+  const metadataPath = publicExportMetadataPath(pathname);
+  const metadataResult = await get(metadataPath, { access: 'private' }).catch(() => null);
+  let metadata: PublicExportMetadata | null = null;
+  if (metadataResult?.statusCode === 200) {
+    try {
+      metadata = (await new Response(metadataResult.stream).json()) as PublicExportMetadata;
+    } catch {
+      metadata = null;
+    }
+  }
+  if (!metadata || !/^[0-9a-f]{64}$/.test(metadata.sha256) || metadata.byteSize !== result.blob.size) {
+    const bytes = new Uint8Array(await new Response(result.stream).arrayBuffer());
+    metadata = {
+      byteSize: bytes.byteLength,
+      sha256: await sha256Hex(bytes),
+      mediaType: result.blob.contentType,
+    };
+    await put(metadataPath, JSON.stringify(metadata), {
+      access: 'private',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: 'application/json; charset=utf-8',
+    }).catch(() => undefined);
+  }
+  return {
+    url: result.blob.url,
+    downloadUrl: (result.blob as unknown as { downloadUrl?: string }).downloadUrl ?? result.blob.url,
+    metadata,
+  };
 }
 
 export async function storePublicExport(input: {
@@ -108,6 +121,7 @@ export async function storePublicExport(input: {
   bytes: Uint8Array;
   contentType: string;
   cacheControlMaxAge: number;
+  sha256: string;
 }): Promise<{ url: string; pathname: string }> {
   const result = await put(input.pathname, input.bytes, {
     access: 'private',
@@ -115,6 +129,17 @@ export async function storePublicExport(input: {
     allowOverwrite: true,
     cacheControlMaxAge: input.cacheControlMaxAge,
     contentType: input.contentType,
+  });
+  await put(publicExportMetadataPath(input.pathname), JSON.stringify({
+    byteSize: input.bytes.byteLength,
+    sha256: input.sha256,
+    mediaType: input.contentType,
+  } satisfies PublicExportMetadata), {
+    access: 'private',
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    cacheControlMaxAge: input.cacheControlMaxAge,
+    contentType: 'application/json; charset=utf-8',
   });
   return { url: result.url, pathname: result.pathname };
 }

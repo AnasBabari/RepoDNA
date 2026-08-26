@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { ArchitectureGraph } from './ArchitectureGraph';
+import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 import { CodeGraph } from './CodeGraph';
 import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
@@ -21,6 +22,7 @@ import {
 } from '../lib/durable-analysis-client';
 import { generateTextReport as generateTextReportImpl } from '../lib/export/text-report';
 import { analyzePrivateRepositoryInBrowser, analyzePublicRepositoryInBrowser, isDeepScanFailure } from '../lib/deep-scan-client';
+import { adaptV1ToV2Viewer } from '../lib/schema/artifact-loader';
 import { projectV2ForWorkspace } from '../lib/schema/v2-viewer-projection';
 import {
   ANALYSIS_COMPLETE_STEP,
@@ -39,6 +41,20 @@ import {
   trackFallbackUsed,
   trackViewChanged,
 } from '../lib/analytics';
+import {
+  BROWSER_EXPORT_CACHE_TTL_MS,
+  clearAllBrowserCaches,
+  clearBrowserArtifactsBySourceType,
+  createBrowserArtifactKey,
+  deleteBrowserArtifact,
+  getBrowserCacheConsent,
+  listBrowserArtifacts,
+  saveBrowserArtifact,
+  setBrowserCacheConsent,
+  type BrowserCachedArtifact,
+  type BrowserCacheSourceType,
+} from '../lib/export/browser-export-cache';
+import { computeSourceArtifactDigest } from '../lib/export/graph/normalize';
 import type {
   ArchitectureComponent,
   FileRecord,
@@ -48,6 +64,7 @@ import type {
 } from '../lib/types';
 
 type View = 'overview' | 'architecture' | 'graph' | 'routes' | 'dependencies' | 'files';
+type AnalysisOrigin = BrowserCacheSourceType;
 type OverviewAudience = 'plain' | 'technical';
 
 const navigation: { id: View; label: string }[] = [
@@ -80,6 +97,19 @@ const methodTone: Record<string, string> = {
 
 function formatNumber(value: number) {
   return Intl.NumberFormat('en-GB', { notation: value > 9999 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value);
+}
+
+function sourceTypeLabel(sourceType: BrowserCacheSourceType): string {
+  const labels: Record<BrowserCacheSourceType, string> = {
+    'public-durable': 'Public GitHub',
+    'public-browser': 'Public GitHub · browser',
+    'github-private': 'Private GitHub',
+    'local-folder': 'Local folder',
+    'zip-upload': 'ZIP upload',
+    'imported-json': 'Imported JSON',
+    sample: 'Sample',
+  };
+  return labels[sourceType];
 }
 
 function matchesProject(value: unknown): value is RepoDNAProject {
@@ -211,6 +241,12 @@ function LandingView({
   onOpenPrivatePicker,
   onOpenFeedback,
   session,
+  retentionEnabled,
+  onRetentionChange,
+  recentArtifacts,
+  onOpenRecent,
+  onRemoveRecent,
+  onClearRecent,
 }: {
   onAnalyzeGitHub: (url: string) => void;
   onAnalyzeFolder: (files: FileList) => void;
@@ -219,6 +255,12 @@ function LandingView({
   onOpenPrivatePicker: () => void;
   onOpenFeedback: () => void;
   session: { user?: { name?: string; image?: string } } | null;
+  retentionEnabled: boolean;
+  onRetentionChange: (enabled: boolean) => void;
+  recentArtifacts: BrowserCachedArtifact[];
+  onOpenRecent: (entry: BrowserCachedArtifact) => void;
+  onRemoveRecent: (entry: BrowserCachedArtifact) => void;
+  onClearRecent: () => void;
 }) {
   const [url, setUrl] = useState('');
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -322,6 +364,8 @@ function LandingView({
           </button>
         </form>
 
+        <BrowserRetentionToggle checked={retentionEnabled} onChange={onRetentionChange} />
+
         <div className="landing-chips-row">
           <span className="label">Featured repos:</span>
           <button
@@ -410,6 +454,36 @@ function LandingView({
             }}
           />
         </div>
+
+        {recentArtifacts.length > 0 ? (
+          <section className="recent-analyses" aria-labelledby="recent-analyses-title">
+            <div className="recent-analyses-heading">
+              <div>
+                <p className="eyebrow cyan-text">On-device cache</p>
+                <h2 id="recent-analyses-title">Recent on this device</h2>
+              </div>
+              <button className="chip-button" type="button" onClick={onClearRecent}>Clear all</button>
+            </div>
+            <div className="recent-analyses-grid">
+              {recentArtifacts.map((entry) => (
+                <article className="recent-analysis-card" key={entry.key}>
+                  <div>
+                    <span className="graph-export-badge">{sourceTypeLabel(entry.sourceType)}</span>
+                    <h3>{entry.project.repository.name}</h3>
+                    <p>
+                      {entry.project.nodes.length} nodes · {entry.project.edges.length} relationships · expires{' '}
+                      {new Date(entry.expiresAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="recent-analysis-actions">
+                    <button className="chip-button" type="button" onClick={() => onOpenRecent(entry)}>Open</button>
+                    <button className="chip-button danger" type="button" onClick={() => onRemoveRecent(entry)}>Remove</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <div className="landing-features-grid">
           <div className="feature-box">
@@ -1308,11 +1382,15 @@ function AnalyseDialog({
   onClose,
   onAnalyzeUrl,
   onImportFile,
+  retentionEnabled,
+  onRetentionChange,
 }: {
   open: boolean;
   onClose: () => void;
   onAnalyzeUrl: (url: string) => void;
   onImportFile: (file: File) => void;
+  retentionEnabled: boolean;
+  onRetentionChange: (enabled: boolean) => void;
 }) {
   const [githubUrl, setGithubUrl] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1342,6 +1420,12 @@ function AnalyseDialog({
         <p className="eyebrow cyan-text">New analysis</p>
         <h2 id="analyse-title">Map a repository</h2>
         <p>RepoDNA statically analyzes source code as text and never executes runtime scripts.</p>
+
+        <BrowserRetentionToggle
+          checked={retentionEnabled}
+          onChange={onRetentionChange}
+          className="browser-retention-toggle-dialog"
+        />
 
         <form onSubmit={handleSubmit}>
           <label className="github-field">
@@ -1427,6 +1511,7 @@ function WorkspaceContent() {
   const { session, setSession } = useAuthSession();
   const [project, setProject] = useState<RepoDNAProject | null>(null);
   const [deepProject, setDeepProject] = useState<RepoDNAProjectV2 | null>(null);
+  const [graphExportProject, setGraphExportProject] = useState<RepoDNAProjectV2 | null>(null);
   const [analyzingTarget, setAnalyzingTarget] = useState<string | null>(null);
   const [analyzingStep, setAnalyzingStep] = useState(0);
   const [analyzingMessage, setAnalyzingMessage] = useState<string | null>(null);
@@ -1444,15 +1529,53 @@ function WorkspaceContent() {
   const [copiedMermaid, setCopiedMermaid] = useState(false);
   const [privatePickerOpen, setPrivatePickerOpen] = useState(false);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [analysisOrigin, setAnalysisOrigin] = useState<AnalysisOrigin | null>(null);
+  const [publicIdentity, setPublicIdentity] = useState<{ owner: string; repo: string; commitSha: string } | null>(null);
+  const [exportConsent, setExportConsent] = useState(false);
+  const [browserArtifactKey, setBrowserArtifactKey] = useState<string | null>(null);
+  const [browserArtifactExpiresAt, setBrowserArtifactExpiresAt] = useState<number | null>(null);
+  const [recentArtifacts, setRecentArtifacts] = useState<BrowserCachedArtifact[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const activeAnalysisRef = useRef<AbortController | null>(null);
+  const browserCacheGenerationRef = useRef(0);
 
   useEffect(() => {
     initAnalytics();
     return () => activeAnalysisRef.current?.abort();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    setExportConsent(getBrowserCacheConsent() === 'granted');
+    void listBrowserArtifacts().then((entries) => {
+      if (!cancelled) setRecentArtifacts(entries);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function refreshRecentArtifacts() {
+    try {
+      setRecentArtifacts(await listBrowserArtifacts());
+    } catch {
+      setRecentArtifacts([]);
+    }
+  }
+
+  function handleRetentionChange(enabled: boolean) {
+    setExportConsent(enabled);
+    setBrowserCacheConsent(enabled ? 'granted' : 'denied');
+    if (!enabled) {
+      setBrowserArtifactKey(null);
+      setBrowserArtifactExpiresAt(null);
+      setRecentArtifacts([]);
+      void clearAllBrowserCaches();
+    }
+  }
+
   function beginAnalysis(target: string): AbortController {
+    browserCacheGenerationRef.current++;
     activeAnalysisRef.current?.abort();
     const controller = new AbortController();
     activeAnalysisRef.current = controller;
@@ -1464,6 +1587,9 @@ function WorkspaceContent() {
     setAnalyzingRequestId(null);
     setAnalyzingRetryAfter(null);
     setDeepProject(null);
+    setGraphExportProject(null);
+    setBrowserArtifactKey(null);
+    setBrowserArtifactExpiresAt(null);
     return controller;
   }
 
@@ -1488,7 +1614,10 @@ function WorkspaceContent() {
   function revealProject(
     controller: AbortController,
     analyzedProject: RepoDNAProject,
-    canonicalProject: RepoDNAProjectV2 | null = null
+    canonicalProject: RepoDNAProjectV2 | null = null,
+    origin: AnalysisOrigin = 'public-browser',
+    identity: { owner: string; repo: string; commitSha: string } | null = null,
+    existingBrowserCache: { key: string; expiresAt: number } | null = null
   ) {
     if (!isActiveAnalysis(controller)) return;
     activeAnalysisRef.current = null;
@@ -1496,6 +1625,12 @@ function WorkspaceContent() {
     setAnalyzingMessage(null);
     setProject(analyzedProject);
     setDeepProject(canonicalProject);
+    const canonicalForExport = canonicalProject ?? adaptV1ToV2Viewer(analyzedProject);
+    setGraphExportProject(canonicalForExport);
+    setAnalysisOrigin(origin);
+    setPublicIdentity(identity);
+    setBrowserArtifactKey(existingBrowserCache?.key ?? null);
+    setBrowserArtifactExpiresAt(existingBrowserCache?.expiresAt ?? null);
     setView('overview');
     setSearch('');
     setSelectedComponent(
@@ -1504,6 +1639,38 @@ function WorkspaceContent() {
         null
     );
     setSelectedRoute(analyzedProject.routes[0] ?? null);
+
+    const shouldPersist = exportConsent && !existingBrowserCache && origin !== 'public-durable' && origin !== 'sample';
+    if (shouldPersist) {
+      const cacheGeneration = browserCacheGenerationRef.current;
+      void (async () => {
+        try {
+          const sourceDigest = await computeSourceArtifactDigest(canonicalForExport);
+          const key = await createBrowserArtifactKey(origin, sourceDigest);
+          const bytes = new TextEncoder().encode(JSON.stringify(canonicalForExport)).byteLength;
+          const now = Date.now();
+          const expiresAt = now + BROWSER_EXPORT_CACHE_TTL_MS;
+          await saveBrowserArtifact({
+            key,
+            sourceType: origin,
+            sourceDigest,
+            project: canonicalForExport,
+            byteSize: bytes,
+            createdAt: now,
+            expiresAt,
+            lastAccessedAt: now,
+          });
+          if (browserCacheGenerationRef.current !== cacheGeneration) return;
+          setBrowserArtifactKey(key);
+          setBrowserArtifactExpiresAt(expiresAt);
+          await refreshRecentArtifacts();
+        } catch {
+          if (browserCacheGenerationRef.current !== cacheGeneration) return;
+          setBrowserArtifactKey(null);
+          setBrowserArtifactExpiresAt(null);
+        }
+      })();
+    }
   }
 
   function showAnalysisError(controller: AbortController, error: unknown, fallbackMessage: string) {
@@ -1547,7 +1714,11 @@ function WorkspaceContent() {
       });
       const viewerProject = projectV2ForWorkspace(canonicalProject);
       assertArchitectureConsistency(viewerProject);
-      revealProject(controller, viewerProject, canonicalProject);
+      const parsed = parseGitHubUrl(run.targetUrl);
+      const identity = parsed && canonicalProject.repository.commitSha
+        ? { owner: parsed.owner, repo: parsed.repo, commitSha: canonicalProject.repository.commitSha }
+        : null;
+      revealProject(controller, viewerProject, canonicalProject, 'public-durable', identity);
     } catch (error) {
       showAnalysisError(controller, error, 'Could not resume this repository analysis.');
     }
@@ -1593,7 +1764,11 @@ function WorkspaceContent() {
     'yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
   };
 
-  async function handleAnalyzeGitHub(url: string, forceClientOnly = false) {
+  async function handleAnalyzeGitHub(
+    url: string,
+    forceClientOnly = false,
+    requestedOrigin: 'github-private' | null = null
+  ) {
     const cleanUrl = url.trim();
     const parsed = parseGitHubUrl(cleanUrl);
     const targetUrl = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}` : cleanUrl;
@@ -1605,6 +1780,7 @@ function WorkspaceContent() {
     let failureCode = 'CLIENT_ERROR';
     let loadedSample = false;
     let canonicalProject: RepoDNAProjectV2 | null = null;
+    let resolvedOrigin: AnalysisOrigin = requestedOrigin ?? 'public-browser';
     trackAnalysisIntent('github_public');
 
     const runPublicBrowserFallback = async (): Promise<RepoDNAProject> => {
@@ -1635,11 +1811,47 @@ function WorkspaceContent() {
         throw new Error('Browser analysis returned an invalid RepoDNA v2 artifact.');
       }
       canonicalProject = outcome.project;
+      resolvedOrigin = 'public-browser';
+      return projectV2ForWorkspace(outcome.project);
+    };
+
+    const runPrivateBrowserAnalysis = async (): Promise<RepoDNAProject> => {
+      const outcome = await analyzePrivateRepositoryInBrowser({
+        url: targetUrl,
+        signal: controller.signal,
+        onProgress: (progress) => {
+          if (isActiveAnalysis(controller)) setAnalyzingMessage(progress.message);
+          const stepByStage: Record<string, number> = {
+            download: 1,
+            inventory: 2,
+            parse: 3,
+            resolve_relationships: 4,
+            analytics: 5,
+          };
+          const progressStep = stepByStage[progress.stage];
+          if (typeof progressStep === 'number' && isActiveAnalysis(controller)) {
+            setAnalyzingStep((current) => Math.max(current, progressStep));
+          }
+        },
+      });
+      if (isDeepScanFailure(outcome)) {
+        failureCode = outcome.code;
+        setAnalyzingErrorCode(outcome.code);
+        throw new Error(outcome.message);
+      }
+      if (!isRepoDNAProjectV2(outcome.project)) {
+        failureCode = 'INVALID_ANALYSIS_ARTIFACT';
+        throw new Error('Private deep scan returned an invalid RepoDNA v2 artifact.');
+      }
+      canonicalProject = outcome.project;
+      resolvedOrigin = 'github-private';
       return projectV2ForWorkspace(outcome.project);
     };
 
     try {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
+        if (requestedOrigin === 'github-private') return runPrivateBrowserAnalysis();
+
         // Check pre-cached sample artifacts without bypassing the shared progress lifecycle.
         if (!forceClientOnly) {
           const samplePath =
@@ -1656,11 +1868,13 @@ function WorkspaceContent() {
                 const parsedSample = (await sampleRes.json()) as unknown;
                 if (matchesProjectV2(parsedSample)) {
                   loadedSample = true;
+                  resolvedOrigin = 'sample';
                   canonicalProject = parsedSample;
                   return projectV2ForWorkspace(parsedSample);
                 }
                 if (matchesProject(parsedSample)) {
                   loadedSample = true;
+                  resolvedOrigin = 'sample';
                   return parsedSample;
                 }
               }
@@ -1691,6 +1905,7 @@ function WorkspaceContent() {
               }
             },
           });
+          resolvedOrigin = 'public-durable';
           return projectV2ForWorkspace(canonicalProject);
         } catch (error) {
           if (controller.signal.aborted) throw new AnalysisCancelledError();
@@ -1752,31 +1967,7 @@ function WorkspaceContent() {
           // the user is signed in, analyze transiently in this browser.
           const rescueable = errObj?.code === 'GITHUB_TOKEN_EXPIRED' || errObj?.code === 'GITHUB_FORBIDDEN' || errObj?.code === 'REPO_NOT_FOUND';
           if (rescueable && !forceClientOnly) {
-            const outcome = await analyzePrivateRepositoryInBrowser({
-              url: targetUrl,
-              signal: controller.signal,
-              onProgress: (p) => {
-                if (isActiveAnalysis(controller)) setAnalyzingMessage(p.message);
-                const stepByStage: Record<string, number> = { download: 1, inventory: 2, parse: 3, resolve_relationships: 4, analytics: 5 };
-                const step = stepByStage[p.stage];
-                if (typeof step === 'number' && isActiveAnalysis(controller)) {
-                  setAnalyzingStep((current) => Math.max(current, step));
-                }
-              },
-            });
-            if (!isDeepScanFailure(outcome)) {
-              if (!isRepoDNAProjectV2(outcome.project)) {
-                throw new Error('Private deep scan returned an invalid RepoDNA v2 artifact.');
-              }
-              canonicalProject = outcome.project;
-              return projectV2ForWorkspace(outcome.project);
-            }
-            if (outcome.authState !== 'expired') {
-              failureCode = outcome.code;
-              setAnalyzingErrorCode(outcome.code);
-              throw new Error(outcome.message);
-            }
-            // expired → surface structured code so UI offers Reconnect GitHub
+            return runPrivateBrowserAnalysis();
           }
           failureCode = errObj?.code || 'UNKNOWN';
           setAnalyzingErrorCode(errObj?.code ?? null);
@@ -1808,7 +1999,12 @@ function WorkspaceContent() {
       });
 
       if (!isActiveAnalysis(controller)) return;
-      revealProject(controller, analyzedProject, canonicalProject);
+      const finalOrigin = resolvedOrigin as AnalysisOrigin;
+      const finalCanonicalProject = canonicalProject as RepoDNAProjectV2 | null;
+      const identity = finalOrigin === 'public-durable' && parsed && finalCanonicalProject?.repository.commitSha
+        ? { owner: parsed.owner, repo: parsed.repo, commitSha: finalCanonicalProject.repository.commitSha }
+        : null;
+      revealProject(controller, analyzedProject, finalCanonicalProject, finalOrigin, identity);
 
       trackAnalysisCompleted(
         loadedSample ? 'demo' : 'github_public',
@@ -1832,7 +2028,7 @@ function WorkspaceContent() {
     try {
       const analyzedProject = await analyzeThroughSplash(controller, () => analyzeUploadedFiles(files));
       if (!isActiveAnalysis(controller)) return;
-      revealProject(controller, analyzedProject);
+      revealProject(controller, analyzedProject, null, 'local-folder');
 
       trackAnalysisCompleted('local_folder', Date.now() - startTime, analyzedProject.repository.fileCount);
     } catch (err) {
@@ -1847,12 +2043,18 @@ function WorkspaceContent() {
     const startTime = Date.now();
     const controller = beginAnalysis(file.name);
     trackAnalysisIntent('zip_upload');
+    const importedJson = file.name.toLowerCase().endsWith('.json');
+    let canonicalProject: RepoDNAProjectV2 | null = null;
 
     try {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
-        if (file.name.endsWith('.json')) {
+        if (importedJson) {
           const text = await file.text();
           const parsed = JSON.parse(text) as unknown;
+          if (matchesProjectV2(parsed)) {
+            canonicalProject = parsed;
+            return projectV2ForWorkspace(parsed);
+          }
           if (!matchesProject(parsed)) throw new Error('Incompatible RepoDNA project schema.');
           return parsed;
         }
@@ -1861,7 +2063,7 @@ function WorkspaceContent() {
         return analyzeZipBuffer(buffer, file.name.replace(/\.zip$/i, ''));
       });
       if (!isActiveAnalysis(controller)) return;
-      revealProject(controller, analyzedProject);
+      revealProject(controller, analyzedProject, canonicalProject, importedJson ? 'imported-json' : 'zip-upload');
 
       trackAnalysisCompleted('zip_upload', Date.now() - startTime, analyzedProject.repository.fileCount);
     } catch (err) {
@@ -1885,7 +2087,7 @@ function WorkspaceContent() {
         return parsed;
       });
       if (!isActiveAnalysis(controller)) return;
-      revealProject(controller, analyzedProject);
+      revealProject(controller, analyzedProject, null, 'sample');
       trackAnalysisCompleted('demo', Date.now() - startTime, analyzedProject.repository.fileCount);
     } catch (err) {
       showAnalysisError(controller, err, 'Failed to load demo project.');
@@ -1893,6 +2095,52 @@ function WorkspaceContent() {
         trackAnalysisFailed('demo', 'DEMO_LOAD_ERROR', 'client_local');
       }
     }
+  }
+
+  function handleOpenRecent(entry: BrowserCachedArtifact) {
+    const controller = beginAnalysis(`Cached graph: ${entry.project.repository.name}`);
+    const viewerProject = projectV2ForWorkspace(entry.project);
+    assertArchitectureConsistency(viewerProject);
+    revealProject(
+      controller,
+      viewerProject,
+      entry.project,
+      entry.sourceType,
+      null,
+      { key: entry.key, expiresAt: entry.expiresAt }
+    );
+  }
+
+  async function handleRemoveRecent(entry: BrowserCachedArtifact) {
+    await deleteBrowserArtifact(entry.key).catch(() => undefined);
+    if (browserArtifactKey === entry.key) {
+      setBrowserArtifactKey(null);
+      setBrowserArtifactExpiresAt(null);
+    }
+    await refreshRecentArtifacts();
+  }
+
+  async function handleClearRecent() {
+    await clearAllBrowserCaches().catch(() => undefined);
+    setRecentArtifacts([]);
+    setBrowserArtifactKey(null);
+    setBrowserArtifactExpiresAt(null);
+  }
+
+  function handleGitHubSignOut() {
+    setSession(null);
+    void clearBrowserArtifactsBySourceType('github-private').finally(() => refreshRecentArtifacts());
+  }
+
+  function returnToLanding() {
+    setProject(null);
+    setDeepProject(null);
+    setGraphExportProject(null);
+    setAnalysisOrigin(null);
+    setPublicIdentity(null);
+    setBrowserArtifactKey(null);
+    setBrowserArtifactExpiresAt(null);
+    void refreshRecentArtifacts();
   }
 
   function selectComponent(component: ArchitectureComponent) {
@@ -1997,12 +2245,20 @@ function WorkspaceContent() {
           }}
           onOpenFeedback={() => setFeedbackModalOpen(true)}
           session={session}
+          retentionEnabled={exportConsent}
+          onRetentionChange={handleRetentionChange}
+          recentArtifacts={recentArtifacts}
+          onOpenRecent={handleOpenRecent}
+          onRemoveRecent={(entry) => void handleRemoveRecent(entry)}
+          onClearRecent={() => void handleClearRecent()}
         />
         <PrivateRepoPicker
           isOpen={privatePickerOpen}
           onClose={() => setPrivatePickerOpen(false)}
-          onSelectRepo={(repoUrl) => handleAnalyzeGitHub(repoUrl)}
-          onSignOut={() => setSession(null)}
+          onSelectRepo={(repoUrl, isPrivate) => handleAnalyzeGitHub(repoUrl, false, isPrivate ? 'github-private' : null)}
+          onSignOut={handleGitHubSignOut}
+          retentionEnabled={exportConsent}
+          onRetentionChange={handleRetentionChange}
         />
         <FeedbackModal
           isOpen={feedbackModalOpen}
@@ -2018,7 +2274,7 @@ function WorkspaceContent() {
     <main className="app-shell">
       <header className="topbar">
         <div className="topbar-left">
-          <Link className="brand" href="/" onClick={(e) => { e.preventDefault(); setProject(null); }} aria-label="RepoDNA overview">
+          <Link className="brand" href="/" onClick={(e) => { e.preventDefault(); returnToLanding(); }} aria-label="RepoDNA overview">
             <span className="brand-mark">R</span>
             <span className="brand-title">RepoDNA</span>
             <span className="version">v1.1</span>
@@ -2139,7 +2395,18 @@ function WorkspaceContent() {
         )}
         {view === 'dependencies' && <DependenciesView project={project} />}
         {view === 'files' && <FilesView project={project} search={search} onSelect={selectFile} />}
-        {view === 'graph' && <CodeGraph project={deepProject ?? project} />}
+        {view === 'graph' && (
+          <CodeGraph
+            project={graphExportProject ?? deepProject ?? project}
+            exportOrigin={analysisOrigin ?? 'public-browser'}
+            exportPublicIdentity={publicIdentity}
+            exportBrowserRetention={{
+              enabled: exportConsent && analysisOrigin !== 'public-durable' && analysisOrigin !== 'sample',
+              artifactKey: browserArtifactKey,
+              expiresAt: browserArtifactExpiresAt,
+            }}
+          />
+        )}
       </section>
 
       <DetailPanel
@@ -2154,12 +2421,16 @@ function WorkspaceContent() {
         onClose={() => setDialogOpen(false)}
         onAnalyzeUrl={handleAnalyzeGitHub}
         onImportFile={handleAnalyzeZipOrJson}
+        retentionEnabled={exportConsent}
+        onRetentionChange={handleRetentionChange}
       />
       <PrivateRepoPicker
         isOpen={privatePickerOpen}
         onClose={() => setPrivatePickerOpen(false)}
-        onSelectRepo={(repoUrl) => handleAnalyzeGitHub(repoUrl)}
-        onSignOut={() => setSession(null)}
+        onSelectRepo={(repoUrl, isPrivate) => handleAnalyzeGitHub(repoUrl, false, isPrivate ? 'github-private' : null)}
+        onSignOut={handleGitHubSignOut}
+        retentionEnabled={exportConsent}
+        onRetentionChange={handleRetentionChange}
       />
       <FeedbackModal
         isOpen={feedbackModalOpen}

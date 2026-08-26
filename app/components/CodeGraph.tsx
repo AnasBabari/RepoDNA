@@ -33,6 +33,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { adaptV1ToV2Viewer } from '../lib/schema/artifact-loader';
 import type { RepoDNAProject } from '../lib/types';
 import type { GraphEdge, RepoDNAProjectV2, GraphNode } from '../lib/analyzer/v2/types';
+import { GraphExportDialog } from './GraphExportDialog';
+import type { BrowserCacheSourceType } from '../lib/export/browser-export-cache';
 
 const INITIAL_NODE_LIMIT = 80;
 const EXPAND_LIMIT = 24;
@@ -413,11 +415,36 @@ function nodeDataEqual(a: CodeGraphNodeData, b: CodeGraphNodeData): boolean {
   );
 }
 
-export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjectV2 }) {
+export function CodeGraph({
+  project,
+  exportOrigin,
+  exportPublicIdentity,
+  exportBrowserRetention,
+}: {
+  project: RepoDNAProject | RepoDNAProjectV2;
+  exportOrigin?: BrowserCacheSourceType;
+  exportPublicIdentity?: { owner: string; repo: string; commitSha: string } | null;
+  exportBrowserRetention?: { enabled: boolean; artifactKey: string | null; expiresAt: number | null };
+}) {
   const graph = useMemo(() => normalizeProject(project), [project]);
   const [resetKey, setResetKey] = useState(0);
   const [layoutSeed, setLayoutSeed] = useState(0);
   const sig = `${resetKey}:${layoutSeed}`;
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportManifest = useMemo(
+    () => ({
+      counts: {
+        nodes: graph.nodes.length,
+        relationships: graph.edges.length,
+        groups: graph.communities.length + graph.architecture.components.length,
+        unresolved: graph.unresolved.length,
+      },
+      coverage: { percentage: graph.coverage.percentage },
+      completeness: { status: graph.completeness.status },
+      adaptedFromLegacy: (project as RepoDNAProjectV2).schemaVersion !== '2.0.0',
+    }),
+    [graph, project]
+  );
 
   const [granularity, setGranularity] = useState<'structure' | 'symbols'>('structure');
   const [search, setSearch] = useState('');
@@ -771,6 +798,9 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
         </div>
         <div className="view-heading-actions">
           <span>{graph.nodes.length} entities · {graph.edges.length} relationships</span>
+          <button className="export-pill-btn" onClick={() => setExportOpen(true)} type="button">
+            Export
+          </button>
           <button className="export-pill-btn" onClick={() => setLayoutSeed((k) => k + 1)} type="button">Re-layout</button>
         </div>
       </section>
@@ -898,6 +928,16 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
           )}
         </aside>
       )}
+
+      <GraphExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        artifact={project}
+        manifest={exportManifest}
+        origin={exportOrigin ?? 'public-browser'}
+        publicIdentity={exportPublicIdentity ?? null}
+        browserRetention={exportBrowserRetention ?? { enabled: false, artifactKey: null, expiresAt: null }}
+      />
     </div>
   );
 }

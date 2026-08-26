@@ -186,10 +186,39 @@ export function trackViewChanged(view: string): void {
   captureEvent('workspace_view_changed', { view_name: view });
 }
 
-export type ExportFormat = 'json' | 'mermaid' | 'txt';
+export type ExportFormat = 'json' | 'mermaid' | 'txt' | 'graph_json' | 'graph_csv' | 'cypher' | 'parquet';
+
+export type ExportSizeBucket = '<100KB' | '100KB-1MB' | '1MB-10MB' | '10MB+';
+
+export function bucketExportSize(byteSize: number): ExportSizeBucket {
+  if (byteSize < 100 * 1024) return '<100KB';
+  if (byteSize < 1024 * 1024) return '100KB-1MB';
+  if (byteSize < 10 * 1024 * 1024) return '1MB-10MB';
+  return '10MB+';
+}
 
 export function trackArtifactExported(format: ExportFormat): void {
   captureEvent('artifact_exported', { format });
+}
+
+export function trackGraphExported(input: {
+  format: Extract<ExportFormat, 'graph_json' | 'graph_csv' | 'cypher' | 'parquet'>;
+  sourceCategory: string;
+  cacheLayer: 'vercel_blob' | 'indexeddb' | 'browser_worker';
+  cacheHit: boolean;
+  success: boolean;
+  durationMs: number;
+  byteSize: number;
+}): void {
+  captureEvent('graph_exported', {
+    format: input.format,
+    source_category: input.sourceCategory,
+    cache_layer: input.cacheLayer,
+    cache_hit: input.cacheHit,
+    success: input.success,
+    duration_bucket: bucketDuration(input.durationMs),
+    size_bucket: bucketExportSize(input.byteSize),
+  });
 }
 
 export function trackFallbackUsed(reason: 'rate_limited' | 'network_error' | 'timeout' | 'service_unavailable'): void {

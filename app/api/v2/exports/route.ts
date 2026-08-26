@@ -10,6 +10,7 @@ import { buildGraphJson } from '../../../lib/export/graph/json';
 import { graphExportFilename } from '../../../lib/export/graph';
 import { isGraphExportFormat } from '../../../lib/export/graph/types';
 import { checkExportRateLimit } from '../../../lib/export/export-rate-limit';
+import { validateRepoDNAProjectV2 } from '../../../lib/schema/safe-validator';
 import {
   createSignedDownloadUrl,
   isPublicExportCacheConfigured,
@@ -125,6 +126,10 @@ export async function POST(request: NextRequest) {
   if (!cached) {
     return createApiErrorResponse('ANALYSIS_ARTIFACT_NOT_FOUND', 'Canonical analysis artifact not found.', 404);
   }
+  const artifactValidation = validateRepoDNAProjectV2(cached.project);
+  if (!artifactValidation.valid) {
+    return createApiErrorResponse('ANALYSIS_SCHEMA_ERROR', 'Cached analysis artifact failed schema validation.', 422);
+  }
 
   let normalized;
   try {
@@ -151,17 +156,23 @@ export async function POST(request: NextRequest) {
 
   const existing = await readCachedPublicExport(pathname);
   if (existing) {
-    const signed = await createSignedDownloadUrl(pathname);
+    let signed;
+    try {
+      signed = await createSignedDownloadUrl(pathname);
+    } catch {
+      return createApiErrorResponse('EXPORT_DOWNLOAD_UNAVAILABLE', 'Could not issue a secure export download.', 503, {
+        fallbackAvailable: true,
+      });
+    }
     const exportId = await sha256Hex(`${sourceDigest}:${format}:1.0.0`);
-    const mediaType = mediaTypeForFormat(format);
     const filename = filenameForFormat(normalized.document.manifest, format);
     return NextResponse.json({
       exportId,
       format,
       filename,
-      mediaType,
-      byteSize: null,
-      sha256: null,
+      mediaType: existing.metadata.mediaType,
+      byteSize: existing.metadata.byteSize,
+      sha256: existing.metadata.sha256,
       cache: { layer: 'vercel-blob', hit: true, expiresAt: cached.pointer.expiresAt },
       download: { url: signed.url, expiresAt: signed.expiresAt },
     });
@@ -172,15 +183,15 @@ export async function POST(request: NextRequest) {
     if (format === 'graph-json') file = await buildGraphJson(normalized.document);
     else if (format === 'csv') file = await buildCsvBundle(normalized.document);
     else if (format === 'cypher') file = await buildCypher(normalized.document);
-    else {
-      return createApiErrorResponse('UNSUPPORTED_EXPORT_FORMAT', `Unsupported format: ${format}.`, 400);
-    }
+    else if (format === 'parquet') {
+      const { buildParquetBundle } = await import('../../../lib/export/graph/parquet');
+      file = await buildParquetBundle(normalized.document);
+    } else return createApiErrorResponse('UNSUPPORTED_EXPORT_FORMAT', `Unsupported format: ${format}.`, 400);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Export generation failed.';
     if ((error as { code?: string }).code === 'EXPORT_GRAPH_INVALID') {
-      return createApiErrorResponse('EXPORT_GRAPH_INVALID', message, 422);
+      return createApiErrorResponse('EXPORT_GRAPH_INVALID', 'Canonical graph failed export validation.', 422);
     }
-    return createApiErrorResponse('EXPORT_GENERATION_FAILED', message, 500);
+    return createApiErrorResponse('EXPORT_GENERATION_FAILED', 'Export generation failed.', 500);
   }
 
   const remainingTtlSeconds = Math.max(60, Math.floor((expiresEpoch - Date.now()) / 1000));
@@ -189,9 +200,17 @@ export async function POST(request: NextRequest) {
     bytes: file.bytes,
     contentType: file.mediaType,
     cacheControlMaxAge: remainingTtlSeconds,
+    sha256: file.sha256,
   });
 
-  const signed = await createSignedDownloadUrl(pathname);
+  let signed;
+  try {
+    signed = await createSignedDownloadUrl(pathname);
+  } catch {
+    return createApiErrorResponse('EXPORT_DOWNLOAD_UNAVAILABLE', 'Could not issue a secure export download.', 503, {
+      fallbackAvailable: true,
+    });
+  }
   const exportId = await sha256Hex(`${sourceDigest}:${format}:1.0.0`);
 
   return NextResponse.json({
@@ -204,14 +223,6 @@ export async function POST(request: NextRequest) {
     cache: { layer: 'vercel-blob', hit: false, expiresAt: cached.pointer.expiresAt },
     download: { url: signed.url, expiresAt: signed.expiresAt },
   });
-}
-
-function mediaTypeForFormat(format: string): string {
-  if (format === 'graph-json') return 'application/vnd.repodna.graph+json; charset=utf-8';
-  if (format === 'csv') return 'application/zip';
-  if (format === 'cypher') return 'text/plain; charset=utf-8';
-  if (format === 'parquet') return 'application/zip';
-  return 'application/octet-stream';
 }
 
 function filenameForFormat(
