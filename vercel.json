@@ -6,5 +6,11 @@
     "app/api/v2/analyses/[runId]/events/route.ts": {
       "supportsCancellation": true
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/internal/cleanup-artifacts",
+      "schedule": "0 4 * * *"
+    }
+  ]
 }
