@@ -30,7 +30,7 @@ interface FormatState {
 
 const FORMAT_LABELS: Record<GraphExportFormat, { label: string; description: string }> = {
   'graph-json': { label: 'Graph JSON', description: 'Single JSON file — complete graph with manifest' },
-  csv: { label: 'CSV tables', description: 'ZIP containing six CSV tables plus manifest.json' },
+  csv: { label: 'CSV tables', description: 'ZIP containing five CSV tables plus manifest.json' },
   cypher: { label: 'Neo4j Cypher', description: 'cypher.txt for Neo4j 5+ — deterministic MERGE, no APOC or AI key' },
   parquet: { label: 'Parquet', description: 'ZIP containing Arrow/DuckDB-ready Parquet tables' },
 };
@@ -94,7 +94,6 @@ function friendlyError(error: unknown): string {
 }
 
 export interface GraphExportDialogProps {
-  open: boolean;
   onClose: () => void;
   artifact: AnyExportableArtifact | null;
   manifest: {
@@ -113,7 +112,6 @@ export interface GraphExportDialogProps {
 }
 
 export function GraphExportDialog({
-  open,
   onClose,
   artifact,
   manifest,
@@ -139,7 +137,6 @@ export function GraphExportDialog({
   }, [onClose]);
 
   useEffect(() => {
-    if (!open) return;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
     const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -171,15 +168,7 @@ export function GraphExportDialog({
       document.removeEventListener('keydown', handleKeyDown);
       previouslyFocused?.focus();
     };
-  }, [closeDialog, open]);
-
-  useEffect(() => {
-    if (open) {
-      setStates(initialStates());
-      setFallbackNotice(null);
-      setCacheWarning(null);
-    }
-  }, [artifact, open]);
+  }, [closeDialog]);
 
   const updateState = useCallback((format: GraphExportFormat, patch: Partial<FormatState>) => {
     setStates((previous) => ({ ...previous, [format]: { ...previous[format], ...patch } }));
@@ -362,8 +351,6 @@ export function GraphExportDialog({
   const handleCancel = useCallback((format: GraphExportFormat) => {
     abortControllers.current[format]?.abort();
   }, []);
-
-  if (!open) return null;
 
   return (
     <div className="graph-export-overlay" role="presentation" onMouseDown={closeDialog}>

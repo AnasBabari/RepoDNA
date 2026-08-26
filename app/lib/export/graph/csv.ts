@@ -11,13 +11,7 @@ const FORMULA_PREFIX_RE = /^\s*[=+\-@\t\r]/;
 
 function protectFormula(value: string): string {
   if (value.length === 0) return value;
-  const trimmed = value.trimStart();
-  if (trimmed.length === 0) return value;
-  const first = trimmed[0];
-  if (first === '=' || first === '+' || first === '-' || first === '@' || first === '\t' || first === '\r') {
-    return `'${value}`;
-  }
-  return value;
+  return FORMULA_PREFIX_RE.test(value) ? `'${value}` : value;
 }
 
 function escapeCsvCell(value: string | null | undefined): string {

@@ -90,7 +90,7 @@ export async function checkExportRateLimit(input: {
         retryAfter: result.success ? undefined : Math.max(1, Math.ceil((result.reset - Date.now()) / 1000)),
         quotaType,
       };
-    } catch (error) {
+    } catch {
       const err = new Error('Rate limit infrastructure unavailable') as Error & { code: string };
       err.code = 'RATE_LIMIT_UNAVAILABLE';
       throw err;

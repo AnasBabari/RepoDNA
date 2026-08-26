@@ -445,6 +445,14 @@ export function CodeGraph({
     }),
     [graph, project]
   );
+  // Stable identity of the currently loaded artifact. The export dialog below
+  // mounts conditionally and uses this as its React key, so every open session
+  // starts from freshly initialised internal state instead of relying on an
+  // effect-driven reset.
+  const exportArtifactKey = useMemo(
+    () => [project.schemaVersion, project.generatedAt, project.repository.name, project.repository.source].join(':'),
+    [project]
+  );
 
   const [granularity, setGranularity] = useState<'structure' | 'symbols'>('structure');
   const [search, setSearch] = useState('');
@@ -929,15 +937,17 @@ export function CodeGraph({
         </aside>
       )}
 
-      <GraphExportDialog
-        open={exportOpen}
-        onClose={() => setExportOpen(false)}
-        artifact={project}
-        manifest={exportManifest}
-        origin={exportOrigin ?? 'public-browser'}
-        publicIdentity={exportPublicIdentity ?? null}
-        browserRetention={exportBrowserRetention ?? { enabled: false, artifactKey: null, expiresAt: null }}
-      />
+      {exportOpen && (
+        <GraphExportDialog
+          key={exportArtifactKey}
+          onClose={() => setExportOpen(false)}
+          artifact={project}
+          manifest={exportManifest}
+          origin={exportOrigin ?? 'public-browser'}
+          publicIdentity={exportPublicIdentity ?? null}
+          browserRetention={exportBrowserRetention ?? { enabled: false, artifactKey: null, expiresAt: null }}
+        />
+      )}
     </div>
   );
 }

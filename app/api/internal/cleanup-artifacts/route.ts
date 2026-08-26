@@ -34,6 +34,8 @@ async function handleCleanup(request: NextRequest): Promise<NextResponse> {
     let processed = 0;
     let deletedCanonical = 0;
     let deletedExports = 0;
+    let failedDeletions = 0;
+    let failedBatches = 0;
     const now = Date.now();
 
     do {
@@ -62,10 +64,18 @@ async function handleCleanup(request: NextRequest): Promise<NextResponse> {
 
       for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
         const batch = toDelete.slice(i, i + BATCH_SIZE);
-        await del(batch).catch(() => undefined);
-        for (const pathname of batch) {
-          if (pathname.endsWith('/repodna-v2.json')) deletedCanonical++;
-          else deletedExports++;
+        try {
+          await del(batch);
+          for (const pathname of batch) {
+            if (pathname.endsWith('/repodna-v2.json')) deletedCanonical++;
+            else deletedExports++;
+          }
+        } catch {
+          // Failed batches are reported honestly instead of being counted as
+          // deleted. Blob pathnames, tokens, and exception text are never
+          // included in responses.
+          failedBatches++;
+          failedDeletions += batch.length;
         }
       }
 
@@ -78,8 +88,10 @@ async function handleCleanup(request: NextRequest): Promise<NextResponse> {
       deletedCanonical,
       deletedExports,
       deletedTotal: deletedCanonical + deletedExports,
+      failedDeletions,
+      failedBatches,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ code: 'CLEANUP_FAILED', message: 'Cleanup failed.' }, { status: 500 });
   }
 }

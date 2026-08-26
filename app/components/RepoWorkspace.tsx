@@ -1531,7 +1531,7 @@ function WorkspaceContent() {
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [analysisOrigin, setAnalysisOrigin] = useState<AnalysisOrigin | null>(null);
   const [publicIdentity, setPublicIdentity] = useState<{ owner: string; repo: string; commitSha: string } | null>(null);
-  const [exportConsent, setExportConsent] = useState(false);
+  const [exportConsent, setExportConsent] = useState(() => getBrowserCacheConsent() === 'granted');
   const [browserArtifactKey, setBrowserArtifactKey] = useState<string | null>(null);
   const [browserArtifactExpiresAt, setBrowserArtifactExpiresAt] = useState<number | null>(null);
   const [recentArtifacts, setRecentArtifacts] = useState<BrowserCachedArtifact[]>([]);
@@ -1546,7 +1546,6 @@ function WorkspaceContent() {
 
   useEffect(() => {
     let cancelled = false;
-    setExportConsent(getBrowserCacheConsent() === 'granted');
     void listBrowserArtifacts().then((entries) => {
       if (!cancelled) setRecentArtifacts(entries);
     }).catch(() => undefined);

@@ -10,7 +10,7 @@ export interface ExportWorkerHandle {
 
 function createWorker(): Worker | null {
   try {
-    return new Worker(new URL('../../workers/graph-export.worker.ts', import.meta.url), { type: 'module' });
+    return new Worker(new URL('../../../workers/graph-export.worker.ts', import.meta.url), { type: 'module' });
   } catch {
     return null;
   }
