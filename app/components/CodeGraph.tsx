@@ -350,6 +350,10 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
       return {
         id: n.id,
         position,
+        // React Flow can paint the custom node before its first measurement;
+        // these dimensions also let MiniMap render nodes immediately.
+        initialWidth: 132,
+        initialHeight: 86,
         data: {
           label: shortLabel(n),
           kind: n.kind,
