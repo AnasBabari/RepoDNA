@@ -1,0 +1,240 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RepoDNAGraphExportV1",
+  "description": "Deterministic graph export projection of a canonical RepoDNA v2 artifact. Stable ordering, complete provenance, no request-time timestamps.",
+  "type": "object",
+  "required": ["manifest", "nodes", "relationships", "groups", "groupMemberships", "unresolved"],
+  "additionalProperties": false,
+  "properties": {
+    "manifest": {
+      "type": "object",
+      "required": [
+        "exportSchemaVersion",
+        "exporterVersion",
+        "sourceSchemaVersion",
+        "analyzerVersion",
+        "sourceArtifactSha256",
+        "repository",
+        "analyzedAt",
+        "coverage",
+        "completeness",
+        "executedRepositoryCode",
+        "adaptedFromLegacy",
+        "ordering",
+        "csvFormulaEscaping",
+        "counts"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "exportSchemaVersion": { "const": "1.0.0" },
+        "exporterVersion": { "type": "string", "minLength": 1 },
+        "sourceSchemaVersion": { "enum": ["2.0.0", "1.1.0"] },
+        "analyzerVersion": { "type": "string", "minLength": 1 },
+        "sourceArtifactSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "repository": {
+          "type": "object",
+          "required": ["name", "source", "commitSha", "analyzedRef"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "source": { "type": "string" },
+            "commitSha": { "type": ["string", "null"] },
+            "analyzedRef": { "type": ["string", "null"] }
+          }
+        },
+        "analyzedAt": { "type": "string" },
+        "coverage": {
+          "type": "object",
+          "required": ["percentage", "truncationReasons"],
+          "additionalProperties": false,
+          "properties": {
+            "percentage": { "type": "number" },
+            "truncationReasons": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "completeness": {
+          "type": "object",
+          "required": ["status", "reasons"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "type": "string" },
+            "reasons": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "executedRepositoryCode": { "const": false },
+        "adaptedFromLegacy": { "type": "boolean" },
+        "ordering": { "const": "stable-id-ascending" },
+        "csvFormulaEscaping": { "const": "apostrophe-prefix-on-formula-leading-characters" },
+        "counts": {
+          "type": "object",
+          "required": ["nodes", "relationships", "groups", "groupMemberships", "unresolved"],
+          "additionalProperties": false,
+          "properties": {
+            "nodes": { "type": "integer", "minimum": 0 },
+            "relationships": { "type": "integer", "minimum": 0 },
+            "groups": { "type": "integer", "minimum": 0 },
+            "groupMemberships": { "type": "integer", "minimum": 0 },
+            "unresolved": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "qualifiedName",
+          "path",
+          "language",
+          "range",
+          "confidence",
+          "evidence",
+          "properties",
+          "communityIds",
+          "architectureGroupIds"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "minLength": 1 },
+          "name": { "type": "string" },
+          "qualifiedName": { "type": "string" },
+          "path": { "type": "string" },
+          "language": { "type": "string" },
+          "range": { "$ref": "#/definitions/sourceRange" },
+          "confidence": { "type": ["number", "null"] },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "properties": { "type": "object" },
+          "communityIds": { "type": "array", "items": { "type": "string" } },
+          "architectureGroupIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "sourceId",
+          "targetId",
+          "sourceName",
+          "sourceKind",
+          "sourcePath",
+          "targetName",
+          "targetKind",
+          "targetPath",
+          "type",
+          "status",
+          "confidence",
+          "why",
+          "evidenceFile",
+          "evidenceRange",
+          "resolverName",
+          "resolverVersion",
+          "alternativeCandidateIds",
+          "unresolvedExpression",
+          "properties"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "sourceId": { "type": "string", "minLength": 1 },
+          "targetId": { "type": ["string", "null"] },
+          "sourceName": { "type": "string" },
+          "sourceKind": { "type": ["string", "null"] },
+          "sourcePath": { "type": "string" },
+          "targetName": { "type": ["string", "null"] },
+          "targetKind": { "type": ["string", "null"] },
+          "targetPath": { "type": ["string", "null"] },
+          "type": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["extracted", "resolved", "inferred", "ambiguous", "unresolved"] },
+          "confidence": { "type": "number" },
+          "why": { "type": "string", "minLength": 1 },
+          "evidenceFile": { "type": "string" },
+          "evidenceRange": { "$ref": "#/definitions/sourceRange" },
+          "resolverName": { "type": "string" },
+          "resolverVersion": { "type": "string" },
+          "alternativeCandidateIds": { "type": "array", "items": { "type": "string" } },
+          "unresolvedExpression": { "type": ["string", "null"] },
+          "properties": { "type": "object" }
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "groupType", "label", "cohesion", "architectureType", "confidence", "evidence", "properties"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "groupType": { "enum": ["community", "architecture"] },
+          "label": { "type": "string" },
+          "cohesion": { "type": ["number", "null"] },
+          "architectureType": { "type": ["string", "null"] },
+          "confidence": { "type": ["number", "null"] },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "properties": { "type": "object" }
+        }
+      }
+    },
+    "groupMemberships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["groupId", "nodeId", "membershipReason"],
+        "additionalProperties": false,
+        "properties": {
+          "groupId": { "type": "string", "minLength": 1 },
+          "nodeId": { "type": "string", "minLength": 1 },
+          "membershipReason": { "enum": ["community-detection", "architecture-file-membership"] }
+        }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "edgeId",
+          "sourceId",
+          "relationshipType",
+          "reason",
+          "unresolvedExpression",
+          "candidateIds",
+          "evidenceFile",
+          "evidenceRange"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "edgeId": { "type": "string", "minLength": 1 },
+          "sourceId": { "type": "string", "minLength": 1 },
+          "relationshipType": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 },
+          "unresolvedExpression": { "type": ["string", "null"] },
+          "candidateIds": { "type": "array", "items": { "type": "string" } },
+          "evidenceFile": { "type": "string" },
+          "evidenceRange": { "$ref": "#/definitions/sourceRange" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "sourceRange": {
+      "type": "object",
+      "required": ["startLine", "startCol", "endLine", "endCol"],
+      "additionalProperties": false,
+      "properties": {
+        "startLine": { "type": "integer" },
+        "startCol": { "type": "integer" },
+        "endLine": { "type": "integer" },
+        "endCol": { "type": "integer" }
+      }
+    }
+  }
+}
