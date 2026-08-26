@@ -122,6 +122,22 @@ function generateTextReport(project: RepoDNAProject | RepoDNAProjectV2): string 
   return generateTextReportImpl(project);
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.rel = 'noopener';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  // Give the browser a chance to start the download before releasing the blob.
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 0);
+}
+
 function generateMermaid(project: RepoDNAProject): string {
   const lines = ['flowchart TD'];
   project.architecture.components.forEach((comp) => {
@@ -1871,12 +1887,7 @@ function WorkspaceContent() {
     if (!project) return;
     const canonicalArtifact = deepProject ?? project;
     const blob = new Blob([JSON.stringify(canonicalArtifact, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${project.repository.name}-repodna.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `${project.repository.name}-repodna.json`);
     trackArtifactExported('json');
   }
 
@@ -1884,12 +1895,7 @@ function WorkspaceContent() {
     if (!project) return;
     const report = generateTextReport(deepProject ?? project);
     const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${project.repository.name}-repodna-report.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `${project.repository.name}-repodna-report.txt`);
     trackArtifactExported('txt');
   }
 
