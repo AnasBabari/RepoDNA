@@ -1920,6 +1920,39 @@ code, kbd {
   transition: fill 0.18s ease, stroke 0.18s ease;
 }
 
+/* The technical graph has many more nodes than the architecture overview.
+   Keep its navigator legible and avoid the light default mask appearing when
+   the minimap itself is zoomed. */
+.code-graph-container .react-flow {
+  background: #06090d;
+}
+
+.code-graph-container .react-flow__minimap {
+  --xy-minimap-background-color-props: #081018;
+  --xy-minimap-mask-background-color-props: rgba(6, 12, 18, 0.74);
+  --xy-minimap-mask-stroke-color-props: #4ce1f5;
+  background: #081018 !important;
+  border-color: #253646 !important;
+}
+
+.code-graph-container .react-flow__minimap-svg {
+  background: #081018;
+}
+
+.code-graph-container .react-flow__minimap-node {
+  filter: none;
+  opacity: 0.96;
+}
+
+.code-graph-container .react-flow__minimap-mask {
+  fill: rgba(6, 12, 18, 0.74);
+  stroke: #4ce1f5;
+}
+
+.code-graph-container .react-flow__edge-path {
+  transition: none;
+}
+
 .minimap-help {
   position: absolute;
   right: 15px;

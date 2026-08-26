@@ -11,7 +11,7 @@
 
 import { Background, Controls, Handle, MarkerType, MiniMap, Position, ReactFlow, type Edge, type Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import { adaptV1ToV2Viewer } from '../lib/schema/artifact-loader';
 import type { RepoDNAProject } from '../lib/types';
@@ -19,6 +19,7 @@ import type { GraphEdge, RepoDNAProjectV2, GraphNode } from '../lib/analyzer/v2/
 
 const INITIAL_NODE_LIMIT = 80;
 const EXPAND_LIMIT = 24;
+const MAX_RENDERED_EDGE_LIMIT = 240;
 
 const kindTone: Record<string, string> = {
   repository: '#e879f9',
@@ -124,14 +125,19 @@ function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number):
   const ranked = [...nodes].sort((a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) || a.id.localeCompare(b.id));
   const centerId = ranked[0]?.id;
   for (const node of nodes) {
-    const angle = hashSeed(`${seed}:${node.id}:angle`) * Math.PI * 2;
-    const radius = centerId === node.id ? 0 : 150 + hashSeed(`${seed}:${node.id}:radius`) * 640;
+    const rank = ranked.findIndex((candidate) => candidate.id === node.id);
+    // A deterministic spiral gives connected hubs room to breathe before the
+    // force pass starts, which avoids the dense central knot on large repos.
+    const angle = rank * 2.399963 + hashSeed(`${seed}:${node.id}:angle`) * 0.45;
+    const radius = centerId === node.id
+      ? 0
+      : 260 + Math.sqrt(rank + 1) * 105 + hashSeed(`${seed}:${node.id}:radius`) * 120;
     positions.set(node.id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
     velocities.set(node.id, { x: 0, y: 0 });
   }
 
   const visibleEdges = edges.filter((edge) => edge.target && nodeIds.has(edge.source) && nodeIds.has(edge.target));
-  const iterations = Math.min(180, Math.max(90, 80 + nodes.length));
+  const iterations = Math.min(140, Math.max(90, 70 + Math.floor(nodes.length * 0.75)));
   for (let iteration = 0; iteration < iterations; iteration++) {
     const temperature = 1 - iteration / iterations;
     const forces = new Map<string, GraphPoint>(nodes.map((node) => [node.id, { x: 0, y: 0 }]));
@@ -148,7 +154,8 @@ function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number):
         const distance = Math.sqrt(distanceSquared);
         dx /= distance;
         dy /= distance;
-        const repel = Math.min(420, 72000 / distanceSquared);
+        const collision = distance < 180 ? (180 - distance) * 1.4 : 0;
+        const repel = Math.min(900, 150000 / distanceSquared + collision);
         forces.get(left.id)!.x += dx * repel;
         forces.get(left.id)!.y += dy * repel;
         forces.get(right.id)!.x -= dx * repel;
@@ -164,7 +171,7 @@ function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number):
       const distance = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
       dx /= distance;
       dy /= distance;
-      const spring = Math.max(-160, Math.min(160, (distance - 250) * 0.012));
+      const spring = Math.max(-220, Math.min(220, (distance - 360) * 0.006));
       forces.get(edge.source)!.x += dx * spring;
       forces.get(edge.source)!.y += dy * spring;
       forces.get(edge.target!)!.x -= dx * spring;
@@ -175,11 +182,12 @@ function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number):
       const point = positions.get(node.id)!;
       const force = forces.get(node.id)!;
       const velocity = velocities.get(node.id)!;
-      // A gentle gravity term keeps the constellation inside the viewport.
-      force.x -= point.x * 0.0022;
-      force.y -= point.y * 0.0022;
-      velocity.x = (velocity.x + force.x * 0.045) * 0.82;
-      velocity.y = (velocity.y + force.y * 0.045) * 0.82;
+      // Very light gravity keeps the constellation bounded without pulling
+      // every connected neighborhood back into one central cluster.
+      force.x -= point.x * 0.0007;
+      force.y -= point.y * 0.0007;
+      velocity.x = (velocity.x + force.x * 0.038) * 0.84;
+      velocity.y = (velocity.y + force.y * 0.038) * 0.84;
       const maxStep = 16 * temperature + 1;
       const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y) || 1;
       const step = Math.min(1, maxStep / speed);
@@ -189,6 +197,45 @@ function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number):
   }
 
   return positions;
+}
+
+function edgePriority(edge: GraphEdge, degreeById: Map<string, number>): number {
+  const statusScore = edge.status === 'resolved' ? 3 : edge.status === 'ambiguous' ? 2 : 1;
+  const relationScore: Record<string, number> = {
+    EXPOSES_ROUTE: 8,
+    HANDLES: 8,
+    READS: 7,
+    WRITES: 7,
+    CALLS: 6,
+    INVOKES: 6,
+    IMPORTS: 5,
+    DEPENDS_ON: 5,
+    INHERITS: 4,
+    IMPLEMENTS: 4,
+    DEFINES: 3,
+    CONTAINS: 2,
+    CONFIGURES: 2,
+  };
+  const endpointDegree = (degreeById.get(edge.source) ?? 0) + (edge.target ? degreeById.get(edge.target) ?? 0 : 0);
+  return statusScore * 10000 + (relationScore[edge.type] ?? 1) * 1000 + endpointDegree * 10 + edge.confidence;
+}
+
+function selectRenderedEdges(edges: GraphEdge[], limit: number, degreeById: Map<string, number>): GraphEdge[] {
+  if (edges.length <= limit) return edges;
+
+  const ranked = edges
+    .map((edge, index) => ({ edge, index, score: edgePriority(edge, degreeById) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limit);
+
+  // Preserve source order so a re-layout never changes edge identity/order
+  // just because the ranking tie-breaker changed.
+  return ranked.sort((a, b) => a.index - b.index).map(({ edge }) => edge);
+}
+
+function graphMiniMapNodeColor(node: Node): string {
+  const color = (node.data as Partial<CodeGraphNodeData>).color;
+  return typeof color === 'string' ? color : '#38bdf8';
 }
 
 export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjectV2 }) {
@@ -282,9 +329,19 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
 
+  const candidateEdges = useMemo(
+    () => filteredEdges.filter((e) => visibleNodeIds.has(e.source) && (!e.target || visibleNodeIds.has(e.target))),
+    [filteredEdges, visibleNodeIds]
+  );
+
+  const renderedEdges = useMemo(
+    () => selectRenderedEdges(candidateEdges, MAX_RENDERED_EDGE_LIMIT, degreeById),
+    [candidateEdges, degreeById]
+  );
+
   const layoutPositions = useMemo(
-    () => layoutForceGraph(visibleNodes, filteredEdges, layoutSeed),
-    [visibleNodes, filteredEdges, layoutSeed]
+    () => layoutForceGraph(visibleNodes, candidateEdges, layoutSeed),
+    [visibleNodes, candidateEdges, layoutSeed]
   );
 
   const rfNodes: Node<CodeGraphNodeData>[] = useMemo(() => {
@@ -307,17 +364,18 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
   }, [visibleNodes, degreeById, layoutPositions]);
 
   const rfEdges: Edge<CodeGraphEdgeData>[] = useMemo(() => {
-    return filteredEdges
-      .filter((e) => visibleNodeIds.has(e.source) && (!e.target || visibleNodeIds.has(e.target)))
-      .map((e) => ({
+    return renderedEdges.map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target ?? e.source,
-        animated: e.status === 'unresolved' || e.status === 'ambiguous',
+        type: 'straight',
+        // Unresolved edges remain visibly dashed; animation adds continuous
+        // paint work while zooming without adding useful information.
+        animated: false,
         style: {
           stroke: edgeTypeTone[e.type] ?? '#94a3b8',
-          strokeDasharray: e.status === 'unresolved' ? '5 3' : undefined,
-          opacity: 0.75,
+          strokeDasharray: e.status === 'unresolved' || e.status === 'ambiguous' ? '6 4' : undefined,
+          opacity: e.status === 'resolved' ? 0.7 : 0.56,
         },
         markerEnd: { type: MarkerType.ArrowClosed, color: edgeTypeTone[e.type] ?? '#94a3b8' },
         data: {
@@ -333,7 +391,7 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
           unresolvedExpression: e.unresolvedExpression ?? null,
         },
       }));
-  }, [filteredEdges, visibleNodeIds]);
+  }, [renderedEdges]);
 
   // Deterministic layered layout by kind tier, then degree.
 
@@ -364,7 +422,9 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
     setLayoutSeed((k) => k + 1);
   }
 
-  const truncated = visibleNodes.length < graph.nodes.filter((n) => (granularity === 'structure' ? structureKinds : symbolKinds).has(n.kind)).length;
+  const candidateNodeCount = graph.nodes.filter((n) => (granularity === 'structure' ? structureKinds : symbolKinds).has(n.kind)).length;
+  const nodesTruncated = visibleNodes.length < candidateNodeCount;
+  const edgesTruncated = renderedEdges.length < candidateEdges.length;
 
   return (
     <div className="code-graph-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 480 }}>
@@ -403,7 +463,7 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
         </button>
         <button className="chip-button" onClick={resetView} type="button">Reset view</button>
         <span style={{ opacity: 0.65, fontSize: 12 }} role="status">
-          {visibleNodes.length} nodes · {rfEdges.length} edges shown{truncated ? ` of ${graph.nodes.length}` : ''} · click a node to expand
+          {visibleNodes.length}{nodesTruncated ? ` of ${candidateNodeCount}` : ''} nodes · {renderedEdges.length}{edgesTruncated ? ` of ${candidateEdges.length}` : ''} edges shown · click a node to expand
         </span>
       </div>
 
@@ -412,16 +472,33 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
           key={resetKey}
           nodes={rfNodes}
           edges={rfEdges}
-          nodeTypes={{ codegraph: CodeGraphNode }}
+          nodeTypes={codeGraphNodeTypes}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
           fitView
           minZoom={0.1}
+          nodesConnectable={false}
+          edgesFocusable={false}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={24} />
+          <Background bgColor="#06090d" color="#142633" gap={36} size={1} />
           <Controls showInteractive={false} />
-          <MiniMap nodeColor={(node) => (node.data as CodeGraphNodeData).color} pannable zoomable />
+          <MiniMap
+            ariaLabel="Code graph navigator. Drag to pan, scroll to zoom, or select a node."
+            bgColor="#081018"
+            maskColor="rgba(6, 12, 18, 0.74)"
+            maskStrokeColor="#4ce1f5"
+            maskStrokeWidth={1.5}
+            nodeBorderRadius={5}
+            nodeColor={graphMiniMapNodeColor}
+            nodeStrokeColor="#dffbff"
+            nodeStrokeWidth={2}
+            offsetScale={2}
+            pannable
+            style={{ background: '#081018' }}
+            zoomStep={0.5}
+            zoomable
+          />
         </ReactFlow>
       </div>
 
@@ -476,7 +553,7 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
   );
 }
 
-function CodeGraphNode({ data }: { data: CodeGraphNodeData }) {
+const CodeGraphNode = memo(function CodeGraphNode({ data }: { data: CodeGraphNodeData }) {
   return (
     <div
       tabIndex={0}
@@ -515,4 +592,6 @@ function CodeGraphNode({ data }: { data: CodeGraphNodeData }) {
       <Handle type="source" position={Position.Right} style={{ background: data.color }} />
     </div>
   );
-}
+});
+
+const codeGraphNodeTypes = { codegraph: CodeGraphNode };
