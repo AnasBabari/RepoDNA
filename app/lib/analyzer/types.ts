@@ -43,6 +43,20 @@ export const DEFAULT_INGESTION_LIMITS: IngestionLimits = {
   fetchTimeoutMs: 20_000, // 20 seconds
 };
 
+/**
+ * Public analyses run inside a durable workflow, so they do not need to send
+ * the downloaded archive back through a browser/serverless response. Keep the
+ * normal 25 MB browser/private bound, but allow a larger bounded codeload
+ * archive for public repositories before falling back to Git-tree acquisition.
+ */
+export const PUBLIC_REPOSITORY_INGESTION_LIMITS: IngestionLimits = {
+  ...DEFAULT_INGESTION_LIMITS,
+  maxArchiveEntries: 50_000,
+  maxArchiveBytes: 128 * 1024 * 1024,
+  maxTotalExtractedBytes: 128 * 1024 * 1024,
+  fetchTimeoutMs: 60_000,
+};
+
 export type IngestionErrorCode =
   | 'INVALID_GITHUB_URL'
   | 'REPO_NOT_FOUND'

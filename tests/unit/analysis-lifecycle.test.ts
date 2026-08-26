@@ -9,6 +9,8 @@ import {
   runAnalysisLifecycle,
 } from '../../app/lib/analysis-lifecycle';
 import type { RepoDNAProject } from '../../app/lib/types';
+import { projectV2ForWorkspace } from '../../app/lib/schema/v2-viewer-projection';
+import type { RepoDNAProjectV2 } from '../../app/lib/analyzer/v2/types';
 
 const instantTiming = {
   discoveryStepMs: 0,
@@ -187,7 +189,8 @@ describe('architecture consistency audit', () => {
   ];
 
   it.each(sampleFiles)('accepts the checked-in artifact %s', (sampleFile) => {
-    const project = JSON.parse(readFileSync(join(process.cwd(), sampleFile), 'utf8')) as RepoDNAProject;
+    const artifact = JSON.parse(readFileSync(join(process.cwd(), sampleFile), 'utf8')) as RepoDNAProject | RepoDNAProjectV2;
+    const project = artifact.schemaVersion === '2.0.0' ? projectV2ForWorkspace(artifact) : artifact;
     const result = auditArchitectureConsistency(project);
     expect(result.issues, result.issues.join('\n')).toEqual([]);
   });

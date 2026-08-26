@@ -1,23 +1,38 @@
 /// <reference lib="webworker" />
 import { extractFromZip } from '../lib/analyzer/ingestion';
+import type { DiscoveredFile, IngestionInventory } from '../lib/analyzer/types';
 import { analyzeRepositoryV2 } from '../lib/analyzer/v2/pipeline';
 
 /**
  * Transient deep-analysis worker for private repositories.
  *
- * The main thread streams a bounded archive from /api/v2/github/private-archive
- * and transfers the buffer here. Parsing and graph construction happen entirely
- * inside this worker so the UI thread stays responsive. The buffer and the
- * resulting graph live only in this tab's memory: nothing is persisted, and the
- * main thread drops its copy of the archive as soon as transfer completes.
+ * The main thread streams a bounded archive or a filtered Git tree payload here.
+ * Parsing and graph construction happen entirely inside this worker so the UI
+ * thread stays responsive. The source and resulting graph live only in this
+ * tab's memory: nothing is persisted.
  */
 
-export interface DeepScanRequest {
-  type: 'analyze';
-  buffer: ArrayBuffer;
+export interface DeepScanDiscovery {
+  files: DiscoveredFile[];
+  skipped: { path: string; reason: string }[];
   name: string;
-  source?: string;
+  source: string;
+  inventory?: IngestionInventory;
 }
+
+export type DeepScanRequest =
+  | {
+      type: 'analyze';
+      buffer: ArrayBuffer;
+      name: string;
+      source?: string;
+    }
+  | {
+      type: 'analyze-discovery';
+      discovery: DeepScanDiscovery;
+      name: string;
+      source: string;
+    };
 
 export type DeepScanResponse =
   | { type: 'progress'; stage: string; message: string; percent?: number }
@@ -25,22 +40,21 @@ export type DeepScanResponse =
   | { type: 'error'; code: string; message: string };
 
 self.onmessage = async (event: MessageEvent<DeepScanRequest>) => {
-  if (event.data?.type !== 'analyze') return;
-  const { buffer, name } = event.data;
+  if (event.data?.type !== 'analyze' && event.data?.type !== 'analyze-discovery') return;
+  const { name } = event.data;
   const post = (msg: DeepScanResponse) => (self as unknown as Worker).postMessage(msg);
 
   try {
     post({ type: 'progress', stage: 'inventory', message: 'Inventorying repository files…', percent: 5 });
 
-    const discovery = await extractFromZip(buffer, name);
-    // Release the caller's reference promptly; extraction owns decoded copies.
-    // Note: the transferred ArrayBuffer cannot be "untransferred", but we avoid
-    // holding any additional references beyond this point.
+    const discovery = event.data.type === 'analyze'
+      ? await extractFromZip(event.data.buffer, name)
+      : event.data.discovery;
 
     post({
       type: 'progress',
       stage: 'parse',
-      message: `Parsing ${discovery.inventory.firstPartySourceFileCount} source files…`,
+      message: `Parsing ${discovery.inventory?.firstPartySourceFileCount ?? discovery.files.length} source files…`,
       percent: 20,
     });
 

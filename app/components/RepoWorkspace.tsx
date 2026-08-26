@@ -53,10 +53,10 @@ type OverviewAudience = 'plain' | 'technical';
 const navigation: { id: View; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'architecture', label: 'Architecture' },
-  { id: 'graph', label: 'Code Graph' },
   { id: 'routes', label: 'Routes & trace' },
   { id: 'dependencies', label: 'Dependencies' },
   { id: 'files', label: 'Files & symbols' },
+  { id: 'graph', label: 'Code Graph' },
 ];
 
 const DURABLE_STAGE_STEPS: Record<string, number> = {
@@ -100,6 +100,20 @@ function matchesProject(value: unknown): value is RepoDNAProject {
     !!candidate.metrics &&
     Array.isArray(candidate.diagnostics) &&
     !!candidate.metadata?.fileComponents
+  );
+}
+
+function matchesProjectV2(value: unknown): value is RepoDNAProjectV2 {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<RepoDNAProjectV2>;
+  return (
+    candidate.schemaVersion === '2.0.0' &&
+    !!candidate.repository?.name &&
+    !!candidate.inventory &&
+    Array.isArray(candidate.nodes) &&
+    Array.isArray(candidate.edges) &&
+    Array.isArray(candidate.diagnostics) &&
+    !!candidate.security
   );
 }
 
@@ -635,7 +649,7 @@ function Overview({
   })();
   // Never display "Fully mapped" unless all supported first-party files parsed and no limits/truncation
   const hasSkippedDiagnostics = project.diagnostics.some(
-    (d) => d.code.startsWith('skipped_') || ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_PARSE_PARTIAL', 'SOURCE_PARSE_FAILED'].includes(d.code)
+    (d) => d.code.startsWith('skipped_') || ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_PARSE_PARTIAL', 'SOURCE_PARSE_FAILED', 'GRAPH_NODES_COMPACTED', 'GRAPH_EDGES_COMPACTED'].includes(d.code)
   );
   const hasUnresolvedRoutes = incompletePaths > 0;
   const isFullyMapped = project.metrics.parseSuccessRate === 100 && !hasSkippedDiagnostics && !hasUnresolvedRoutes;
@@ -1587,6 +1601,11 @@ function WorkspaceContent() {
               const sampleRes = await fetch(samplePath, { signal: controller.signal });
               if (sampleRes.ok) {
                 const parsedSample = (await sampleRes.json()) as unknown;
+                if (matchesProjectV2(parsedSample)) {
+                  loadedSample = true;
+                  canonicalProject = parsedSample;
+                  return projectV2ForWorkspace(parsedSample);
+                }
                 if (matchesProject(parsedSample)) {
                   loadedSample = true;
                   return parsedSample;

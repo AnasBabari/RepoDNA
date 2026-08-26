@@ -16,6 +16,7 @@ import {
 } from './graph';
 import { extractFromFileList, extractFromZip, fetchGitHubRepo, parseGitHubUrl, type ParsedGitHubUrl } from './ingestion';
 export { parseGitHubUrl, type ParsedGitHubUrl };
+import { DEFAULT_INGESTION_LIMITS, type IngestionLimits } from './types';
 import type {
   Diagnostic,
   DiscoveredFile,
@@ -29,6 +30,7 @@ export type ParserMode = 'legacy' | 'tree-sitter';
 
 export interface AnalyzeOptions {
   parserMode?: ParserMode;
+  ingestionLimits?: IngestionLimits;
 }
 
 export function resolveParserMode(options?: AnalyzeOptions): ParserMode {
@@ -50,6 +52,7 @@ export async function analyzeRepositoryFiles(
 ): Promise<RepoDNAProject> {
   const { files: discoveredFiles, skipped, name, source } = discovery;
   const parserMode = resolveParserMode(options);
+  const ingestionLimits = options?.ingestionLimits ?? DEFAULT_INGESTION_LIMITS;
 
   const fingerprintData = fingerprint(discoveredFiles);
   const pathAliases = parseTsconfigPaths(discoveredFiles);
@@ -276,10 +279,11 @@ export async function analyzeRepositoryFiles(
       executedRepositoryCode: false,
       analyzerVersion: '1.2.0',
       limits: {
-        maxFiles: 10000,
-        maxFileBytes: 1000000,
-        maxArchiveBytes: 25 * 1024 * 1024,
-        maxTotalExtractedBytes: 100 * 1024 * 1024,
+        maxFiles: ingestionLimits.maxFiles,
+        maxFileBytes: ingestionLimits.maxFileBytes,
+        maxArchiveBytes: ingestionLimits.maxArchiveBytes,
+        maxTotalExtractedBytes: ingestionLimits.maxTotalExtractedBytes,
+        fetchTimeoutMs: ingestionLimits.fetchTimeoutMs,
       },
       fileComponents,
       cache: { hits: 0, misses: files.length },

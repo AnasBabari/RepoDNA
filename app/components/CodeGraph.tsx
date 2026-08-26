@@ -9,13 +9,13 @@
  * render their entire graph at once.
  */
 
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node } from '@xyflow/react';
+import { Background, Controls, Handle, MarkerType, MiniMap, Position, ReactFlow, type Edge, type Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useCallback, useMemo, useState } from 'react';
 
 import { adaptV1ToV2Viewer } from '../lib/schema/artifact-loader';
 import type { RepoDNAProject } from '../lib/types';
-import type { RepoDNAProjectV2, GraphNode } from '../lib/analyzer/v2/types';
+import type { GraphEdge, RepoDNAProjectV2, GraphNode } from '../lib/analyzer/v2/types';
 
 const INITIAL_NODE_LIMIT = 80;
 const EXPAND_LIMIT = 24;
@@ -83,6 +83,8 @@ type CodeGraphEdgeData = {
   unresolvedExpression: string | null;
 };
 
+type GraphPoint = { x: number; y: number };
+
 function normalizeProject(project: RepoDNAProject | RepoDNAProjectV2): RepoDNAProjectV2 {
   if ((project as RepoDNAProjectV2).schemaVersion === '2.0.0') return project as RepoDNAProjectV2;
   return adaptV1ToV2Viewer(project as RepoDNAProject);
@@ -93,9 +95,106 @@ function shortLabel(node: GraphNode): string {
   return q.length > 28 ? q.slice(0, 27) + '…' : q;
 }
 
+function hashSeed(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967296;
+}
+
+/**
+ * Small deterministic force solver for an Obsidian-like constellation layout.
+ * Keeping this local avoids another graph-rendering dependency and makes the
+ * first frame stable for the same repository/filter combination.
+ */
+function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number): Map<string, GraphPoint> {
+  const positions = new Map<string, GraphPoint>();
+  const velocities = new Map<string, GraphPoint>();
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const degree = new Map<string, number>();
+
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.source)) continue;
+    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+    if (edge.target && nodeIds.has(edge.target)) degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+  }
+
+  const ranked = [...nodes].sort((a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) || a.id.localeCompare(b.id));
+  const centerId = ranked[0]?.id;
+  for (const node of nodes) {
+    const angle = hashSeed(`${seed}:${node.id}:angle`) * Math.PI * 2;
+    const radius = centerId === node.id ? 0 : 150 + hashSeed(`${seed}:${node.id}:radius`) * 640;
+    positions.set(node.id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+    velocities.set(node.id, { x: 0, y: 0 });
+  }
+
+  const visibleEdges = edges.filter((edge) => edge.target && nodeIds.has(edge.source) && nodeIds.has(edge.target));
+  const iterations = Math.min(180, Math.max(90, 80 + nodes.length));
+  for (let iteration = 0; iteration < iterations; iteration++) {
+    const temperature = 1 - iteration / iterations;
+    const forces = new Map<string, GraphPoint>(nodes.map((node) => [node.id, { x: 0, y: 0 }]));
+
+    for (let i = 0; i < nodes.length; i++) {
+      const left = nodes[i];
+      const leftPoint = positions.get(left.id)!;
+      for (let j = i + 1; j < nodes.length; j++) {
+        const right = nodes[j];
+        const rightPoint = positions.get(right.id)!;
+        let dx = leftPoint.x - rightPoint.x;
+        let dy = leftPoint.y - rightPoint.y;
+        const distanceSquared = Math.max(dx * dx + dy * dy, 900);
+        const distance = Math.sqrt(distanceSquared);
+        dx /= distance;
+        dy /= distance;
+        const repel = Math.min(420, 72000 / distanceSquared);
+        forces.get(left.id)!.x += dx * repel;
+        forces.get(left.id)!.y += dy * repel;
+        forces.get(right.id)!.x -= dx * repel;
+        forces.get(right.id)!.y -= dy * repel;
+      }
+    }
+
+    for (const edge of visibleEdges) {
+      const source = positions.get(edge.source)!;
+      const target = positions.get(edge.target!)!;
+      let dx = target.x - source.x;
+      let dy = target.y - source.y;
+      const distance = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+      dx /= distance;
+      dy /= distance;
+      const spring = Math.max(-160, Math.min(160, (distance - 250) * 0.012));
+      forces.get(edge.source)!.x += dx * spring;
+      forces.get(edge.source)!.y += dy * spring;
+      forces.get(edge.target!)!.x -= dx * spring;
+      forces.get(edge.target!)!.y -= dy * spring;
+    }
+
+    for (const node of nodes) {
+      const point = positions.get(node.id)!;
+      const force = forces.get(node.id)!;
+      const velocity = velocities.get(node.id)!;
+      // A gentle gravity term keeps the constellation inside the viewport.
+      force.x -= point.x * 0.0022;
+      force.y -= point.y * 0.0022;
+      velocity.x = (velocity.x + force.x * 0.045) * 0.82;
+      velocity.y = (velocity.y + force.y * 0.045) * 0.82;
+      const maxStep = 16 * temperature + 1;
+      const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y) || 1;
+      const step = Math.min(1, maxStep / speed);
+      point.x += velocity.x * step;
+      point.y += velocity.y * step;
+    }
+  }
+
+  return positions;
+}
+
 export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjectV2 }) {
   const graph = useMemo(() => normalizeProject(project), [project]);
   const [resetKey, setResetKey] = useState(0);
+  const [layoutSeed, setLayoutSeed] = useState(0);
 
   const [granularity, setGranularity] = useState<'structure' | 'symbols'>('structure');
   const [search, setSearch] = useState('');
@@ -183,23 +282,17 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
 
-  const tierOrder = ['repository', 'workspace', 'package', 'directory', 'module', 'file', 'route', 'controller', 'class', 'interface', 'function', 'method', 'service', 'component', 'attribute', 'variable', 'data_model', 'table', 'dependency', 'configuration', 'external_system'];
+  const layoutPositions = useMemo(
+    () => layoutForceGraph(visibleNodes, filteredEdges, layoutSeed),
+    [visibleNodes, filteredEdges, layoutSeed]
+  );
 
   const rfNodes: Node<CodeGraphNodeData>[] = useMemo(() => {
-    const byKind = new Map<string, number>();
-    tierOrder.forEach((k, i) => byKind.set(k, i));
-    // Grid within each kind-tier so single-kind subgraphs stay readable.
-    const COLS_PER_TIER = 10;
-    const counters = new Map<number, number>();
     return visibleNodes.map((n) => {
-      const tier = byKind.get(n.kind) ?? 99;
-      const idx = counters.get(tier) ?? 0;
-      counters.set(tier, idx + 1);
-      const gx = idx % COLS_PER_TIER;
-      const gy = Math.floor(idx / COLS_PER_TIER);
+      const position = layoutPositions.get(n.id) ?? { x: 0, y: 0 };
       return {
         id: n.id,
-        position: { x: tier * 320 + gx * 210, y: gy * 110 },
+        position,
         data: {
           label: shortLabel(n),
           kind: n.kind,
@@ -211,8 +304,7 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
         type: 'codegraph' as const,
       };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleNodes, degreeById]);
+  }, [visibleNodes, degreeById, layoutPositions]);
 
   const rfEdges: Edge<CodeGraphEdgeData>[] = useMemo(() => {
     return filteredEdges
@@ -269,12 +361,24 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
     setResetKey((k) => k + 1);
+    setLayoutSeed((k) => k + 1);
   }
 
   const truncated = visibleNodes.length < graph.nodes.filter((n) => (granularity === 'structure' ? structureKinds : symbolKinds).has(n.kind)).length;
 
   return (
     <div className="code-graph-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 480 }}>
+      <section className="view-heading code-graph-heading">
+        <div>
+          <p className="eyebrow cyan-text">Relationship explorer</p>
+          <h1>Code Graph</h1>
+          <p>Explore the repository as a connected constellation. Search, filter, and click a relationship to see its evidence.</p>
+        </div>
+        <div className="view-heading-actions">
+          <span>{graph.nodes.length} entities · {graph.edges.length} relationships</span>
+          <button className="export-pill-btn" onClick={() => setLayoutSeed((k) => k + 1)} type="button">Re-layout</button>
+        </div>
+      </section>
       <div className="code-graph-controls" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10, alignItems: 'center' }}>
         <input
           className="search-input"
@@ -317,6 +421,7 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
         >
           <Background gap={24} />
           <Controls showInteractive={false} />
+          <MiniMap nodeColor={(node) => (node.data as CodeGraphNodeData).color} pannable zoomable />
         </ReactFlow>
       </div>
 
@@ -377,18 +482,35 @@ function CodeGraphNode({ data }: { data: CodeGraphNodeData }) {
       tabIndex={0}
       role="button"
       style={{
-        background: 'rgba(6,9,13,0.95)',
-        border: `1px solid ${data.color}`,
-        borderRadius: 8,
-        padding: '6px 10px',
-        fontSize: 11,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 5,
         color: '#e2e8f0',
-        minWidth: 140,
-        maxWidth: 220,
+        minWidth: 112,
+        maxWidth: 180,
+        fontSize: 11,
       }}
     >
       <Handle type="target" position={Position.Left} style={{ background: data.color }} />
-      <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data.label}</div>
+      <div
+        aria-label={data.label}
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          border: `2px solid ${data.color}`,
+          background: `radial-gradient(circle at 35% 30%, ${data.color}55, rgba(6,9,13,0.96) 68%)`,
+          boxShadow: `0 0 18px ${data.color}66`,
+          display: 'grid',
+          placeItems: 'center',
+          fontSize: 13,
+          fontWeight: 700,
+        }}
+      >
+        {(data.label.replace(/[^a-zA-Z0-9]/g, '')[0] ?? '?').toUpperCase()}
+      </div>
+      <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{data.label}</div>
       <div style={{ opacity: 0.65, fontSize: 10 }}>{data.kind.replace('_', ' ')}{data.degree ? ` · ${data.degree}` : ''}</div>
       <Handle type="source" position={Position.Right} style={{ background: data.color }} />
     </div>

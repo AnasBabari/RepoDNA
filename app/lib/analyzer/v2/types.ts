@@ -154,6 +154,8 @@ export interface Security {
     maxTotalExtractedBytes?: number;
     maxAstNodes?: number;
     maxAstDepth?: number;
+    maxGraphNodes?: number;
+    maxGraphEdges?: number;
   };
   truncated: string[];
   executedRepositoryCode: false;

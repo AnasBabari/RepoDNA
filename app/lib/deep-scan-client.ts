@@ -1,12 +1,12 @@
+import type { DiscoveredFile, IngestionInventory } from './analyzer/types';
+
 /**
  * Browser deep-scan client for private repositories.
  *
- * Fetches a bounded archive from /api/v2/github/private-archive (never exposing
- * the GitHub token to page JavaScript), hands the buffer to a transient Web
- * Worker, and returns the v2 graph artifact. The archive buffer is transferred
- * (not copied) to the worker and discarded after parsing. Nothing is persisted.
- *
- * Falls back to inline main-thread analysis when Web Workers are unavailable.
+ * The GitHub token never reaches page JavaScript. Small repositories use the
+ * bounded ZIP endpoint; oversized repositories use the server-side Git tree
+ * endpoint, which returns only filtered source/configuration files. Both paths
+ * hand analysis to a transient worker and persist nothing.
  */
 
 export type DeepScanAuthState =
@@ -41,9 +41,20 @@ interface WorkerProgress {
   percent?: number;
 }
 
-async function runWorkerScan(
-  buffer: ArrayBuffer,
-  name: string,
+interface DiscoveryPayload {
+  files: DiscoveredFile[];
+  skipped: { path: string; reason: string }[];
+  name: string;
+  source: string;
+  inventory?: IngestionInventory;
+}
+
+type WorkerRequest =
+  | { type: 'analyze'; buffer: ArrayBuffer; name: string; source?: string }
+  | { type: 'analyze-discovery'; discovery: DiscoveryPayload; name: string; source: string };
+
+async function runWorkerRequest(
+  request: WorkerRequest,
   onProgress?: (p: WorkerProgress) => void,
   signal?: AbortSignal
 ): Promise<unknown> {
@@ -88,9 +99,33 @@ async function runWorkerScan(
       );
     };
 
-    // Transfer ownership of the buffer: zero-copy, main thread loses access.
-    worker.postMessage({ type: 'analyze', buffer, name }, [buffer]);
+    // Transfer ZIP ownership zero-copy; tree discovery is structured-cloned
+    // because it is already a filtered set of bounded source strings.
+    const transfer: Transferable[] = request.type === 'analyze' ? [request.buffer] : [];
+    worker.postMessage(request, transfer);
   });
+}
+
+async function runWorkerScan(
+  buffer: ArrayBuffer,
+  name: string,
+  onProgress?: (p: WorkerProgress) => void,
+  signal?: AbortSignal
+): Promise<unknown> {
+  return runWorkerRequest({ type: 'analyze', buffer, name }, onProgress, signal);
+}
+
+async function runWorkerDiscoveryScan(
+  discovery: DiscoveryPayload,
+  name: string,
+  onProgress?: (p: WorkerProgress) => void,
+  signal?: AbortSignal
+): Promise<unknown> {
+  return runWorkerRequest(
+    { type: 'analyze-discovery', discovery, name, source: discovery.source },
+    onProgress,
+    signal
+  );
 }
 
 /** Inline fallback used only where Workers cannot start (very old browsers). */
@@ -101,6 +136,11 @@ async function runInlineScan(buffer: ArrayBuffer, name: string): Promise<unknown
   ]);
   const discovery = await extractFromZip(buffer, name);
   return analyzeRepositoryV2({ ...discovery, source: `private:${name}` }, {});
+}
+
+async function runInlineDiscoveryScan(discovery: DiscoveryPayload): Promise<unknown> {
+  const { analyzeRepositoryV2 } = await import('./analyzer/v2/pipeline');
+  return analyzeRepositoryV2(discovery, {});
 }
 
 function mapArchiveFailure(status: number, body: { code?: string; message?: string }): DeepScanFailure {
@@ -140,7 +180,7 @@ export async function analyzePrivateRepositoryInBrowser(options: {
 }): Promise<DeepScanOutcome> {
   const { url, onProgress, signal } = options;
 
-  onProgress?.({ stage: 'download', message: 'Streaming private repository archive…', percent: 2 });
+  onProgress?.({ stage: 'download', message: 'Fetching private repository source…', percent: 2 });
 
   let res: Response;
   try {
@@ -163,6 +203,9 @@ export async function analyzePrivateRepositoryInBrowser(options: {
 
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
+    if (body?.code === 'ARCHIVE_TOO_LARGE') {
+      return analyzePrivateRepositoryViaTree({ url, onProgress, signal });
+    }
     return mapArchiveFailure(res.status, body ?? {});
   }
 
@@ -196,6 +239,91 @@ export async function analyzePrivateRepositoryInBrowser(options: {
       authState: 'unavailable',
       code,
       message: err instanceof Error ? err.message : 'Private analysis failed.',
+    };
+  }
+}
+
+async function analyzePrivateRepositoryViaTree(options: {
+  url: string;
+  onProgress?: (p: WorkerProgress) => void;
+  signal?: AbortSignal;
+}): Promise<DeepScanOutcome> {
+  const { url, onProgress, signal } = options;
+  onProgress?.({ stage: 'download', message: 'ZIP is over 25 MB — fetching the repository Git tree instead…', percent: 2 });
+
+  let res: Response;
+  try {
+    res = await fetch('/api/v2/github/private-tree', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw err;
+    return {
+      authState: 'unavailable',
+      code: 'NETWORK_ERROR',
+      message: 'Could not reach the private repository source service.',
+    };
+  }
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
+    return mapArchiveFailure(res.status, body ?? {});
+  }
+
+  let discovery: DiscoveryPayload;
+  try {
+    discovery = (await res.json()) as DiscoveryPayload;
+    if (!discovery || !Array.isArray(discovery.files) || typeof discovery.name !== 'string') {
+      return {
+        authState: 'unavailable',
+        code: 'INVALID_DISCOVERY',
+        message: 'GitHub returned an invalid repository source payload.',
+      };
+    }
+  } catch {
+    return {
+      authState: 'unavailable',
+      code: 'INVALID_DISCOVERY',
+      message: 'GitHub returned an unreadable repository source payload.',
+    };
+  }
+
+  onProgress?.({
+    stage: 'inventory',
+    message: `Git tree ready — analyzing ${discovery.inventory?.firstPartySourceFileCount ?? discovery.files.length} source files…`,
+    percent: 8,
+  });
+
+  try {
+    const supportsWorkers = typeof Worker !== 'undefined';
+    const project = supportsWorkers
+      ? await runWorkerDiscoveryScan(discovery, discovery.name, onProgress, signal)
+      : await runInlineDiscoveryScan(discovery);
+    return { project, authState: 'ok' };
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw err;
+    const code = (err as { code?: string }).code ?? 'ANALYSIS_FAILED';
+    if (code === 'WORKER_UNAVAILABLE' || code === 'WORKER_ERROR') {
+      try {
+        const project = await runInlineDiscoveryScan(discovery);
+        return { project, authState: 'ok' };
+      } catch (inlineErr) {
+        return {
+          authState: 'unavailable',
+          code: (inlineErr as { code?: string }).code ?? 'ANALYSIS_FAILED',
+          message: inlineErr instanceof Error ? inlineErr.message : 'Private tree analysis failed.',
+        };
+      }
+    }
+    return {
+      authState: 'unavailable',
+      code,
+      message: err instanceof Error ? err.message : 'Private tree analysis failed.',
     };
   }
 }

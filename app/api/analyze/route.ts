@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { analyzeGitHubUrl } from '../../lib/analyzer';
-import { IngestionError } from '../../lib/analyzer/types';
+import { IngestionError, PUBLIC_REPOSITORY_INGESTION_LIMITS } from '../../lib/analyzer/types';
 import { auth } from '../../lib/auth';
 import { checkAnalysisRateLimit } from '../../lib/ratelimit';
 import { createApiErrorResponse } from '../../lib/api-error';
@@ -175,7 +175,14 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
 
   // 3. Execute Static Analysis
   try {
-    const project = await analyzeGitHubUrl(url.trim(), undefined, accessToken);
+    // Public fallback analyses run server-side and can use the larger bounded
+    // codeload path; authenticated/private requests keep the browser-safe
+    // archive bound and use the private source fallback when needed.
+    const project = await analyzeGitHubUrl(
+      url.trim(),
+      accessToken ? undefined : PUBLIC_REPOSITORY_INGESTION_LIMITS,
+      accessToken
+    );
     const durationMs = Date.now() - startTime;
 
     // Schema validation invariant (fail-closed in all environments)

@@ -1,5 +1,5 @@
 import * as fflate from 'fflate';
-import { DEFAULT_INGESTION_LIMITS, IngestionError, type DiscoveredFile, type IngestionLimits, type IngestionErrorCode } from './types';
+import { DEFAULT_INGESTION_LIMITS, IngestionError, type DiscoveredFile, type IngestionInventory, type IngestionLimits, type IngestionErrorCode } from './types';
 
 export const DEFAULT_IGNORES = new Set([
   '.git', '.hg', '.svn', 'node_modules', 'venv', '.venv', 'env',
@@ -604,6 +604,420 @@ async function streamBoundedArrayBuffer(
   return combined.buffer;
 }
 
+type GitHubTreeEntry = {
+  path: string;
+  type: string;
+  sha: string;
+  size?: number;
+};
+
+type GitHubTreeResponse = {
+  sha?: string;
+  truncated?: boolean;
+  tree?: GitHubTreeEntry[];
+};
+
+type GitHubCommitResponse = {
+  sha?: string;
+  commit?: { tree?: { sha?: string } };
+};
+
+type GitHubBlobResponse = {
+  content?: string;
+  encoding?: string;
+};
+
+type TreeFileReadResult =
+  | { text: string; byteLength: number }
+  | { skippedReason: string };
+
+const TREE_FALLBACK_TIMEOUT_MS = 240_000;
+const TREE_FILE_CONCURRENCY = 8;
+const TREE_DIRECTORY_CONCURRENCY = 8;
+
+function githubApiHeaders(accessToken?: string): Record<string, string> {
+  return {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'RepoDNA-GitTree/1.0',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  };
+}
+
+function throwGitHubApiError(response: Response, owner: string, repo: string, accessToken?: string): never {
+  const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+  if (response.status === 429 || (response.status === 403 && rateLimitRemaining === '0')) {
+    throw new IngestionError(
+      'UPSTREAM_GITHUB_RATE_LIMITED',
+      'GitHub API rate limit reached. Client-side browser analysis is available.',
+      429
+    );
+  }
+  if (response.status === 401 && accessToken) {
+    throw new IngestionError(
+      'GITHUB_TOKEN_EXPIRED',
+      'GitHub token expired or revoked. Reconnect GitHub to continue.',
+      401
+    );
+  }
+  if (response.status === 404) {
+    throw new IngestionError(
+      'REPO_NOT_FOUND',
+      accessToken
+        ? `Repository "${owner}/${repo}" was not found or your GitHub account does not have access.`
+        : `Repository "https://github.com/${owner}/${repo}" was not found or is private. Sign in to analyze private repositories.`,
+      404
+    );
+  }
+  if (response.status === 403) {
+    throw new IngestionError(
+      'GITHUB_FORBIDDEN',
+      accessToken
+        ? 'GitHub access denied (403). Ensure the GitHub App or OAuth token has contents:read access.'
+        : 'GitHub access denied (403).',
+      403
+    );
+  }
+  throw new IngestionError(
+    'UPSTREAM_GITHUB_ERROR',
+    `GitHub returned status ${response.status}: ${response.statusText}`,
+    502
+  );
+}
+
+async function fetchGitHubJson<T>(
+  url: string,
+  owner: string,
+  repo: string,
+  signal: AbortSignal,
+  accessToken?: string
+): Promise<T> {
+  const response = await fetch(url, { headers: githubApiHeaders(accessToken), signal });
+  if (!response.ok) throwGitHubApiError(response, owner, repo, accessToken);
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new IngestionError('UPSTREAM_GITHUB_ERROR', 'GitHub returned an invalid JSON response.', 502);
+  }
+}
+
+async function readBoundedTextResponse(response: Response, maxBytes: number): Promise<{ text: string; byteLength: number } | null> {
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > maxBytes) return null;
+    return { text: new TextDecoder().decode(bytes), byteLength: bytes.byteLength };
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel('FILE_TOO_LARGE');
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return {
+    text: new TextDecoder().decode(combineChunks(chunks, totalBytes)),
+    byteLength: totalBytes,
+  };
+}
+
+function decodeBase64Bytes(value: string): Uint8Array {
+  const binary = atob(value.replace(/\s+/g, ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function walkGitHubTree(
+  owner: string,
+  repo: string,
+  rootTreeSha: string,
+  limits: IngestionLimits,
+  signal: AbortSignal,
+  accessToken?: string
+): Promise<{ entries: GitHubTreeEntry[]; totalArchiveEntries: number }> {
+  const queue: { sha: string; prefix: string }[] = [{ sha: rootTreeSha, prefix: '' }];
+  const entries: GitHubTreeEntry[] = [];
+  let totalArchiveEntries = 0;
+
+  while (queue.length > 0) {
+    const batch = queue.splice(0, TREE_DIRECTORY_CONCURRENCY);
+    const trees = await Promise.all(
+      batch.map(async (current) => ({
+        current,
+        tree: await fetchGitHubJson<GitHubTreeResponse>(
+          `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(current.sha)}`,
+          owner,
+          repo,
+          signal,
+          accessToken
+        ),
+      }))
+    );
+
+    for (const { current, tree } of trees) {
+      for (const entry of tree.tree ?? []) {
+        const path = current.prefix ? `${current.prefix}/${entry.path}` : entry.path;
+        validatePath(path);
+        totalArchiveEntries++;
+        if (totalArchiveEntries > limits.maxArchiveEntries) {
+          throw new IngestionError(
+            'TOO_MANY_ARCHIVE_ENTRIES',
+            `Repository tree contains more than ${limits.maxArchiveEntries.toLocaleString()} entries`,
+            413
+          );
+        }
+
+        if (entry.type === 'tree') {
+          // Do not spend API calls walking known vendor/generated directories.
+          if (!isIgnored(path) && !isGeneratedPath(path)) {
+            queue.push({ sha: entry.sha, prefix: path });
+          }
+        } else if (entry.type === 'blob') {
+          entries.push({ ...entry, path });
+        }
+      }
+    }
+  }
+
+  return { entries, totalArchiveEntries };
+}
+
+async function readGitHubTreeFile(
+  owner: string,
+  repo: string,
+  commitSha: string,
+  entry: GitHubTreeEntry,
+  limits: IngestionLimits,
+  signal: AbortSignal,
+  accessToken?: string
+): Promise<TreeFileReadResult> {
+  if (typeof entry.size === 'number' && entry.size > limits.maxFileBytes) {
+    return { skippedReason: 'exceeds_file_size_limit' };
+  }
+
+  if (accessToken) {
+    const blob = await fetchGitHubJson<GitHubBlobResponse>(
+      `https://api.github.com/repos/${owner}/${repo}/git/blobs/${encodeURIComponent(entry.sha)}`,
+      owner,
+      repo,
+      signal,
+      accessToken
+    );
+    if (blob.encoding !== 'base64' || typeof blob.content !== 'string') {
+      return { skippedReason: 'unreadable' };
+    }
+    let bytes: Uint8Array;
+    try {
+      bytes = decodeBase64Bytes(blob.content);
+    } catch {
+      return { skippedReason: 'unreadable' };
+    }
+    if (bytes.byteLength > limits.maxFileBytes) return { skippedReason: 'exceeds_file_size_limit' };
+    return { text: new TextDecoder().decode(bytes), byteLength: bytes.byteLength };
+  }
+
+  const rawPath = entry.path.split('/').map((part) => encodeURIComponent(part)).join('/');
+  const response = await fetch(
+    `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(commitSha)}/${rawPath}`,
+    { headers: { 'User-Agent': 'RepoDNA-GitTree/1.0' }, signal }
+  );
+  if (response.status === 404) return { skippedReason: 'unreadable' };
+  if (!response.ok) throwGitHubApiError(response, owner, repo);
+  const result = await readBoundedTextResponse(response, limits.maxFileBytes);
+  return result ? result : { skippedReason: 'exceeds_file_size_limit' };
+}
+
+/**
+ * Acquire source files through GitHub's tree and blob/raw APIs.
+ *
+ * GitHub's generated ZIP archive is capped by RepoDNA at 25 MB to protect the
+ * server from oversized compressed payloads. This path avoids that compressed
+ * archive entirely: it inventories the commit tree first, filters ignored and
+ * generated paths, and fetches only bounded source/configuration files. The
+ * existing file-count, per-file, total-content, and AST limits still apply.
+ */
+async function fetchGitHubTreeRepo(
+  owner: string,
+  repo: string,
+  limits: IngestionLimits,
+  accessToken?: string
+): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory: IngestionInventory }> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), Math.max(limits.fetchTimeoutMs, TREE_FALLBACK_TIMEOUT_MS));
+  const signal = controller.signal;
+
+  try {
+    const metadata = await fetchGitHubJson<{ name?: string; default_branch?: string }>(
+      `https://api.github.com/repos/${owner}/${repo}`,
+      owner,
+      repo,
+      signal,
+      accessToken
+    );
+    const branch = metadata.default_branch || 'HEAD';
+    const commit = await fetchGitHubJson<GitHubCommitResponse>(
+      `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(branch)}`,
+      owner,
+      repo,
+      signal,
+      accessToken
+    );
+    const commitSha = commit.sha;
+    if (!commitSha) throw new IngestionError('UPSTREAM_GITHUB_ERROR', 'GitHub did not return a commit SHA.', 502);
+
+    const recursiveTree = await fetchGitHubJson<GitHubTreeResponse>(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(commitSha)}?recursive=1`,
+      owner,
+      repo,
+      signal,
+      accessToken
+    );
+    const treeResult = recursiveTree.truncated
+      ? await walkGitHubTree(owner, repo, commit.commit?.tree?.sha ?? commitSha, limits, signal, accessToken)
+      : { entries: recursiveTree.tree ?? [], totalArchiveEntries: (recursiveTree.tree ?? []).length };
+
+    const skipped: { path: string; reason: string }[] = [];
+    const candidates: GitHubTreeEntry[] = [];
+    let totalFileCount = 0;
+    let totalBytes = 0;
+    let candidateFileCount = 0;
+    let ignoredFileCount = 0;
+    let generatedFileCount = 0;
+    let unsupportedFileCount = 0;
+    let firstPartySourceCandidateCount = 0;
+
+    const sortedEntries = [...treeResult.entries].sort((a, b) => a.path.localeCompare(b.path));
+    for (const entry of sortedEntries) {
+      validatePath(entry.path);
+      totalFileCount++;
+      if (typeof entry.size === 'number' && Number.isFinite(entry.size)) totalBytes += entry.size;
+
+      if (entry.path.split('/').length > 32) {
+        skipped.push({ path: entry.path, reason: 'path_too_deep' });
+        continue;
+      }
+      if (isIgnored(entry.path)) {
+        ignoredFileCount++;
+        continue;
+      }
+      if (isGeneratedPath(entry.path)) {
+        generatedFileCount++;
+        continue;
+      }
+      if (!isCandidate(entry.path)) {
+        unsupportedFileCount++;
+        continue;
+      }
+      if (isSupportedSource(entry.path)) {
+        firstPartySourceCandidateCount++;
+      } else {
+        unsupportedFileCount++;
+      }
+
+      candidateFileCount++;
+      if (candidateFileCount > limits.maxFiles) {
+        throw new IngestionError(
+          'TOO_MANY_FILES',
+          `Repository exceeds limit of ${limits.maxFiles.toLocaleString()} candidate files`,
+          413
+        );
+      }
+      if (typeof entry.size === 'number' && entry.size > limits.maxFileBytes) {
+        skipped.push({ path: entry.path, reason: 'exceeds_file_size_limit' });
+        continue;
+      }
+      candidates.push(entry);
+    }
+
+    const files: DiscoveredFile[] = [];
+    let totalExtractedBytes = 0;
+    for (let offset = 0; offset < candidates.length; offset += TREE_FILE_CONCURRENCY) {
+      const batch = candidates.slice(offset, offset + TREE_FILE_CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(async (entry) => ({
+          entry,
+          result: await readGitHubTreeFile(owner, repo, commitSha, entry, limits, signal, accessToken),
+        }))
+      );
+
+      for (const { entry, result } of results) {
+        if ('skippedReason' in result) {
+          skipped.push({ path: entry.path, reason: result.skippedReason });
+          continue;
+        }
+        if (result.text.includes('\0')) {
+          skipped.push({ path: entry.path, reason: 'binary' });
+          continue;
+        }
+        totalExtractedBytes += result.byteLength;
+        if (totalExtractedBytes > limits.maxTotalExtractedBytes) {
+          throw new IngestionError(
+            'EXTRACTED_TOO_LARGE',
+            `Fetched repository content exceeds limit of ${(limits.maxTotalExtractedBytes / (1024 * 1024)).toFixed(0)} MB`,
+            413
+          );
+        }
+        if (typeof entry.size !== 'number') totalBytes += result.byteLength;
+        files.push({
+          path: entry.path,
+          size: typeof entry.size === 'number' ? entry.size : result.byteLength,
+          content: result.text,
+          hash: await sha256(result.text),
+        });
+      }
+    }
+
+    const skippedByReason: Record<string, number> = {};
+    for (const item of skipped) skippedByReason[item.reason] = (skippedByReason[item.reason] ?? 0) + 1;
+
+    return {
+      files: files.sort((a, b) => a.path.localeCompare(b.path)),
+      skipped: skipped.sort((a, b) => a.path.localeCompare(b.path) || a.reason.localeCompare(b.reason)),
+      name: metadata.name || repo,
+      source: `https://github.com/${owner}/${repo}`,
+      inventory: {
+        totalFileCount,
+        totalBytes,
+        firstPartySourceFileCount: firstPartySourceCandidateCount,
+        candidateFileCount,
+        ignoredFileCount,
+        generatedFileCount,
+        unsupportedSourceFileCount: unsupportedFileCount,
+        totalArchiveEntries: treeResult.totalArchiveEntries,
+        skippedByReason,
+      },
+    };
+  } catch (error) {
+    if (error instanceof IngestionError) throw error;
+    if (error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('abort'))) {
+      throw new IngestionError(
+        'FETCH_TIMEOUT',
+        `GitHub repository tree fetch timed out after ${(Math.max(limits.fetchTimeoutMs, TREE_FALLBACK_TIMEOUT_MS) / 1000).toFixed(0)} seconds`,
+        504
+      );
+    }
+    throw new IngestionError(
+      'UPSTREAM_GITHUB_ERROR',
+      `Failed to fetch GitHub repository tree: ${error instanceof Error ? error.message : 'Network error'}`,
+      502
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function fetchGitHubRepo(
   urlOrOwnerRepo: string,
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS,
@@ -812,19 +1226,22 @@ export async function fetchGitHubRepo(
 
   const contentLength = response.headers.get('content-length');
   if (contentLength && parseInt(contentLength, 10) > limits.maxArchiveBytes) {
-    throw new IngestionError(
-      'ARCHIVE_TOO_LARGE',
-      `Repository archive (${(parseInt(contentLength, 10) / (1024 * 1024)).toFixed(1)} MB) exceeds limit of ${(limits.maxArchiveBytes / (1024 * 1024)).toFixed(0)} MB`,
-      413
-    );
+    return fetchGitHubTreeRepo(owner, repo, limits, accessToken);
   }
 
-  const zipBuffer = await streamBoundedArrayBuffer(response, limits.maxArchiveBytes);
-  const result = await extractFromZip(zipBuffer, repo, limits);
-  return {
-    ...result,
-    source: `https://github.com/${owner}/${repo}`,
-  };
+  try {
+    const zipBuffer = await streamBoundedArrayBuffer(response, limits.maxArchiveBytes);
+    const result = await extractFromZip(zipBuffer, repo, limits);
+    return {
+      ...result,
+      source: `https://github.com/${owner}/${repo}`,
+    };
+  } catch (error) {
+    if (error instanceof IngestionError && error.code === 'ARCHIVE_TOO_LARGE') {
+      return fetchGitHubTreeRepo(owner, repo, limits, accessToken);
+    }
+    throw error;
+  }
 }
 
 export async function extractFromFileList(

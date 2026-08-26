@@ -1,7 +1,8 @@
 import * as fflate from 'fflate';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   extractFromZip,
+  fetchGitHubRepo,
   parseGitHubUrl,
 } from '../../app/lib/analyzer/ingestion';
 import { IngestionError } from '../../app/lib/analyzer/types';
@@ -56,6 +57,66 @@ describe('Ingestion & Resource Limits', () => {
     expect(parseGitHubUrl('https://github.com/explore')).toBeNull();
     expect(parseGitHubUrl('https://github.com/invalid url/repo')).toBeNull();
     expect(parseGitHubUrl('')).toBeNull();
+  });
+
+  it('falls back to Git tree and raw files when the generated archive exceeds the compressed limit', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock
+      .mockResolvedValueOnce(new Response('oversized archive', { status: 200, headers: { 'content-length': '101' } }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ name: 'large', default_branch: 'main' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sha: 'commit-sha', commit: { tree: { sha: 'tree-sha' } } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            truncated: false,
+            tree: [
+              { path: 'src/main.py', type: 'blob', sha: 'blob-python', size: 12 },
+              { path: 'README.txt', type: 'blob', sha: 'blob-readme', size: 24 },
+              { path: 'node_modules/ignored.js', type: 'blob', sha: 'blob-ignored', size: 10 },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response('print("ok")', { status: 200 }));
+
+    try {
+      const result = await fetchGitHubRepo('https://github.com/owner/large', {
+        maxFiles: 100,
+        maxArchiveEntries: 100,
+        maxFileBytes: 1000,
+        maxArchiveBytes: 100,
+        maxTotalExtractedBytes: 5000,
+        fetchTimeoutMs: 1000,
+      });
+
+      expect(result.files.map((file) => file.path)).toEqual(['src/main.py']);
+      expect(result.inventory).toMatchObject({
+        totalFileCount: 3,
+        candidateFileCount: 1,
+        firstPartySourceFileCount: 1,
+        ignoredFileCount: 1,
+      });
+      expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+        'https://codeload.github.com/owner/large/zip/HEAD',
+        'https://api.github.com/repos/owner/large',
+        'https://api.github.com/repos/owner/large/commits/main',
+        'https://api.github.com/repos/owner/large/git/trees/commit-sha?recursive=1',
+        'https://raw.githubusercontent.com/owner/large/commit-sha/src/main.py',
+      ]);
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 
   it('rejects archives containing path traversal attempts', async () => {

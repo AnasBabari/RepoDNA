@@ -1,7 +1,7 @@
 import { FatalError, getWritable } from 'workflow';
 
 import { fetchGitHubRepo } from '../lib/analyzer/ingestion';
-import { DEFAULT_INGESTION_LIMITS, IngestionError } from '../lib/analyzer/types';
+import { IngestionError, PUBLIC_REPOSITORY_INGESTION_LIMITS } from '../lib/analyzer/types';
 import {
   isPublicArtifactCacheConfigured,
   readCachedPublicArtifact,
@@ -82,10 +82,10 @@ async function analyzeAndCachePublicRepository(
       };
     }
 
-    await emit('download', 8, 'Downloading the public repository archive');
+    await emit('download', 8, 'Fetching public repository sources (archive or Git tree)');
     // Deliberately omit credentials: durable workflows are public-only. Private
-    // repository archives never enter Workflow or Blob storage.
-    const discovery = await fetchGitHubRepo(input.repositoryUrl, DEFAULT_INGESTION_LIMITS);
+    // repository source files never enter Workflow or Blob storage.
+    const discovery = await fetchGitHubRepo(input.repositoryUrl, PUBLIC_REPOSITORY_INGESTION_LIMITS);
     const inventory = discovery.inventory;
     await emit(
       'inventory',
@@ -96,7 +96,11 @@ async function analyzeAndCachePublicRepository(
     await emit('parse', 28, 'Extracting symbols, routes, imports, calls, models, and dependencies');
     const project = await analyzeRepositoryV2(
       { ...discovery, inventory },
-      { commitSha: input.commitSha, analyzedRef: 'HEAD' }
+      {
+        commitSha: input.commitSha,
+        analyzedRef: 'HEAD',
+        ingestionLimits: PUBLIC_REPOSITORY_INGESTION_LIMITS,
+      }
     );
 
     await emit('resolve_relationships', 72, 'Resolving cross-file relationships and unresolved evidence');

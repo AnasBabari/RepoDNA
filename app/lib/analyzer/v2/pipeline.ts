@@ -1,13 +1,148 @@
 import { analyzeRepositoryFiles, type AnalyzeOptions } from '../index';
+import { DEFAULT_INGESTION_LIMITS } from '../types';
 import type { DiscoveredFile } from '../types';
 import type { IngestionInventory } from '../types';
 import { adaptV1ToV2Viewer } from '../../schema/artifact-loader';
-import type { RepoDNAProjectV2 } from './types';
+import type { GraphEdge, GraphNode, RepoDNAProjectV2 } from './types';
 import { detectCentrality, detectCommunities, detectDependencyCycles } from './analytics';
+
+const DEFAULT_GRAPH_LIMITS = {
+  // The full repository inventory is retained separately. These caps keep a
+  // browser-loaded artifact and its interactive graph responsive on very large
+  // repositories while preserving a deterministic high-signal subgraph.
+  maxNodes: 8_000,
+  maxEdges: 12_000,
+} as const;
+
+const STRUCTURAL_NODE_KINDS = new Set([
+  'repository', 'workspace', 'package', 'directory', 'module', 'file', 'route',
+  'dependency', 'configuration', 'external_system',
+]);
+
+const EDGE_PRIORITY: Record<string, number> = {
+  EXPOSES_ROUTE: 7,
+  HANDLES: 7,
+  INVOKES: 6,
+  READS: 6,
+  WRITES: 6,
+  INHERITS: 5,
+  IMPLEMENTS: 5,
+  DEFINES: 4,
+  IMPORTS: 4,
+  DEPENDS_ON: 4,
+  CONTAINS: 3,
+  CONFIGURES: 3,
+  CALLS: 2,
+};
+
+function compactGraph(project: RepoDNAProjectV2, limits: { maxNodes: number; maxEdges: number }): string[] {
+  const originalNodeCount = project.nodes.length;
+  const originalEdgeCount = project.edges.length;
+  if (originalNodeCount <= limits.maxNodes && originalEdgeCount <= limits.maxEdges) return [];
+
+  const nodeIds = new Set(project.nodes.map((node) => node.id));
+  const degree = new Map<string, number>();
+  for (const edge of project.edges) {
+    if (nodeIds.has(edge.source)) degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+    if (edge.target && nodeIds.has(edge.target)) degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+  }
+
+  const entrypointFiles = new Set((project.entrypoints ?? []).map((entrypoint) => `file:${entrypoint.file}`));
+  const centralFiles = new Set(project.centrality.mostConnected.map((item) => item.nodeId));
+  const nodeRank = (node: GraphNode): number => {
+    const anchor = entrypointFiles.has(node.id) || centralFiles.has(node.id) ? 1_000_000 : 0;
+    const structural = STRUCTURAL_NODE_KINDS.has(node.kind) ? 100_000 : 0;
+    return anchor + structural + (degree.get(node.id) ?? 0);
+  };
+
+  const rankedNodes = [...project.nodes].sort(
+    (a, b) => nodeRank(b) - nodeRank(a) || a.id.localeCompare(b.id)
+  );
+  const rankedFileNodes = rankedNodes.filter((node) => node.kind === 'file');
+  const rankedStructuralNodes = rankedNodes.filter((node) => STRUCTURAL_NODE_KINDS.has(node.kind) && node.kind !== 'file');
+  const rankedSymbolNodes = rankedNodes.filter((node) => !STRUCTURAL_NODE_KINDS.has(node.kind));
+  // File nodes are the navigable source inventory. Preserve as many of them as
+  // the graph budget allows before spending the remaining budget on symbols.
+  // This keeps architecture components and file-level navigation truthful on
+  // large repositories where the graph itself must be compacted.
+  const fileBudget = Math.min(limits.maxNodes, rankedFileNodes.length);
+  const keptFileNodes = rankedFileNodes.slice(0, fileBudget);
+  const remainingBudget = Math.max(0, limits.maxNodes - keptFileNodes.length);
+  const keptNodeIds = new Set([
+    ...keptFileNodes,
+    ...rankedStructuralNodes.slice(0, remainingBudget),
+    ...rankedSymbolNodes.slice(0, Math.max(0, remainingBudget - Math.min(remainingBudget, rankedStructuralNodes.length))),
+  ].map((node) => node.id));
+  project.nodes = project.nodes.filter((node) => keptNodeIds.has(node.id));
+
+  const edgeRank = (edge: GraphEdge): number => {
+    const endpointDegree = (degree.get(edge.source) ?? 0) + (edge.target ? degree.get(edge.target) ?? 0 : 0);
+    const resolved = edge.target ? 10_000 : 0;
+    return (EDGE_PRIORITY[edge.type] ?? 1) * 1_000_000 + resolved + endpointDegree;
+  };
+  const eligibleEdges = project.edges
+    .filter((edge) => keptNodeIds.has(edge.source) && (!edge.target || keptNodeIds.has(edge.target)))
+    .sort((a, b) => edgeRank(b) - edgeRank(a) || a.id.localeCompare(b.id));
+
+  // Keep relationship families balanced. A large Python repository can have
+  // hundreds of thousands of CALLS/DEFINES edges; selecting only the first
+  // family would make the graph look falsely one-dimensional.
+  const selectedEdges: GraphEdge[] = [];
+  const selectedEdgeIds = new Set<string>();
+  const take = (candidates: GraphEdge[], budget: number) => {
+    for (const edge of candidates.slice(0, budget)) {
+      selectedEdges.push(edge);
+      selectedEdgeIds.add(edge.id);
+    }
+  };
+  take(eligibleEdges.filter((edge) => edge.type === 'CALLS'), Math.floor(limits.maxEdges * 0.45));
+  take(eligibleEdges.filter((edge) => edge.type === 'DEFINES'), Math.floor(limits.maxEdges * 0.2));
+  take(
+    eligibleEdges.filter((edge) => edge.type === 'IMPORTS' || edge.type === 'DEPENDS_ON'),
+    Math.floor(limits.maxEdges * 0.2)
+  );
+  for (const edge of eligibleEdges) {
+    if (selectedEdges.length >= limits.maxEdges) break;
+    if (!selectedEdgeIds.has(edge.id)) {
+      selectedEdges.push(edge);
+      selectedEdgeIds.add(edge.id);
+    }
+  }
+  selectedEdges.sort((a, b) => a.id.localeCompare(b.id));
+  project.edges = selectedEdges;
+  project.unresolved = project.unresolved.filter((item) => selectedEdgeIds.has(item.edgeId));
+
+  const truncationCodes: string[] = [];
+  if (project.nodes.length < originalNodeCount) {
+    truncationCodes.push('GRAPH_NODES_COMPACTED');
+    project.diagnostics.push({
+      severity: 'warning',
+      code: 'GRAPH_NODES_COMPACTED',
+      message: `The repository produced ${originalNodeCount.toLocaleString()} graph entities; showing ${project.nodes.length.toLocaleString()} highest-signal entities while preserving the full repository inventory.`,
+      file: null,
+    });
+  }
+  if (eligibleEdges.length < originalEdgeCount || project.edges.length < eligibleEdges.length) {
+    truncationCodes.push('GRAPH_EDGES_COMPACTED');
+    project.diagnostics.push({
+      severity: 'warning',
+      code: 'GRAPH_EDGES_COMPACTED',
+      message: `The repository produced ${originalEdgeCount.toLocaleString()} graph relationships; showing ${project.edges.length.toLocaleString()} balanced, highest-signal relationships with evidence.`,
+      file: null,
+    });
+  }
+  project.inventory.truncation = {
+    hitLimits: [...(project.inventory.truncation?.hitLimits ?? []), ...truncationCodes],
+    maxFilesReached: project.inventory.truncation?.maxFilesReached ?? false,
+    maxBytesReached: project.inventory.truncation?.maxBytesReached ?? false,
+  };
+  return truncationCodes;
+}
 
 export interface V2AnalyzeOptions extends AnalyzeOptions {
   commitSha?: string | null;
   analyzedRef?: string | null;
+  graphLimits?: { maxNodes?: number; maxEdges?: number };
   inventoryOverride?: {
     totalFileCount?: number;
     totalBytes?: number;
@@ -22,6 +157,7 @@ export async function analyzeRepositoryV2(
 ): Promise<RepoDNAProjectV2> {
   const start = Date.now();
   const timings: Record<string, number> = {};
+  const ingestionLimits = options?.ingestionLimits ?? DEFAULT_INGESTION_LIMITS;
 
   const t0 = Date.now();
   const v1 = await analyzeRepositoryFiles(discovery, options);
@@ -33,7 +169,7 @@ export async function analyzeRepositoryV2(
   timings.adapt = Date.now() - t1;
 
   // Enrich with inventory truth (from ingestion if available, else derived)
-  const ingestionInventory = (discovery as unknown as { inventory?: { totalFileCount?: number; totalBytes?: number; firstPartySourceFileCount?: number; candidateFileCount?: number; ignoredFileCount?: number; generatedFileCount?: number; unsupportedSourceFileCount?: number } }).inventory;
+  const ingestionInventory = discovery.inventory;
   if (ingestionInventory) {
     v2.inventory.totalFileCount = ingestionInventory.totalFileCount ?? v2.inventory.totalFileCount;
     v2.inventory.totalBytes = ingestionInventory.totalBytes ?? v2.inventory.totalBytes;
@@ -45,6 +181,12 @@ export async function analyzeRepositoryV2(
     }
     if (typeof ingestionInventory.candidateFileCount === 'number') {
       v2.inventory.candidateFileCount = ingestionInventory.candidateFileCount;
+    }
+    if (typeof ingestionInventory.unsupportedSourceFileCount === 'number') {
+      v2.inventory.unsupportedSourceFileCount = ingestionInventory.unsupportedSourceFileCount;
+    }
+    if (ingestionInventory.skippedByReason) {
+      v2.inventory.skippedByReason = { ...ingestionInventory.skippedByReason };
     }
   }
   // Override where provided
@@ -65,6 +207,15 @@ export async function analyzeRepositoryV2(
   v2.repository.analyzedRef = options?.analyzedRef ?? null;
   v2.repository.source = discovery.source;
 
+  const graphLimits = {
+    maxNodes: Math.max(1, Math.floor(options?.graphLimits?.maxNodes ?? DEFAULT_GRAPH_LIMITS.maxNodes)),
+    maxEdges: Math.max(1, Math.floor(options?.graphLimits?.maxEdges ?? DEFAULT_GRAPH_LIMITS.maxEdges)),
+  };
+  const tCompact = Date.now();
+  const graphTruncation = compactGraph(v2, graphLimits);
+  timings.compact = Date.now() - tCompact;
+  v2.coverage.truncationReasons = [...new Set([...v2.coverage.truncationReasons, ...graphTruncation])];
+
   // Analytics (deterministic)
   const t2 = Date.now();
   v2.communities = detectCommunities(v2.nodes, v2.edges);
@@ -75,15 +226,20 @@ export async function analyzeRepositoryV2(
   // Security limits
   v2.security = {
     limits: {
-      maxArchiveEntries: 20000,
-      maxFiles: 10000,
-      maxFileBytes: 1000000,
-      maxArchiveBytes: 25 * 1024 * 1024,
-      maxTotalExtractedBytes: 100 * 1024 * 1024,
+      maxArchiveEntries: ingestionLimits.maxArchiveEntries,
+      maxFiles: ingestionLimits.maxFiles,
+      maxFileBytes: ingestionLimits.maxFileBytes,
+      maxArchiveBytes: ingestionLimits.maxArchiveBytes,
+      maxTotalExtractedBytes: ingestionLimits.maxTotalExtractedBytes,
       maxAstNodes: 25000,
       maxAstDepth: 128,
+      maxGraphNodes: graphLimits.maxNodes,
+      maxGraphEdges: graphLimits.maxEdges,
     },
-    truncated: v1.diagnostics.filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE'].includes(d.code)).map((d) => d.code),
+    truncated: [...new Set([
+      ...v1.diagnostics.filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE'].includes(d.code)).map((d) => d.code),
+      ...graphTruncation,
+    ])],
     executedRepositoryCode: false as const,
   };
 

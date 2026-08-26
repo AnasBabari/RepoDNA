@@ -50,6 +50,23 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     parsed: node.metadata?.parsed !== false,
     error: typeof node.metadata?.error === 'string' ? node.metadata.error : null,
   }));
+  const knownFilePaths = new Set(files.map((file) => file.path));
+  const architectureComponents = project.architecture.components
+    .map((component) => ({
+      ...component,
+      // A compacted graph may omit low-signal file nodes. Do not let the
+      // legacy workspace projection display component paths that it cannot
+      // navigate to; the canonical v2 artifact and inventory remain intact.
+      files: component.files.filter((file) => knownFilePaths.has(file)),
+    }))
+    .filter((component) => component.files.length > 0);
+  const architectureComponentIds = new Set(architectureComponents.map((component) => component.id));
+  const architecture = {
+    components: architectureComponents,
+    connections: project.architecture.connections.filter(
+      (connection) => architectureComponentIds.has(connection.source) && architectureComponentIds.has(connection.target)
+    ),
+  };
 
   const symbols: SymbolRecord[] = project.nodes
     .filter((node) => !NON_SYMBOL_KINDS.has(node.kind))
@@ -115,7 +132,7 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     }));
 
   const fileComponents: Record<string, string> = {};
-  for (const component of project.architecture.components) {
+  for (const component of architecture.components) {
     for (const file of component.files) fileComponents[file] = component.id;
   }
 
@@ -183,7 +200,7 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     external_systems: project.external_systems ?? project.externalSystems ?? [],
     entrypoints: project.entrypoints ?? [],
     flows: project.flows,
-    architecture: project.architecture,
+    architecture,
     importantFiles,
     important_files: importantFiles,
     onboarding,
@@ -201,7 +218,7 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
         .filter((item): item is NonNullable<typeof item> => item !== null),
       symbols: symbols.length,
       routes: routes.length,
-      components: project.architecture.components.length,
+      components: architecture.components.length,
       parseSuccessRate: project.coverage.percentage,
     },
     diagnostics: project.diagnostics,

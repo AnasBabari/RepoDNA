@@ -1,17 +1,9 @@
-import fs from 'fs';
-import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { analyzeRepositoryFiles } from '../../app/lib/analyzer';
 import type { DiscoveredFile } from '../../app/lib/analyzer/types';
 
 describe('Pre-cached Golden Sample Artifacts', () => {
-  const samplesDir = path.resolve(process.cwd(), 'public/samples');
-
   it('generates and validates featured user repository samples (Strix, nanoGPT, Full-Stack FastAPI)', async () => {
-    if (!fs.existsSync(samplesDir)) {
-      fs.mkdirSync(samplesDir, { recursive: true });
-    }
-
     // 1. Strix (usestrix/strix) Sample
     const strixFiles: DiscoveredFile[] = [
       {
@@ -496,22 +488,16 @@ export function App() {
       { name: 'strix', source: 'https://github.com/usestrix/strix', files: strixFiles, skipped: [] },
       {}
     );
-    fs.writeFileSync(path.join(samplesDir, 'strix.json'), JSON.stringify(strixProject, null, 2));
-
     // Generate nanoGPT Artifact
     const nanogptProject = await analyzeRepositoryFiles(
       { name: 'nanoGPT', source: 'https://github.com/karpathy/nanoGPT', files: nanogptFiles, skipped: [] },
       {}
     );
-    fs.writeFileSync(path.join(samplesDir, 'nanogpt.json'), JSON.stringify(nanogptProject, null, 2));
-
     // Generate Full-Stack FastAPI Template Artifact
     const templateProject = await analyzeRepositoryFiles(
       { name: 'full-stack-fastapi-template', source: 'https://github.com/tiangolo/full-stack-fastapi-template', files: templateFiles, skipped: [] },
       {}
     );
-    fs.writeFileSync(path.join(samplesDir, 'full-stack-fastapi-template.json'), JSON.stringify(templateProject, null, 2));
-
     // Verify generated artifacts
     expect(strixProject.repository.name).toBe('strix');
     expect(strixProject.architecture.components.length).toBeGreaterThan(0);

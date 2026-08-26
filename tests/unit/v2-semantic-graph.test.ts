@@ -6,9 +6,10 @@ import { auditArchitectureConsistency } from '../../app/lib/analysis-lifecycle';
 import { adaptV1ToV2Viewer, validateArtifact } from '../../app/lib/schema/artifact-loader';
 import { projectV2ForWorkspace } from '../../app/lib/schema/v2-viewer-projection';
 import type { RepoDNAProject } from '../../app/lib/types';
+import type { RepoDNAProjectV2 } from '../../app/lib/analyzer/v2/types';
 
 function loadStrixFixture(): RepoDNAProject {
-  return JSON.parse(readFileSync('public/samples/strix.json', 'utf8')) as RepoDNAProject;
+  return JSON.parse(readFileSync('public/demo-project.json', 'utf8')) as RepoDNAProject;
 }
 
 describe('v2 semantic graph adapter', () => {
@@ -21,7 +22,7 @@ describe('v2 semantic graph adapter', () => {
     expect(v2.nodes.some((node) => node.kind === 'class')).toBe(true);
     expect(v2.nodes.some((node) => node.kind === 'method')).toBe(true);
     expect(v2.nodes.some((node) => node.kind === 'data_model')).toBe(true);
-    expect(v2.nodes.some((node) => node.kind === 'dependency' && node.name === 'fastapi')).toBe(true);
+    expect(v2.nodes.some((node) => node.kind === 'dependency')).toBe(true);
 
     expect(v2.edges.some((edge) => edge.type === 'DEFINES')).toBe(true);
     expect(v2.edges.some((edge) => edge.type === 'CALLS' && edge.status === 'resolved')).toBe(true);
@@ -49,5 +50,16 @@ describe('v2 semantic graph adapter', () => {
 
     expect(validateArtifact(v2)).toMatchObject({ valid: true, version: '2.0.0' });
     expect(v2.nodes.filter((node) => node.kind === 'dependency').every((node) => node.range.startLine >= 1 && node.range.endLine >= 1)).toBe(true);
+  });
+
+  it('keeps the large PyTorch sample transparent and bounded for the viewer', () => {
+    const pytorch = JSON.parse(readFileSync('public/samples/pytorch.json', 'utf8')) as RepoDNAProjectV2;
+
+    expect(validateArtifact(pytorch)).toMatchObject({ valid: true, version: '2.0.0' });
+    expect(pytorch.inventory.totalFileCount).toBeGreaterThan(pytorch.nodes.filter((node) => node.kind === 'file').length);
+    expect(pytorch.nodes.length).toBeLessThanOrEqual(pytorch.security.limits.maxGraphNodes ?? 0);
+    expect(pytorch.edges.length).toBeLessThanOrEqual(pytorch.security.limits.maxGraphEdges ?? 0);
+    expect(pytorch.security.truncated).toEqual(expect.arrayContaining(['GRAPH_NODES_COMPACTED', 'GRAPH_EDGES_COMPACTED']));
+    expect(pytorch.diagnostics.some((diagnostic) => diagnostic.code === 'GRAPH_EDGES_COMPACTED')).toBe(true);
   });
 });
