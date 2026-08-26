@@ -24,6 +24,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern app/.well-known/workflow --ignore-pattern tests/fixtures --ignore-pattern public/tree-sitter",
     "test:unit": "vitest run",
     "test:python": "python -c \"import sys, unittest; sys.path.insert(0, 'core'); test_suite = unittest.defaultTestLoader.discover('tests'); runner = unittest.TextTestRunner(verbosity=2); res = runner.run(test_suite); sys.exit(0 if res.wasSuccessful() else 1)\"",
+    "test:e2e": "playwright test",
     "test": "npm run lint && npm run test:unit && npm run build"
   },
   "dependencies": {
@@ -52,6 +53,7 @@
     "@emnapi/runtime": "^1.11.3",
     "@emnapi/wasi-threads": "^1.2.3",
     "@openai/sites-vite-plugin": "^0.1.0 || ^0.2.0",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",

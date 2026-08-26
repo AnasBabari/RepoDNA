@@ -1949,8 +1949,169 @@ code, kbd {
   stroke: #4ce1f5;
 }
 
+.code-graph-container .react-flow__node {
+  cursor: grab;
+}
+
+.code-graph-container .react-flow__node.dragging {
+  cursor: grabbing;
+}
+
+/* Constellation nodes are fixed 48px circles; labels float below without
+   affecting measurement so edge anchors never drift. */
+.code-node {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  cursor: inherit;
+  transition: opacity 0.25s ease;
+}
+
+.code-node-glyph {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--node-color);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--node-color) 33%, rgba(6, 9, 13, 0.96)), rgba(6, 9, 13, 0.96) 68%);
+  box-shadow: 0 0 14px var(--node-glow);
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 700;
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.code-node:hover .code-node-glyph,
+.code-node.is-hot .code-node-glyph,
+.code-node:focus-visible .code-node-glyph {
+  transform: scale(1.28);
+  border-color: #eaf6ff;
+  box-shadow:
+    0 0 26px 4px var(--node-glow-strong),
+    0 0 8px var(--node-color),
+    inset 0 0 6px var(--node-glow);
+}
+
+.code-node.is-selected .code-node-glyph {
+  transform: scale(1.16);
+  border-color: #ffffff;
+}
+
+.code-node:focus-visible {
+  outline: none;
+}
+
+.code-node-caption {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: max-content;
+  max-width: 160px;
+  pointer-events: none;
+  text-align: center;
+  color: #e2e8f0;
+  opacity: 0.72;
+  transition: opacity 0.2s ease;
+}
+
+.code-node:hover .code-node-caption,
+.code-node.is-hot .code-node-caption {
+  opacity: 1;
+}
+
+.code-node-title {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.code-node-kind {
+  opacity: 0.65;
+  font-size: 10px;
+}
+
+.code-node.is-dimmed {
+  opacity: 0.16;
+}
+
+.code-node.is-dimmed .code-node-glyph {
+  transform: none;
+}
+
+.code-node .react-flow__handle {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.code-node .react-flow__handle-left {
+  left: -3px;
+  top: 21px;
+  transform: none;
+}
+
+.code-node .react-flow__handle-right {
+  right: -3px;
+  top: 21px;
+  transform: none;
+}
+
+.code-node .react-flow__handle-top {
+  left: 21px;
+  top: -3px;
+  transform: none;
+}
+
+.code-node .react-flow__handle-bottom {
+  left: 21px;
+  bottom: -3px;
+  transform: none;
+}
+
+/* Edge states: idle / hot (in hovered neighborhood) / dim (outside it). */
 .code-graph-container .react-flow__edge-path {
-  transition: none;
+  transition: opacity 0.22s ease, stroke-width 0.15s ease;
+}
+
+.code-graph-container .react-flow__edge.eg-idle .react-flow__edge-path {
+  opacity: 0.68;
+}
+
+.code-graph-container .react-flow__edge.eg-unresolved .react-flow__edge-path {
+  stroke-dasharray: 6 4;
+  opacity: 0.5;
+}
+
+.code-graph-container .react-flow__edge.eg-hot .react-flow__edge-path {
+  opacity: 1;
+  stroke-width: 2.4;
+}
+
+.code-graph-container .react-flow__edge.eg-dim .react-flow__edge-path {
+  opacity: 0.07;
+}
+
+.code-graph-container .react-flow__edge:hover .react-flow__edge-path {
+  opacity: 1;
+  stroke-width: 2.6;
 }
 
 .minimap-help {

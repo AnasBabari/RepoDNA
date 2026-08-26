@@ -7,11 +7,28 @@
  * adapted without fabricated evidence). Starts from a focused, highest-degree
  * subgraph and expands neighborhoods on demand so large repositories never
  * render their entire graph at once.
+ *
+ * The constellation is alive: a continuous force simulation runs in a
+ * requestAnimationFrame loop with alpha cooling (Obsidian-style), dragging a
+ * node reheats the simulation while its neighbors react, and hovering a node
+ * or edge highlights its direct neighborhood and dims everything else.
  */
 
-import { Background, Controls, Handle, MarkerType, MiniMap, Position, ReactFlow, type Edge, type Node } from '@xyflow/react';
+import {
+  Background,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Position,
+  ReactFlow,
+  applyNodeChanges,
+  type Edge,
+  type Node,
+  type NodeChange,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { adaptV1ToV2Viewer } from '../lib/schema/artifact-loader';
 import type { RepoDNAProject } from '../lib/types';
@@ -69,6 +86,8 @@ type CodeGraphNodeData = {
   language: string;
   degree: number;
   color: string;
+  dim: boolean;
+  hot: boolean;
 };
 
 type CodeGraphEdgeData = {
@@ -85,6 +104,7 @@ type CodeGraphEdgeData = {
 };
 
 type GraphPoint = { x: number; y: number };
+type Side = 'n' | 'e' | 's' | 'w';
 
 function normalizeProject(project: RepoDNAProject | RepoDNAProjectV2): RepoDNAProjectV2 {
   if ((project as RepoDNAProjectV2).schemaVersion === '2.0.0') return project as RepoDNAProjectV2;
@@ -106,11 +126,11 @@ function hashSeed(value: string): number {
 }
 
 /**
- * Small deterministic force solver for an Obsidian-like constellation layout.
- * Keeping this local avoids another graph-rendering dependency and makes the
- * first frame stable for the same repository/filter combination.
+ * Deterministic initializer for the live simulation. The same repository and
+ * filter combination always starts from the same constellation; from there the
+ * rAF loop takes over with alpha cooling.
  */
-function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number): Map<string, GraphPoint> {
+function initSimulation(nodes: GraphNode[], edges: GraphEdge[], seed: number): Map<string, GraphPoint> {
   const positions = new Map<string, GraphPoint>();
   const velocities = new Map<string, GraphPoint>();
   const nodeIds = new Set(nodes.map((node) => node.id));
@@ -126,8 +146,6 @@ function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number):
   const centerId = ranked[0]?.id;
   for (const node of nodes) {
     const rank = ranked.findIndex((candidate) => candidate.id === node.id);
-    // A deterministic spiral gives connected hubs room to breathe before the
-    // force pass starts, which avoids the dense central knot on large repos.
     const angle = rank * 2.399963 + hashSeed(`${seed}:${node.id}:angle`) * 0.45;
     const radius = centerId === node.id
       ? 0
@@ -182,8 +200,6 @@ function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number):
       const point = positions.get(node.id)!;
       const force = forces.get(node.id)!;
       const velocity = velocities.get(node.id)!;
-      // Very light gravity keeps the constellation bounded without pulling
-      // every connected neighborhood back into one central cluster.
       force.x -= point.x * 0.0007;
       force.y -= point.y * 0.0007;
       velocity.x = (velocity.x + force.x * 0.038) * 0.84;
@@ -197,6 +213,130 @@ function layoutForceGraph(nodes: GraphNode[], edges: GraphEdge[], seed: number):
   }
 
   return positions;
+}
+
+/** One integration tick of the live simulation. Mutates points/velocities/alpha in place; returns true when anything moved. */
+function stepSimulation(
+  points: Map<string, GraphPoint>,
+  springs: Array<{ a: string; b: string }>,
+  ids: string[],
+  velocities: Map<string, GraphPoint>,
+  state: { alpha: number },
+  pinned: Set<string> | null
+): boolean {
+  if (state.alpha <= 0.004 && !pinned) return false;
+
+  const nodes = ids.filter((id) => points.has(id));
+  const forces = new Map<string, GraphPoint>(nodes.map((id) => [id, { x: 0, y: 0 }]));
+  const dragBoost = pinned ? 1.35 : 1;
+
+  for (let i = 0; i < nodes.length; i++) {
+    const leftId = nodes[i];
+    const leftPoint = points.get(leftId)!;
+    for (let j = i + 1; j < nodes.length; j++) {
+      const rightId = nodes[j];
+      const rightPoint = points.get(rightId)!;
+      let dx = leftPoint.x - rightPoint.x;
+      let dy = leftPoint.y - rightPoint.y;
+      const distanceSquared = Math.max(dx * dx + dy * dy, 900);
+      const distance = Math.sqrt(distanceSquared);
+      dx /= distance;
+      dy /= distance;
+      const collision = distance < 170 ? (170 - distance) * 1.5 : 0;
+      const repel = Math.min(950, (160000 / distanceSquared + collision) * dragBoost);
+      forces.get(leftId)!.x += dx * repel;
+      forces.get(leftId)!.y += dy * repel;
+      forces.get(rightId)!.x -= dx * repel;
+      forces.get(rightId)!.y -= dy * repel;
+    }
+  }
+
+  for (const edge of springs) {
+    const source = points.get(edge.a);
+    const target = points.get(edge.b);
+    if (!source || !target) continue;
+    let dx = target.x - source.x;
+    let dy = target.y - source.y;
+    const distance = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+    dx /= distance;
+    dy /= distance;
+    const spring = Math.max(-240, Math.min(240, (distance - 360) * 0.007));
+    forces.get(edge.a)!.x += dx * spring;
+    forces.get(edge.a)!.y += dy * spring;
+    forces.get(edge.b)!.x -= dx * spring;
+    forces.get(edge.b)!.y -= dy * spring;
+  }
+
+  let moved = false;
+  for (const id of nodes) {
+    if (pinned?.has(id)) continue;
+    const point = points.get(id)!;
+    const force = forces.get(id)!;
+    const velocity = velocities.get(id);
+    if (!velocity) continue;
+    force.x -= point.x * 0.0008;
+    force.y -= point.y * 0.0008;
+    velocity.x = (velocity.x + force.x * 0.04) * 0.85;
+    velocity.y = (velocity.y + force.y * 0.04) * 0.85;
+    const maxStep = 15 * state.alpha + 0.6;
+    const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y) || 1;
+    const stepScale = Math.min(1, maxStep / speed);
+    const nextX = point.x + velocity.x * stepScale;
+    const nextY = point.y + velocity.y * stepScale;
+    if (Math.abs(nextX - point.x) > 0.02 || Math.abs(nextY - point.y) > 0.02) moved = true;
+    point.x = nextX;
+    point.y = nextY;
+  }
+
+  state.alpha *= pinned ? 0.999 : 0.978;
+  if (state.alpha <= 0.004) state.alpha = 0;
+  return moved;
+}
+
+function buildSprings(edges: GraphEdge[], visibleIds: Set<string>): Array<{ a: string; b: string }> {
+  const springs: Array<{ a: string; b: string }> = [];
+  for (const edge of edges) {
+    if (!edge.target || edge.target === edge.source) continue;
+    if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
+    springs.push({ a: edge.source, b: edge.target });
+  }
+  return springs;
+}
+
+function buildNeighborhood(edges: GraphEdge[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => {
+    let set = map.get(a);
+    if (!set) map.set(a, (set = new Set()));
+    set.add(b);
+  };
+  for (const edge of edges) {
+    if (!edge.target || edge.target === edge.source) continue;
+    link(edge.source, edge.target);
+    link(edge.target, edge.source);
+  }
+  return map;
+}
+
+function spawnPoint(id: string, adjacency: Map<string, Set<string>>, pos: Map<string, GraphPoint>, index: number): GraphPoint {
+  for (const neighbor of adjacency.get(id) ?? []) {
+    const base = pos.get(neighbor);
+    if (base) {
+      const angle = index * 2.399963 + hashSeed(`${id}:spawn`) * 1.2;
+      const radius = 120 + hashSeed(`${id}:spawn:r`) * 90;
+      return { x: base.x + Math.cos(angle) * radius, y: base.y + Math.sin(angle) * radius };
+    }
+  }
+  const fallbackAngle = index * 2.399963 + hashSeed(`${id}:spawn`) * 0.45;
+  const fallbackRadius = 260 + Math.sqrt(index + 1) * 105 + hashSeed(`${id}:spawn:r`) * 120;
+  return { x: Math.cos(fallbackAngle) * fallbackRadius, y: Math.sin(fallbackAngle) * fallbackRadius };
+}
+
+function pickSides(a: GraphPoint, b: GraphPoint): { s: Side; t: Side } {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return { s: dx >= 0 ? 'e' : 'w', t: dx >= 0 ? 'w' : 'e' };
+  return { s: dy >= 0 ? 's' : 'n', t: dy >= 0 ? 'n' : 's' };
 }
 
 function edgePriority(edge: GraphEdge, degreeById: Map<string, number>): number {
@@ -238,10 +378,46 @@ function graphMiniMapNodeColor(node: Node): string {
   return typeof color === 'string' ? color : '#38bdf8';
 }
 
+function buildCodeNode(
+  node: GraphNode,
+  position: GraphPoint,
+  degrees: Map<string, number>
+): Node<CodeGraphNodeData> {
+  return {
+    id: node.id,
+    position: { x: position.x, y: position.y },
+    initialWidth: 48,
+    initialHeight: 48,
+    data: {
+      label: shortLabel(node),
+      kind: node.kind,
+      path: node.path,
+      language: node.language,
+      degree: degrees.get(node.id) ?? 0,
+      color: kindTone[node.kind] ?? '#9ca3af',
+      dim: false,
+      hot: false,
+    },
+    type: 'codegraph' as const,
+  };
+}
+
+function nodeDataEqual(a: CodeGraphNodeData, b: CodeGraphNodeData): boolean {
+  return (
+    a.label === b.label &&
+    a.kind === b.kind &&
+    a.path === b.path &&
+    a.language === b.language &&
+    a.degree === b.degree &&
+    a.color === b.color
+  );
+}
+
 export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjectV2 }) {
   const graph = useMemo(() => normalizeProject(project), [project]);
   const [resetKey, setResetKey] = useState(0);
   const [layoutSeed, setLayoutSeed] = useState(0);
+  const sig = `${resetKey}:${layoutSeed}`;
 
   const [granularity, setGranularity] = useState<'structure' | 'symbols'>('structure');
   const [search, setSearch] = useState('');
@@ -250,6 +426,8 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
 
   const structureKinds = useMemo(() => new Set(['repository', 'workspace', 'package', 'directory', 'module', 'file', 'route', 'data_model', 'table', 'dependency', 'configuration', 'external_system']), []);
   const symbolKinds = useMemo(() => new Set(['class', 'interface', 'function', 'method', 'controller', 'service', 'repository_layer', 'component', 'attribute', 'variable']), []);
@@ -293,7 +471,6 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
       );
     }
 
-    // Seed ranking: degree desc, then id asc (stable).
     const ranked = [...candidates].sort((a, b) => {
       const da = degreeById.get(a.id) ?? 0;
       const dbv = degreeById.get(b.id) ?? 0;
@@ -303,7 +480,6 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
     const selected = new Map<string, GraphNode>();
     for (const n of ranked.slice(0, INITIAL_NODE_LIMIT)) selected.set(n.id, n);
 
-    // Expand neighborhoods of user-expanded nodes.
     for (const expandId of expandedIds) {
       if (!selected.has(expandId)) continue;
       const neighbors: string[] = [];
@@ -339,49 +515,197 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
     [candidateEdges, degreeById]
   );
 
-  const layoutPositions = useMemo(
-    () => layoutForceGraph(visibleNodes, candidateEdges, layoutSeed),
-    [visibleNodes, candidateEdges, layoutSeed]
+  const [rfNodes, setRfNodes] = useState<Node<CodeGraphNodeData>[]>(() => {
+    const pos = initSimulation(visibleNodes, candidateEdges, layoutSeed);
+    return visibleNodes.map((n) => buildCodeNode(n, pos.get(n.id) ?? { x: 0, y: 0 }, degreeById));
+  });
+
+  const wakeRef = useRef<() => void>(() => {});
+  const pinnedRef = useRef<Set<string> | null>(null);
+  const adjacencyRef = useRef<Map<string, Set<string>>>(new Map());
+  const springRef = useRef<Array<{ a: string; b: string }>>([]);
+  const velRef = useRef<Map<string, GraphPoint>>(new Map());
+  const alphaRef = useRef({ alpha: 1 });
+  const simIdsRef = useRef<string[]>([]);
+  const latestNodesRef = useRef<Node<CodeGraphNodeData>[]>(rfNodes);
+  const builtSigRef = useRef<string | null>(null);
+
+  const reheat = useCallback((alpha: number) => {
+    alphaRef.current.alpha = Math.max(alphaRef.current.alpha, alpha);
+    wakeRef.current();
+  }, []);
+
+  useEffect(() => {
+    adjacencyRef.current = buildNeighborhood(candidateEdges);
+    springRef.current = buildSprings(candidateEdges, visibleNodeIds);
+    simIdsRef.current = [...visibleNodeIds];
+  }, [candidateEdges, visibleNodeIds]);
+
+  useEffect(() => {
+    latestNodesRef.current = rfNodes;
+  }, [rfNodes]);
+
+  useEffect(() => {
+    if (builtSigRef.current !== sig) {
+      builtSigRef.current = sig;
+      const pos = initSimulation(visibleNodes, candidateEdges, layoutSeed);
+      velRef.current = new Map([...pos.keys()].map((id) => [id, { x: 0, y: 0 }]));
+      alphaRef.current = { alpha: 1 };
+      setRfNodes(visibleNodes.map((n) => buildCodeNode(n, pos.get(n.id) ?? { x: 0, y: 0 }, degreeById)));
+      reheat(0.9);
+      return;
+    }
+
+    const aliveIds = new Set(visibleNodes.map((n) => n.id));
+    let removed = false;
+    for (const id of [...velRef.current.keys()]) {
+      if (!aliveIds.has(id)) {
+        velRef.current.delete(id);
+        removed = true;
+      }
+    }
+    let spawned = 0;
+    const currentPositions = new Map<string, GraphPoint>(
+      latestNodesRef.current.map((n) => [n.id, { x: n.position.x, y: n.position.y }])
+    );
+    const spawnPositions = new Map<string, GraphPoint>();
+    visibleNodes.forEach((n, index) => {
+      if (!currentPositions.has(n.id)) {
+        spawnPositions.set(n.id, spawnPoint(n.id, adjacencyRef.current, currentPositions, index));
+        velRef.current.set(n.id, { x: 0, y: 0 });
+        spawned++;
+      }
+    });
+
+    setRfNodes((prev) => {
+      const byId = new Map(prev.map((n) => [n.id, n]));
+      return visibleNodes.map((n) => {
+        const existing = byId.get(n.id);
+        const spawn = spawnPositions.get(n.id);
+        const position = spawn ?? (existing ? existing.position : { x: 0, y: 0 });
+        const desired = buildCodeNode(n, position, degreeById);
+        if (existing && nodeDataEqual(existing.data, desired.data)) return existing;
+        return desired;
+      });
+    });
+    if (spawned > 0 || removed) reheat(spawned > 0 ? 0.85 : 0.5);
+  }, [visibleNodes, candidateEdges, degreeById, sig, layoutSeed, reheat]);
+
+  useEffect(() => {
+    let frame = 0;
+    let sleeping = false;
+
+    const tick = () => {
+      const pinned = pinnedRef.current;
+      const points = new Map<string, GraphPoint>(
+        latestNodesRef.current.map((n) => [n.id, { x: n.position.x, y: n.position.y }])
+      );
+      const moved = stepSimulation(points, springRef.current, simIdsRef.current, velRef.current, alphaRef.current, pinned);
+      if (moved) {
+        setRfNodes((prev) => {
+          let changed = false;
+          const next = prev.map((n) => {
+            if (pinned?.has(n.id)) return n;
+            const p = points.get(n.id);
+            if (!p) return n;
+            if (Math.abs(p.x - n.position.x) > 0.02 || Math.abs(p.y - n.position.y) > 0.02) {
+              changed = true;
+              return { ...n, position: { x: p.x, y: p.y } };
+            }
+            return n;
+          });
+          return changed ? next : prev;
+        });
+      }
+      if (alphaRef.current.alpha <= 0 && !pinned) {
+        sleeping = true;
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+
+    wakeRef.current = () => {
+      if (!sleeping) return;
+      sleeping = false;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => {
+      sleeping = true;
+      cancelAnimationFrame(frame);
+      wakeRef.current = () => {};
+    };
+  }, [sig]);
+
+  const onNodesChange = useCallback((changes: NodeChange<Node<CodeGraphNodeData>>[]) => {
+    setRfNodes((prev) => applyNodeChanges(changes, prev));
+  }, []);
+
+  const onNodeDragStart = useCallback(
+    (_: unknown, node: Node<CodeGraphNodeData>) => {
+      pinnedRef.current = new Set([node.id]);
+      reheat(0.35);
+    },
+    [reheat]
   );
 
-  const rfNodes: Node<CodeGraphNodeData>[] = useMemo(() => {
-    return visibleNodes.map((n) => {
-      const position = layoutPositions.get(n.id) ?? { x: 0, y: 0 };
-      return {
-        id: n.id,
-        position,
-        // React Flow can paint the custom node before its first measurement;
-        // these dimensions also let MiniMap render nodes immediately.
-        initialWidth: 132,
-        initialHeight: 86,
-        data: {
-          label: shortLabel(n),
-          kind: n.kind,
-          path: n.path,
-          language: n.language,
-          degree: degreeById.get(n.id) ?? 0,
-          color: kindTone[n.kind] ?? '#9ca3af',
-        },
-        type: 'codegraph' as const,
-      };
+  const onNodeDragStop = useCallback(
+    () => {
+      pinnedRef.current = null;
+      reheat(0.28);
+    },
+    [reheat]
+  );
+
+  const neighborhood = useMemo(() => buildNeighborhood(renderedEdges), [renderedEdges]);
+
+  const focusIds = useMemo(() => {
+    const hoveredEdge = hoveredEdgeId ? renderedEdges.find((e) => e.id === hoveredEdgeId) : null;
+    const focusNode = hoveredNodeId ?? selectedNodeId;
+    if (!hoveredEdge && !focusNode) return null;
+    const ids = new Set<string>();
+    const roots = hoveredEdge ? [hoveredEdge.source, ...(hoveredEdge.target ? [hoveredEdge.target] : [])] : [focusNode!];
+    for (const root of roots) {
+      ids.add(root);
+      for (const neighbor of neighborhood.get(root) ?? []) ids.add(neighbor);
+    }
+    return ids;
+  }, [hoveredNodeId, hoveredEdgeId, selectedNodeId, renderedEdges, neighborhood]);
+
+  const decoratedNodes = useMemo(() => {
+    return rfNodes.map((n) => {
+      const isFocus = !!focusIds?.has(n.id);
+      const dim = !!focusIds && !isFocus;
+      const hot = isFocus || n.id === selectedNodeId;
+      if (n.data.dim === dim && n.data.hot === hot) return n;
+      return { ...n, data: { ...n.data, dim, hot } };
     });
-  }, [visibleNodes, degreeById, layoutPositions]);
+  }, [rfNodes, focusIds, selectedNodeId]);
 
   const rfEdges: Edge<CodeGraphEdgeData>[] = useMemo(() => {
-    return renderedEdges.map((e) => ({
+    const unresolved = (status: string) => status === 'unresolved' || status === 'ambiguous';
+    const pointById = new Map(rfNodes.map((n) => [n.id, n.position]));
+    return renderedEdges.flatMap((e) => {
+      if (!e.target || e.target === e.source || !visibleNodeIds.has(e.source) || !visibleNodeIds.has(e.target)) return [];
+      const a = pointById.get(e.source);
+      const b = pointById.get(e.target);
+      const sides = a && b ? pickSides(a, b) : { s: 'r' as Side, t: 'l' as Side };
+      const hot = !!focusIds?.has(e.source) && !!focusIds.has(e.target);
+      const dim = !!focusIds && !hot;
+      const stroke = edgeTypeTone[e.type] ?? '#94a3b8';
+      return [{
         id: e.id,
         source: e.source,
-        target: e.target ?? e.source,
+        target: e.target,
+        sourceHandle: `s-${sides.s}`,
+        targetHandle: `t-${sides.t}`,
         type: 'straight',
-        // Unresolved edges remain visibly dashed; animation adds continuous
-        // paint work while zooming without adding useful information.
         animated: false,
-        style: {
-          stroke: edgeTypeTone[e.type] ?? '#94a3b8',
-          strokeDasharray: e.status === 'unresolved' || e.status === 'ambiguous' ? '6 4' : undefined,
-          opacity: e.status === 'resolved' ? 0.7 : 0.56,
-        },
-        markerEnd: { type: MarkerType.ArrowClosed, color: edgeTypeTone[e.type] ?? '#94a3b8' },
+        className: `${dim ? 'eg-dim' : hot ? 'eg-hot' : 'eg-idle'}${unresolved(e.status) ? ' eg-unresolved' : ''}`,
+        style: { stroke },
+        markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 16, height: 16 },
         data: {
           edgeId: e.id,
           relation: e.type,
@@ -394,15 +718,15 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
           alternatives: e.alternativeCandidates ?? [],
           unresolvedExpression: e.unresolvedExpression ?? null,
         },
-      }));
-  }, [renderedEdges]);
-
-  // Deterministic layered layout by kind tier, then degree.
+      }];
+    });
+  }, [renderedEdges, visibleNodeIds, focusIds, rfNodes]);
 
   const selectedNode = graph.nodes.find((n) => n.id === selectedNodeId) ?? null;
   const selectedEdge = graph.edges.find((e) => e.id === selectedEdgeId) ?? null;
 
   const onNodeClick = useCallback((_: unknown, node: Node<CodeGraphNodeData>) => {
+    setSelectedEdgeId(null);
     setSelectedNodeId((prev) => (prev === node.id ? prev : node.id));
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -415,6 +739,11 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
     setSelectedEdgeId(edge.id);
   }, []);
 
+  const onPaneClick = useCallback(() => {
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }, []);
+
   function resetView() {
     setExpandedIds(new Set());
     setSearch('');
@@ -422,6 +751,8 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
     setRelationFilter('all');
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
+    setHoveredNodeId(null);
+    setHoveredEdgeId(null);
     setResetKey((k) => k + 1);
     setLayoutSeed((k) => k + 1);
   }
@@ -436,7 +767,7 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
         <div>
           <p className="eyebrow cyan-text">Relationship explorer</p>
           <h1>Code Graph</h1>
-          <p>Explore the repository as a connected constellation. Search, filter, and click a relationship to see its evidence.</p>
+          <p>Explore the repository as a living constellation. Drag nodes to pull the web around, hover to trace neighborhoods, click to expand.</p>
         </div>
         <div className="view-heading-actions">
           <span>{graph.nodes.length} entities · {graph.edges.length} relationships</span>
@@ -467,22 +798,36 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
         </button>
         <button className="chip-button" onClick={resetView} type="button">Reset view</button>
         <span style={{ opacity: 0.65, fontSize: 12 }} role="status">
-          {visibleNodes.length}{nodesTruncated ? ` of ${candidateNodeCount}` : ''} nodes · {renderedEdges.length}{edgesTruncated ? ` of ${candidateEdges.length}` : ''} edges shown · click a node to expand
+          {visibleNodes.length}{nodesTruncated ? ` of ${candidateNodeCount}` : ''} nodes · {renderedEdges.length}{edgesTruncated ? ` of ${candidateEdges.length}` : ''} edges shown · drag nodes, click to expand
         </span>
       </div>
 
       <div style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', minHeight: 420 }}>
         <ReactFlow
           key={resetKey}
-          nodes={rfNodes}
+          nodes={decoratedNodes}
           edges={rfEdges}
           nodeTypes={codeGraphNodeTypes}
+          onNodesChange={onNodesChange}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
+          onPaneClick={onPaneClick}
+          onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
+          onNodeMouseLeave={() => setHoveredNodeId(null)}
+          onEdgeMouseEnter={(_, edge) => setHoveredEdgeId(edge.id)}
+          onEdgeMouseLeave={() => setHoveredEdgeId(null)}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDragStop={onNodeDragStop}
           fitView
-          minZoom={0.1}
+          fitViewOptions={{ padding: 0.22 }}
+          minZoom={0.05}
+          maxZoom={2.5}
+          nodeOrigin={[0.5, 0.5]}
+          nodeDragThreshold={2}
           nodesConnectable={false}
+          deleteKeyCode={null}
           edgesFocusable={false}
+          zoomOnDoubleClick={false}
           proOptions={{ hideAttribution: true }}
         >
           <Background bgColor="#06090d" color="#142633" gap={36} size={1} />
@@ -558,42 +903,36 @@ export function CodeGraph({ project }: { project: RepoDNAProject | RepoDNAProjec
 }
 
 const CodeGraphNode = memo(function CodeGraphNode({ data }: { data: CodeGraphNodeData }) {
+  const classes = ['code-node'];
+  if (data.dim) classes.push('is-dimmed');
+  if (data.hot) classes.push('is-hot');
   return (
     <div
+      className={classes.join(' ')}
       tabIndex={0}
       role="button"
+      aria-label={data.path || data.label}
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 5,
-        color: '#e2e8f0',
-        minWidth: 112,
-        maxWidth: 180,
-        fontSize: 11,
+        ['--node-color' as string]: data.color,
+        ['--node-glow' as string]: `${data.color}66`,
+        ['--node-glow-strong' as string]: `${data.color}aa`,
       }}
     >
-      <Handle type="target" position={Position.Left} style={{ background: data.color }} />
-      <div
-        aria-label={data.label}
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          border: `2px solid ${data.color}`,
-          background: `radial-gradient(circle at 35% 30%, ${data.color}55, rgba(6,9,13,0.96) 68%)`,
-          boxShadow: `0 0 18px ${data.color}66`,
-          display: 'grid',
-          placeItems: 'center',
-          fontSize: 13,
-          fontWeight: 700,
-        }}
-      >
+      <span className="code-node-glyph" aria-hidden="true">
         {(data.label.replace(/[^a-zA-Z0-9]/g, '')[0] ?? '?').toUpperCase()}
-      </div>
-      <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{data.label}</div>
-      <div style={{ opacity: 0.65, fontSize: 10 }}>{data.kind.replace('_', ' ')}{data.degree ? ` · ${data.degree}` : ''}</div>
-      <Handle type="source" position={Position.Right} style={{ background: data.color }} />
+      </span>
+      <span className="code-node-caption" aria-hidden="true">
+        <span className="code-node-title">{data.label}</span>
+        <span className="code-node-kind">{data.kind.replace('_', ' ')}{data.degree ? ` · ${data.degree}` : ''}</span>
+      </span>
+      <Handle className="code-handle" id="t-n" type="target" position={Position.Top} />
+      <Handle className="code-handle" id="t-e" type="target" position={Position.Right} />
+      <Handle className="code-handle" id="t-s" type="target" position={Position.Bottom} />
+      <Handle className="code-handle" id="t-w" type="target" position={Position.Left} />
+      <Handle className="code-handle" id="s-n" type="source" position={Position.Top} />
+      <Handle className="code-handle" id="s-e" type="source" position={Position.Right} />
+      <Handle className="code-handle" id="s-s" type="source" position={Position.Bottom} />
+      <Handle className="code-handle" id="s-w" type="source" position={Position.Left} />
     </div>
   );
 });
