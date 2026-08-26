@@ -98,6 +98,8 @@ export interface Inventory {
   packageCount: number;
   declaredDependencyCount: number;
   skippedByReason: Record<string, number>;
+  acquisitionMode?: 'archive' | 'git-tree';
+  repositorySizeKb?: number;
   languageCoverage: Record<string, number>;
   truncation?: {
     hitLimits: string[];

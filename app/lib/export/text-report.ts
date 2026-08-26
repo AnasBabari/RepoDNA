@@ -156,8 +156,14 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   // 4. Inventory
   out.push(...heading(4, 'Repository inventory'));
   if (inventory) {
-    out.push(`Total archive entries:     ${inventory.totalFileCount}`);
+    out.push(`${inventory.acquisitionMode === 'git-tree' ? 'Total tree entries' : 'Total archive entries'}:       ${inventory.totalFileCount}`);
     out.push(`Total bytes (declared):    ${inventory.totalBytes}`);
+    if (inventory.acquisitionMode) {
+      out.push(`Source acquisition:        ${inventory.acquisitionMode === 'git-tree' ? 'Git tree (large-repository mode)' : 'Repository archive'}`);
+    }
+    if (typeof inventory.repositorySizeKb === 'number') {
+      out.push(`GitHub size hint (KB):     ${inventory.repositorySizeKb}`);
+    }
     out.push(`First-party source files:  ${inventory.firstPartySourceFileCount}`);
     out.push(`First-party lines of code: ${inventory.firstPartyLoc}`);
     out.push(`Parse candidates:          ${inventory.candidateFileCount}`);
@@ -169,6 +175,9 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
     out.push(`Generated artifacts:       ${inventory.generatedFileCount}`);
     out.push(`Packages/workspaces:       ${inventory.packageCount}`);
     out.push(`Declared dependencies:     ${inventory.declaredDependencyCount}`);
+    if (inventory.truncation?.maxFilesReached || inventory.truncation?.maxBytesReached) {
+      out.push(`Inventory truncated:       ${inventory.truncation.hitLimits.join(', ') || 'resource limit'}`);
+    }
     const reasons = Object.keys(inventory.skippedByReason).sort();
     if (reasons.length > 0) {
       out.push('Skipped by reason:');

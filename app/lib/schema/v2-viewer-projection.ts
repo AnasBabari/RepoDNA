@@ -176,7 +176,11 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
       source: project.repository.source,
       languages: project.repository.languages,
       fileCount: files.length,
-      sourceFileCount: Math.min(files.length, project.inventory.firstPartySourceFileCount),
+      // Inventory counts include source files intentionally left out by a
+      // large-repository resource boundary. Keep the repository size label
+      // truthful even though the navigable file list contains only the files
+      // actually acquired and parsed.
+      sourceFileCount: project.inventory.firstPartySourceFileCount,
       parsedFileCount: files.filter((file) => file.parsed).length,
       lines: project.inventory.firstPartyLoc,
       fingerprint: {

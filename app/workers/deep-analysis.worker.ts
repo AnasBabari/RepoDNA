@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import { extractFromZip } from '../lib/analyzer/ingestion';
-import type { DiscoveredFile, IngestionInventory } from '../lib/analyzer/types';
+import type { DiscoveredFile, IngestionInventory, IngestionLimits } from '../lib/analyzer/types';
 import { analyzeRepositoryV2 } from '../lib/analyzer/v2/pipeline';
 
 /**
@@ -26,12 +26,14 @@ export type DeepScanRequest =
       buffer: ArrayBuffer;
       name: string;
       source?: string;
+      ingestionLimits?: IngestionLimits;
     }
   | {
       type: 'analyze-discovery';
       discovery: DeepScanDiscovery;
       name: string;
       source: string;
+      ingestionLimits?: IngestionLimits;
     };
 
 export type DeepScanResponse =
@@ -48,7 +50,7 @@ self.onmessage = async (event: MessageEvent<DeepScanRequest>) => {
     post({ type: 'progress', stage: 'inventory', message: 'Inventorying repository files…', percent: 5 });
 
     const discovery = event.data.type === 'analyze'
-      ? await extractFromZip(event.data.buffer, name)
+      ? await extractFromZip(event.data.buffer, name, event.data.ingestionLimits)
       : event.data.discovery;
 
     post({
@@ -60,7 +62,24 @@ self.onmessage = async (event: MessageEvent<DeepScanRequest>) => {
 
     const project = await analyzeRepositoryV2(
       { ...discovery, source: event.data.source ?? `private:${name}` },
-      {}
+      {
+        ingestionLimits: event.data.ingestionLimits,
+        onProgress: (progress) => {
+          const ranges: Record<string, [number, number]> = {
+            parse: [22, 58],
+            resolve_relationships: [59, 78],
+            analytics: [79, 94],
+          };
+          const [start, end] = ranges[progress.stage] ?? [20, 94];
+          const ratio = progress.total > 0 ? Math.min(1, Math.max(0, progress.completed / progress.total)) : 1;
+          post({
+            type: 'progress',
+            stage: progress.stage,
+            message: progress.message,
+            percent: Math.round(start + (end - start) * ratio),
+          });
+        },
+      }
     );
 
     post({ type: 'progress', stage: 'complete', message: 'Graph ready', percent: 100 });

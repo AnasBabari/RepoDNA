@@ -119,6 +119,138 @@ describe('Ingestion & Resource Limits', () => {
     }
   });
 
+  it('selects Git-tree acquisition before codeload for a known large public repository', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ name: 'large', default_branch: 'main', size: 75_000 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sha: 'commit-sha' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            truncated: false,
+            tree: [{ path: 'src/main.py', type: 'blob', sha: 'blob-python', size: 12 }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response('print("ok")', { status: 200 }));
+
+    try {
+      const result = await fetchGitHubRepo('https://github.com/owner/large', {
+        maxFiles: 100,
+        maxArchiveEntries: 100,
+        maxFileBytes: 1000,
+        maxArchiveBytes: 100,
+        maxTotalExtractedBytes: 5000,
+        fetchTimeoutMs: 1000,
+        treeFirstSizeKb: 50_000,
+      });
+
+      expect(result.files.map((file) => file.path)).toEqual(['src/main.py']);
+      expect(result.inventory).toMatchObject({
+        acquisitionMode: 'git-tree',
+        repositorySizeKb: 75_000,
+      });
+      expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+        'https://api.github.com/repos/owner/large',
+        'https://api.github.com/repos/owner/large/commits/main',
+        'https://api.github.com/repos/owner/large/git/trees/commit-sha?recursive=1',
+        'https://raw.githubusercontent.com/owner/large/commit-sha/src/main.py',
+      ]);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('walks from the returned root tree when a pinned recursive tree is truncated', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ name: 'large', default_branch: 'main', size: 75_000 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sha: 'root-tree-sha', truncated: true, tree: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ tree: [{ path: 'src/main.py', type: 'blob', sha: 'blob-python', size: 12 }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(new Response('print("ok")', { status: 200 }));
+
+    try {
+      const result = await fetchGitHubRepo(
+        'https://github.com/owner/large',
+        {
+          maxFiles: 100,
+          maxArchiveEntries: 100,
+          maxFileBytes: 1000,
+          maxArchiveBytes: 100,
+          maxTotalExtractedBytes: 5000,
+          fetchTimeoutMs: 1000,
+          treeFirstSizeKb: 50_000,
+        },
+        undefined,
+        { commitSha: 'commit-sha' }
+      );
+
+      expect(result.files).toHaveLength(1);
+      expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+        'https://api.github.com/repos/owner/large',
+        'https://api.github.com/repos/owner/large/git/trees/commit-sha?recursive=1',
+        'https://api.github.com/repos/owner/large/git/trees/root-tree-sha',
+        'https://raw.githubusercontent.com/owner/large/commit-sha/src/main.py',
+      ]);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('keeps a truthful partial inventory when public candidate files exceed the soft limit', async () => {
+    const buffer = fflate.zipSync({
+      'one.py': fflate.strToU8('print(1)'),
+      'two.py': fflate.strToU8('print(2)'),
+    });
+
+    const result = await extractFromZip(buffer, 'large-repo', {
+      maxFiles: 1,
+      maxArchiveEntries: 100,
+      maxFileBytes: 1000,
+      maxArchiveBytes: 50000,
+      maxTotalExtractedBytes: 50000,
+      fetchTimeoutMs: 1000,
+      allowPartialOnFileLimit: true,
+    });
+
+    expect(result.files).toHaveLength(1);
+    expect(result.skipped).toContainEqual({ path: 'two.py', reason: 'max_files_limit' });
+    expect(result.inventory).toMatchObject({
+      acquisitionMode: 'archive',
+      truncation: {
+        hitLimits: ['TOO_MANY_FILES'],
+        maxFilesReached: true,
+        maxBytesReached: false,
+      },
+    });
+  });
+
   it('rejects archives containing path traversal attempts', async () => {
     const buffer = fflate.zipSync({
       '../evil.py': fflate.strToU8('print("malicious")'),

@@ -48,6 +48,11 @@ export const SPECIAL_FILES = new Set([
   'go.mod', 'Cargo.toml', 'pom.xml', 'build.gradle', 'tsconfig.json', 'jsconfig.json',
 ]);
 
+export interface GitHubFetchOptions {
+  /** Pin acquisition to the commit already resolved by the public API route. */
+  commitSha?: string;
+}
+
 const OWNER_REPO_REGEX = /^[a-zA-Z0-9_.-]+$/;
 
 const RESERVED_GITHUB_ROOT_SEGMENTS = new Set([
@@ -267,6 +272,7 @@ export async function extractFromZip(
     let generatedFileCount = 0;
     let unsupportedFileCount = 0;
     let firstPartySourceCandidateCount = 0;
+    let maxFilesReached = false;
 
     const files: DiscoveredFile[] = [];
     const skipped: { path: string; reason: string }[] = [];
@@ -324,6 +330,12 @@ export async function extractFromZip(
           unsupportedSourceFileCount: unsupportedFileCount,
           totalArchiveEntries: archiveEntryCount,
           skippedByReason,
+          acquisitionMode: 'archive' as const,
+          truncation: {
+            hitLimits: maxFilesReached ? ['TOO_MANY_FILES'] : [],
+            maxFilesReached,
+            maxBytesReached: false,
+          },
         };
         resolve({
           files: normalizedFiles.sort((a, b) => a.path.localeCompare(b.path)),
@@ -408,6 +420,11 @@ export async function extractFromZip(
       // 3. Enforce candidate files budget
       candidateFileCount++;
       if (candidateFileCount > limits.maxFiles) {
+        if (limits.allowPartialOnFileLimit) {
+          maxFilesReached = true;
+          skipped.push({ path: normalizedPath, reason: 'max_files_limit' });
+          return;
+        }
         abortArchive(
           'TOO_MANY_FILES',
           `Repository exceeds limit of ${limits.maxFiles.toLocaleString()} candidate files`,
@@ -608,6 +625,12 @@ type GitHubTreeEntry = {
   path: string;
   type: string;
   sha: string;
+  size?: number;
+};
+
+type GitHubRepositoryMetadata = {
+  name?: string;
+  default_branch?: string;
   size?: number;
 };
 
@@ -852,29 +875,33 @@ async function fetchGitHubTreeRepo(
   owner: string,
   repo: string,
   limits: IngestionLimits,
-  accessToken?: string
+  accessToken?: string,
+  metadataOverride?: GitHubRepositoryMetadata,
+  commitShaOverride?: string
 ): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory: IngestionInventory }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), Math.max(limits.fetchTimeoutMs, TREE_FALLBACK_TIMEOUT_MS));
   const signal = controller.signal;
 
   try {
-    const metadata = await fetchGitHubJson<{ name?: string; default_branch?: string }>(
-      `https://api.github.com/repos/${owner}/${repo}`,
-      owner,
-      repo,
-      signal,
-      accessToken
-    );
+    const metadata = metadataOverride ?? await fetchGitHubJson<GitHubRepositoryMetadata>(
+        `https://api.github.com/repos/${owner}/${repo}`,
+        owner,
+        repo,
+        signal,
+        accessToken
+      );
     const branch = metadata.default_branch || 'HEAD';
-    const commit = await fetchGitHubJson<GitHubCommitResponse>(
-      `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(branch)}`,
-      owner,
-      repo,
-      signal,
-      accessToken
-    );
-    const commitSha = commit.sha;
+    const commit = commitShaOverride
+      ? null
+      : await fetchGitHubJson<GitHubCommitResponse>(
+          `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(branch)}`,
+          owner,
+          repo,
+          signal,
+          accessToken
+        );
+    const commitSha = commitShaOverride ?? commit?.sha;
     if (!commitSha) throw new IngestionError('UPSTREAM_GITHUB_ERROR', 'GitHub did not return a commit SHA.', 502);
 
     const recursiveTree = await fetchGitHubJson<GitHubTreeResponse>(
@@ -885,7 +912,7 @@ async function fetchGitHubTreeRepo(
       accessToken
     );
     const treeResult = recursiveTree.truncated
-      ? await walkGitHubTree(owner, repo, commit.commit?.tree?.sha ?? commitSha, limits, signal, accessToken)
+      ? await walkGitHubTree(owner, repo, recursiveTree.sha ?? commit?.commit?.tree?.sha ?? commitSha, limits, signal, accessToken)
       : { entries: recursiveTree.tree ?? [], totalArchiveEntries: (recursiveTree.tree ?? []).length };
 
     const skipped: { path: string; reason: string }[] = [];
@@ -897,6 +924,7 @@ async function fetchGitHubTreeRepo(
     let generatedFileCount = 0;
     let unsupportedFileCount = 0;
     let firstPartySourceCandidateCount = 0;
+    let maxFilesReached = false;
 
     const sortedEntries = [...treeResult.entries].sort((a, b) => a.path.localeCompare(b.path));
     for (const entry of sortedEntries) {
@@ -928,6 +956,11 @@ async function fetchGitHubTreeRepo(
 
       candidateFileCount++;
       if (candidateFileCount > limits.maxFiles) {
+        if (limits.allowPartialOnFileLimit) {
+          maxFilesReached = true;
+          skipped.push({ path: entry.path, reason: 'max_files_limit' });
+          continue;
+        }
         throw new IngestionError(
           'TOO_MANY_FILES',
           `Repository exceeds limit of ${limits.maxFiles.toLocaleString()} candidate files`,
@@ -997,6 +1030,13 @@ async function fetchGitHubTreeRepo(
         unsupportedSourceFileCount: unsupportedFileCount,
         totalArchiveEntries: treeResult.totalArchiveEntries,
         skippedByReason,
+        acquisitionMode: 'git-tree',
+        repositorySizeKb: typeof metadata.size === 'number' ? metadata.size : undefined,
+        truncation: {
+          hitLimits: maxFilesReached ? ['TOO_MANY_FILES'] : [],
+          maxFilesReached,
+          maxBytesReached: false,
+        },
       },
     };
   } catch (error) {
@@ -1021,7 +1061,8 @@ async function fetchGitHubTreeRepo(
 export async function fetchGitHubRepo(
   urlOrOwnerRepo: string,
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS,
-  accessToken?: string
+  accessToken?: string,
+  options: GitHubFetchOptions = {}
 ): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory?: import('./types').IngestionInventory }> {
   const parsed = parseGitHubUrl(urlOrOwnerRepo);
   if (!parsed) {
@@ -1043,16 +1084,49 @@ export async function fetchGitHubRepo(
     ? { Authorization: `Bearer ${accessToken}` }
     : {};
 
+  // GitHub's repository size is a conservative early signal. When the
+  // large-repository profile is enabled, skip the single codeload ZIP when
+  // the repository is likely to exceed the archive budget and acquire
+  // filtered files through the Git tree/raw endpoints instead. This avoids
+  // waiting for a large ZIP only to reject it after the 25 MB browser-era
+  // boundary. An explicitly supplied token is preserved for private trees.
+  if (typeof limits.treeFirstSizeKb === 'number' && Number.isFinite(limits.treeFirstSizeKb)) {
+    const preflightController = new AbortController();
+    const preflightTimeoutId = setTimeout(
+      () => preflightController.abort(),
+      Math.min(Math.max(limits.fetchTimeoutMs, 1_000), 8_000)
+    );
+    try {
+      const metadata = await fetchGitHubJson<GitHubRepositoryMetadata>(
+        `https://api.github.com/repos/${owner}/${repo}`,
+        owner,
+        repo,
+        preflightController.signal,
+        accessToken
+      );
+      if (typeof metadata.size === 'number' && metadata.size >= limits.treeFirstSizeKb) {
+        clearTimeout(timeoutId);
+        return fetchGitHubTreeRepo(owner, repo, limits, accessToken, metadata, options.commitSha);
+      }
+    } catch {
+      // The archive path remains a useful fallback when the metadata request
+      // is unavailable or rate-limited; it preserves the existing error path.
+    } finally {
+      clearTimeout(preflightTimeoutId);
+    }
+  }
+
   // Helpers that never send Authorization unless explicitly required
   const fetchUnauthCodeload = async (): Promise<Response | null> => {
-    const codeloadUrl = `https://codeload.github.com/${owner}/${repo}/zip/HEAD`;
+    const archiveRef = options.commitSha ? encodeURIComponent(options.commitSha) : 'HEAD';
+    const codeloadUrl = `https://codeload.github.com/${owner}/${repo}/zip/${archiveRef}`;
     try {
       const res = await fetch(codeloadUrl, {
         signal: controller.signal,
         headers: { 'User-Agent': 'RepoDNA-V1/1.0' },
       });
       if (res.ok) return res;
-      if (res.status === 404) {
+      if (res.status === 404 && !options.commitSha) {
         const branchesToTry = ['main', 'master', 'trunk', 'dev', 'develop'];
         for (const branch of branchesToTry) {
           const codeloadBranch = `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/${branch}`;
@@ -1070,7 +1144,8 @@ export async function fetchGitHubRepo(
   };
 
   const fetchUnauthApiZip = async (): Promise<Response | null> => {
-    const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
+    const archiveRef = options.commitSha ? encodeURIComponent(options.commitSha) : 'HEAD';
+    const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${archiveRef}`;
     return fetch(apiZipUrl, {
       signal: controller.signal,
       headers: {
@@ -1081,7 +1156,8 @@ export async function fetchGitHubRepo(
   };
 
   const fetchAuthApiZip = async (): Promise<Response | null> => {
-    const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/HEAD`;
+    const archiveRef = options.commitSha ? encodeURIComponent(options.commitSha) : 'HEAD';
+    const apiZipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${archiveRef}`;
     return fetch(apiZipUrl, {
       signal: controller.signal,
       headers: {
@@ -1226,7 +1302,7 @@ export async function fetchGitHubRepo(
 
   const contentLength = response.headers.get('content-length');
   if (contentLength && parseInt(contentLength, 10) > limits.maxArchiveBytes) {
-    return fetchGitHubTreeRepo(owner, repo, limits, accessToken);
+    return fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha);
   }
 
   try {
@@ -1238,7 +1314,7 @@ export async function fetchGitHubRepo(
     };
   } catch (error) {
     if (error instanceof IngestionError && error.code === 'ARCHIVE_TOO_LARGE') {
-      return fetchGitHubTreeRepo(owner, repo, limits, accessToken);
+      return fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha);
     }
     throw error;
   }

@@ -1,5 +1,6 @@
 import { FatalError, getWritable } from 'workflow';
 
+import { type AnalyzeProgress } from '../lib/analyzer';
 import { fetchGitHubRepo } from '../lib/analyzer/ingestion';
 import { IngestionError, PUBLIC_REPOSITORY_INGESTION_LIMITS } from '../lib/analyzer/types';
 import {
@@ -85,26 +86,46 @@ async function analyzeAndCachePublicRepository(
     await emit('download', 8, 'Fetching public repository sources (archive or Git tree)');
     // Deliberately omit credentials: durable workflows are public-only. Private
     // repository source files never enter Workflow or Blob storage.
-    const discovery = await fetchGitHubRepo(input.repositoryUrl, PUBLIC_REPOSITORY_INGESTION_LIMITS);
+    const discovery = await fetchGitHubRepo(
+      input.repositoryUrl,
+      PUBLIC_REPOSITORY_INGESTION_LIMITS,
+      undefined,
+      { commitSha: input.commitSha }
+    );
     const inventory = discovery.inventory;
     await emit(
       'inventory',
       18,
-      `Inventoried ${inventory?.totalFileCount ?? discovery.files.length} files; parsing ${inventory?.firstPartySourceFileCount ?? discovery.files.length} first-party source files`
+      `Inventoried ${inventory?.totalFileCount ?? discovery.files.length} files; parsing ${inventory?.firstPartySourceFileCount ?? discovery.files.length} first-party source files${inventory?.acquisitionMode === 'git-tree' ? ' with large-repository Git tree mode' : ''}`
     );
 
-    await emit('parse', 28, 'Extracting symbols, routes, imports, calls, models, and dependencies');
+    await emit('parse', 24, 'Extracting symbols, routes, imports, calls, models, and dependencies');
+    let lastAnalysisPercent = 24;
+    const emitAnalysisProgress = async (progress: AnalyzeProgress): Promise<void> => {
+      const ranges: Record<AnalyzeProgress['stage'], [number, number]> = {
+        parse: [25, 58],
+        resolve_relationships: [59, 77],
+        analytics: [78, 89],
+      };
+      const [startPercent, endPercent] = ranges[progress.stage];
+      const ratio = progress.total > 0 ? Math.min(1, Math.max(0, progress.completed / progress.total)) : 1;
+      const percent = Math.max(lastAnalysisPercent, Math.round(startPercent + (endPercent - startPercent) * ratio));
+      if (percent === lastAnalysisPercent && progress.completed < progress.total) return;
+      lastAnalysisPercent = percent;
+      await emit(progress.stage, percent, progress.message);
+    };
     const project = await analyzeRepositoryV2(
       { ...discovery, inventory },
       {
         commitSha: input.commitSha,
         analyzedRef: 'HEAD',
         ingestionLimits: PUBLIC_REPOSITORY_INGESTION_LIMITS,
+        onProgress: emitAnalysisProgress,
       }
     );
 
-    await emit('resolve_relationships', 72, 'Resolving cross-file relationships and unresolved evidence');
-    await emit('analytics', 84, 'Computing communities, dependency cycles, centrality, and completeness');
+    await emit('resolve_relationships', Math.max(lastAnalysisPercent, 77), 'Resolving cross-file relationships and unresolved evidence');
+    await emit('analytics', Math.max(lastAnalysisPercent, 89), 'Computing communities, dependency cycles, centrality, and completeness');
 
     const validation = validateArtifact(project);
     if (!validation.valid || validation.version !== '2.0.0') {

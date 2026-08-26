@@ -23,6 +23,16 @@ export interface IngestionInventory {
   unsupportedSourceFileCount: number;
   totalArchiveEntries: number;
   skippedByReason: Record<string, number>;
+  /** How the source was acquired; tree mode avoids a single large ZIP payload. */
+  acquisitionMode?: 'archive' | 'git-tree';
+  /** GitHub's repository size hint, in KB, when tree mode was selected. */
+  repositorySizeKb?: number;
+  /** Limits that produced a truthful partial inventory rather than a hard failure. */
+  truncation?: {
+    hitLimits: string[];
+    maxFilesReached: boolean;
+    maxBytesReached: boolean;
+  };
 }
 
 export interface IngestionLimits {
@@ -32,6 +42,10 @@ export interface IngestionLimits {
   maxArchiveBytes: number;
   maxTotalExtractedBytes: number;
   fetchTimeoutMs: number;
+  /** Skip codeload for repositories whose GitHub size hint is above this value. */
+  treeFirstSizeKb?: number;
+  /** Keep a bounded partial inventory when candidate files exceed maxFiles. */
+  allowPartialOnFileLimit?: boolean;
 }
 
 export const DEFAULT_INGESTION_LIMITS: IngestionLimits = {
@@ -51,10 +65,16 @@ export const DEFAULT_INGESTION_LIMITS: IngestionLimits = {
  */
 export const PUBLIC_REPOSITORY_INGESTION_LIMITS: IngestionLimits = {
   ...DEFAULT_INGESTION_LIMITS,
-  maxArchiveEntries: 50_000,
+  // Public analyses run in the durable workflow and can use Git-tree
+  // acquisition, so a large repository is not rejected just because its
+  // generated ZIP is larger than the browser/private 25 MB bound.
+  maxFiles: 20_000,
+  maxArchiveEntries: 100_000,
   maxArchiveBytes: 128 * 1024 * 1024,
-  maxTotalExtractedBytes: 128 * 1024 * 1024,
+  maxTotalExtractedBytes: 192 * 1024 * 1024,
   fetchTimeoutMs: 60_000,
+  treeFirstSizeKb: 50_000,
+  allowPartialOnFileLimit: true,
 };
 
 export type IngestionErrorCode =

@@ -1,4 +1,4 @@
-import type { DiscoveredFile, IngestionInventory } from './analyzer/types';
+import { PUBLIC_REPOSITORY_INGESTION_LIMITS, type DiscoveredFile, type IngestionInventory, type IngestionLimits } from './analyzer/types';
 
 /**
  * Browser deep-scan client for private repositories.
@@ -50,8 +50,8 @@ interface DiscoveryPayload {
 }
 
 type WorkerRequest =
-  | { type: 'analyze'; buffer: ArrayBuffer; name: string; source?: string }
-  | { type: 'analyze-discovery'; discovery: DiscoveryPayload; name: string; source: string };
+  | { type: 'analyze'; buffer: ArrayBuffer; name: string; source?: string; ingestionLimits?: IngestionLimits }
+  | { type: 'analyze-discovery'; discovery: DiscoveryPayload; name: string; source: string; ingestionLimits?: IngestionLimits };
 
 async function runWorkerRequest(
   request: WorkerRequest,
@@ -119,10 +119,11 @@ async function runWorkerDiscoveryScan(
   discovery: DiscoveryPayload,
   name: string,
   onProgress?: (p: WorkerProgress) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  ingestionLimits?: IngestionLimits
 ): Promise<unknown> {
   return runWorkerRequest(
-    { type: 'analyze-discovery', discovery, name, source: discovery.source },
+    { type: 'analyze-discovery', discovery, name, source: discovery.source, ingestionLimits },
     onProgress,
     signal
   );
@@ -138,9 +139,65 @@ async function runInlineScan(buffer: ArrayBuffer, name: string): Promise<unknown
   return analyzeRepositoryV2({ ...discovery, source: `private:${name}` }, {});
 }
 
-async function runInlineDiscoveryScan(discovery: DiscoveryPayload): Promise<unknown> {
+async function runInlineDiscoveryScan(discovery: DiscoveryPayload, ingestionLimits?: IngestionLimits): Promise<unknown> {
   const { analyzeRepositoryV2 } = await import('./analyzer/v2/pipeline');
-  return analyzeRepositoryV2(discovery, {});
+  return analyzeRepositoryV2(discovery, { ingestionLimits });
+}
+
+function mapBrowserAnalysisFailure(error: unknown): DeepScanFailure {
+  return {
+    authState: 'unavailable',
+    code: error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : 'ANALYSIS_FAILED',
+    message: error instanceof Error ? error.message : 'Repository analysis failed in the browser.',
+  };
+}
+
+/**
+ * Public browser fallback. Large public repositories use the Git tree path and
+ * all parsing happens in a worker so a slow scan does not freeze the workspace.
+ */
+export async function analyzePublicRepositoryInBrowser(options: {
+  url: string;
+  onProgress?: (p: WorkerProgress) => void;
+  signal?: AbortSignal;
+}): Promise<DeepScanOutcome> {
+  const { url, onProgress, signal } = options;
+  onProgress?.({ stage: 'download', message: 'Fetching repository source…', percent: 2 });
+
+  let discovery: DiscoveryPayload;
+  try {
+    const { fetchGitHubRepo } = await import('./analyzer/ingestion');
+    discovery = await fetchGitHubRepo(url, PUBLIC_REPOSITORY_INGESTION_LIMITS);
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') throw error;
+    return mapBrowserAnalysisFailure(error);
+  }
+
+  onProgress?.({
+    stage: 'inventory',
+    message: `Source ready — analyzing ${(discovery.inventory?.firstPartySourceFileCount ?? discovery.files.length).toLocaleString()} first-party files${discovery.inventory?.acquisitionMode === 'git-tree' ? ' with large-repository Git tree mode' : ''}…`,
+    percent: 8,
+  });
+
+  try {
+    const supportsWorkers = typeof Worker !== 'undefined';
+    const project = supportsWorkers
+      ? await runWorkerDiscoveryScan(discovery, discovery.name, onProgress, signal, PUBLIC_REPOSITORY_INGESTION_LIMITS)
+      : await runInlineDiscoveryScan(discovery, PUBLIC_REPOSITORY_INGESTION_LIMITS);
+    return { project, authState: 'ok' };
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') throw error;
+    const code = (error as { code?: string }).code;
+    if ((code === 'WORKER_UNAVAILABLE' || code === 'WORKER_ERROR') && typeof Worker !== 'undefined') {
+      try {
+        const project = await runInlineDiscoveryScan(discovery, PUBLIC_REPOSITORY_INGESTION_LIMITS);
+        return { project, authState: 'ok' };
+      } catch (inlineError) {
+        return mapBrowserAnalysisFailure(inlineError);
+      }
+    }
+    return mapBrowserAnalysisFailure(error);
+  }
 }
 
 function mapArchiveFailure(status: number, body: { code?: string; message?: string }): DeepScanFailure {

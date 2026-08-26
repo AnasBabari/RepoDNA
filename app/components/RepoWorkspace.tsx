@@ -9,7 +9,7 @@ import { CodeGraph } from './CodeGraph';
 import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
-import { analyzeGitHubUrl, analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
+import { analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
 import {
   analyzePublicRepositoryDurably,
@@ -20,7 +20,7 @@ import {
   type DurableRunReference,
 } from '../lib/durable-analysis-client';
 import { generateTextReport as generateTextReportImpl } from '../lib/export/text-report';
-import { analyzePrivateRepositoryInBrowser, isDeepScanFailure } from '../lib/deep-scan-client';
+import { analyzePrivateRepositoryInBrowser, analyzePublicRepositoryInBrowser, isDeepScanFailure } from '../lib/deep-scan-client';
 import { projectV2ForWorkspace } from '../lib/schema/v2-viewer-projection';
 import {
   ANALYSIS_COMPLETE_STEP,
@@ -439,6 +439,7 @@ const APP_BUILD_VERSION = 'v1.1.0-a91b35f';
 function AnalyzingView({
   target,
   step,
+  analysisMessage,
   error,
   errorCode,
   requestId,
@@ -449,6 +450,7 @@ function AnalyzingView({
 }: {
   target: string;
   step: number;
+  analysisMessage?: string | null;
   error: string | null;
   errorCode?: string | null;
   requestId?: string | null;
@@ -567,9 +569,9 @@ function AnalyzingView({
               })}
             </ul>
             <p className="analysis-stage-summary" aria-live="polite">
-              {step >= ANALYSIS_COMPLETE_STEP
+              {analysisMessage || (step >= ANALYSIS_COMPLETE_STEP
                 ? 'All analysis and consistency checks completed.'
-                : `Stage ${Math.min(step + 1, ANALYSIS_PROGRESS_STEPS.length)} of ${ANALYSIS_PROGRESS_STEPS.length}`}
+                : `Stage ${Math.min(step + 1, ANALYSIS_PROGRESS_STEPS.length)} of ${ANALYSIS_PROGRESS_STEPS.length}`)}
             </p>
             <p className="privacy-note">
               <span>◆</span> Local-first & serverless analysis. Your source is never persisted.
@@ -1427,6 +1429,7 @@ function WorkspaceContent() {
   const [deepProject, setDeepProject] = useState<RepoDNAProjectV2 | null>(null);
   const [analyzingTarget, setAnalyzingTarget] = useState<string | null>(null);
   const [analyzingStep, setAnalyzingStep] = useState(0);
+  const [analyzingMessage, setAnalyzingMessage] = useState<string | null>(null);
   const [analyzingError, setAnalyzingError] = useState<string | null>(null);
   const [analyzingErrorCode, setAnalyzingErrorCode] = useState<string | null>(null);
   const [analyzingRequestId, setAnalyzingRequestId] = useState<string | null>(null);
@@ -1455,6 +1458,7 @@ function WorkspaceContent() {
     activeAnalysisRef.current = controller;
     setAnalyzingTarget(target);
     setAnalyzingStep(0);
+    setAnalyzingMessage(null);
     setAnalyzingError(null);
     setAnalyzingErrorCode(null);
     setAnalyzingRequestId(null);
@@ -1489,6 +1493,7 @@ function WorkspaceContent() {
     if (!isActiveAnalysis(controller)) return;
     activeAnalysisRef.current = null;
     setAnalyzingTarget(null);
+    setAnalyzingMessage(null);
     setProject(analyzedProject);
     setDeepProject(canonicalProject);
     setView('overview');
@@ -1530,6 +1535,7 @@ function WorkspaceContent() {
         signal: controller.signal,
         resume: run,
         onProgress: (event) => {
+          if (isActiveAnalysis(controller)) setAnalyzingMessage(event.message);
           const step = DURABLE_STAGE_STEPS[event.stage];
           if (typeof step === 'number' && isActiveAnalysis(controller)) {
             setAnalyzingStep((current) => Math.max(current, step));
@@ -1601,6 +1607,37 @@ function WorkspaceContent() {
     let canonicalProject: RepoDNAProjectV2 | null = null;
     trackAnalysisIntent('github_public');
 
+    const runPublicBrowserFallback = async (): Promise<RepoDNAProject> => {
+      const outcome = await analyzePublicRepositoryInBrowser({
+        url: targetUrl,
+        signal: controller.signal,
+        onProgress: (p) => {
+          if (isActiveAnalysis(controller)) setAnalyzingMessage(p.message);
+          const stepByStage: Record<string, number> = {
+            download: 1,
+            inventory: 2,
+            parse: 3,
+            resolve_relationships: 4,
+            analytics: 5,
+          };
+          const step = stepByStage[p.stage];
+          if (typeof step === 'number' && isActiveAnalysis(controller)) {
+            setAnalyzingStep((current) => Math.max(current, step));
+          }
+        },
+      });
+      if (isDeepScanFailure(outcome)) {
+        failureCode = outcome.code;
+        throw new Error(outcome.message);
+      }
+      if (!isRepoDNAProjectV2(outcome.project)) {
+        failureCode = 'INVALID_ANALYSIS_ARTIFACT';
+        throw new Error('Browser analysis returned an invalid RepoDNA v2 artifact.');
+      }
+      canonicalProject = outcome.project;
+      return projectV2ForWorkspace(outcome.project);
+    };
+
     try {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
         // Check pre-cached sample artifacts without bypassing the shared progress lifecycle.
@@ -1634,7 +1671,7 @@ function WorkspaceContent() {
           }
         }
 
-        if (forceClientOnly) return analyzeGitHubUrl(targetUrl);
+        if (forceClientOnly) return runPublicBrowserFallback();
 
         try {
           canonicalProject = await analyzePublicRepositoryDurably({
@@ -1644,6 +1681,7 @@ function WorkspaceContent() {
               if (isActiveAnalysis(controller)) setAnalyzingRequestId(run.runId);
             },
             onProgress: (event) => {
+              if (isActiveAnalysis(controller)) setAnalyzingMessage(event.message);
               const step = DURABLE_STAGE_STEPS[event.stage];
               if (typeof step === 'number' && isActiveAnalysis(controller)) {
                 setAnalyzingStep((current) => Math.max(current, step));
@@ -1718,6 +1756,7 @@ function WorkspaceContent() {
               url: targetUrl,
               signal: controller.signal,
               onProgress: (p) => {
+                if (isActiveAnalysis(controller)) setAnalyzingMessage(p.message);
                 const stepByStage: Record<string, number> = { download: 1, inventory: 2, parse: 3, resolve_relationships: 4, analytics: 5 };
                 const step = stepByStage[p.stage];
                 if (typeof step === 'number' && isActiveAnalysis(controller)) {
@@ -1757,7 +1796,7 @@ function WorkspaceContent() {
         trackFallbackUsed(fallbackReason);
 
         try {
-          return await analyzeGitHubUrl(targetUrl);
+          return await runPublicBrowserFallback();
         } catch (clientError) {
           failureCode = errObj?.code || 'FALLBACK_FAILED';
           const message = errObj?.message || 'Server analysis failed and browser analysis could not complete.';
@@ -1906,6 +1945,7 @@ function WorkspaceContent() {
         <AnalyzingView
           target={analyzingTarget}
           step={analyzingStep}
+          analysisMessage={analyzingMessage}
           error={analyzingError}
           errorCode={analyzingErrorCode}
           requestId={analyzingRequestId}
@@ -1927,6 +1967,7 @@ function WorkspaceContent() {
             activeAnalysisRef.current = null;
             clearPendingDurableRun();
             setAnalyzingTarget(null);
+            setAnalyzingMessage(null);
             setAnalyzingError(null);
             setAnalyzingErrorCode(null);
             setAnalyzingRequestId(null);

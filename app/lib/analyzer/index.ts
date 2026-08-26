@@ -28,9 +28,22 @@ import type {
 
 export type ParserMode = 'legacy' | 'tree-sitter';
 
+export type AnalyzeProgressStage = 'parse' | 'resolve_relationships' | 'analytics';
+
+export interface AnalyzeProgress {
+  stage: AnalyzeProgressStage;
+  completed: number;
+  total: number;
+  message: string;
+}
+
 export interface AnalyzeOptions {
   parserMode?: ParserMode;
   ingestionLimits?: IngestionLimits;
+  /** Called at bounded checkpoints so long analyses can report real progress. */
+  onProgress?: (progress: AnalyzeProgress) => void | Promise<void>;
+  /** Defaults to roughly 50 parse updates for a repository of any size. */
+  progressEvery?: number;
 }
 
 export function resolveParserMode(options?: AnalyzeOptions): ParserMode {
@@ -53,6 +66,23 @@ export async function analyzeRepositoryFiles(
   const { files: discoveredFiles, skipped, name, source } = discovery;
   const parserMode = resolveParserMode(options);
   const ingestionLimits = options?.ingestionLimits ?? DEFAULT_INGESTION_LIMITS;
+  const progressEvery = Math.max(
+    1,
+    Math.floor(options?.progressEvery ?? Math.max(25, Math.ceil(Math.max(discoveredFiles.length, 1) / 50)))
+  );
+  const reportProgress = async (progress: AnalyzeProgress): Promise<void> => {
+    await options?.onProgress?.(progress);
+  };
+  const yieldToEventLoop = async (): Promise<void> => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  };
+
+  await reportProgress({
+    stage: 'parse',
+    completed: 0,
+    total: discoveredFiles.length,
+    message: `Preparing to parse ${discoveredFiles.length.toLocaleString()} discovered files`,
+  });
 
   const fingerprintData = fingerprint(discoveredFiles);
   const pathAliases = parseTsconfigPaths(discoveredFiles);
@@ -66,7 +96,8 @@ export async function analyzeRepositoryFiles(
     file: item.path === '*' ? null : item.path,
   }));
 
-  for (const discovered of discoveredFiles) {
+  for (let index = 0; index < discoveredFiles.length; index += 1) {
+    const discovered = discoveredFiles[index];
     const lang = languageFor(discovered.path);
     const lineCount = (discovered.content.match(/\n/g) || []).length + 1;
 
@@ -150,6 +181,20 @@ export async function analyzeRepositoryFiles(
         file: partial.file.path,
       });
     }
+
+    const completed = index + 1;
+    if (completed === discoveredFiles.length || completed % progressEvery === 0) {
+      await reportProgress({
+        stage: 'parse',
+        completed,
+        total: discoveredFiles.length,
+        message: `Parsed ${completed.toLocaleString()} of ${discoveredFiles.length.toLocaleString()} discovered files`,
+      });
+      // Tree-sitter and the relationship builders are intentionally kept
+      // single-threaded for deterministic output. Yield between batches so a
+      // long scan does not monopolize the worker or server event loop.
+      if (completed < discoveredFiles.length) await yieldToEventLoop();
+    }
   }
 
   // Apply manifest entrypoint indicators
@@ -160,16 +205,46 @@ export async function analyzeRepositoryFiles(
   const calls = partials.flatMap((p) => p.calls);
   let routes = partials.flatMap((p) => p.routes);
 
+  await reportProgress({
+    stage: 'resolve_relationships',
+    completed: 0,
+    total: 4,
+    message: `Resolving ${imports.length.toLocaleString()} import relationships`,
+  });
   resolveImports(imports, files, pathAliases);
+  await reportProgress({
+    stage: 'resolve_relationships',
+    completed: 1,
+    total: 4,
+    message: `Resolved imports; composing ${routes.length.toLocaleString()} detected routes`,
+  });
   routes = resolveExpressRouteMounts(partials, imports, diagnostics);
   resolveCalls(calls, symbols, imports);
+  await reportProgress({
+    stage: 'resolve_relationships',
+    completed: 2,
+    total: 4,
+    message: `Resolved ${calls.length.toLocaleString()} call relationships`,
+  });
 
   const entrypoints = rankEntrypoints(files, partials);
   const { architecture, fileComponents } = buildArchitecture(files, symbols, imports, routes);
+  await reportProgress({
+    stage: 'resolve_relationships',
+    completed: 3,
+    total: 4,
+    message: `Built ${architecture.components.length.toLocaleString()} architecture layers`,
+  });
   const flows = buildFlows(routes, calls, symbols);
   const importantFiles = rankImportantFiles(files, imports, routes, entrypoints);
   const onboarding = onboardingTour(entrypoints, architecture, importantFiles);
   const metrics = graphMetrics(files, imports, symbols);
+  await reportProgress({
+    stage: 'resolve_relationships',
+    completed: 4,
+    total: 4,
+    message: 'Relationship resolution complete',
+  });
 
   const environment = environmentEvidence(discoveredFiles);
   const frameworks = new Set(fingerprintData.frameworks);

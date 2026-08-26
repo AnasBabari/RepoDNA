@@ -1,4 +1,4 @@
-import { analyzeRepositoryFiles, type AnalyzeOptions } from '../index';
+import { analyzeRepositoryFiles, type AnalyzeOptions, type AnalyzeProgress } from '../index';
 import { DEFAULT_INGESTION_LIMITS } from '../types';
 import type { DiscoveredFile } from '../types';
 import type { IngestionInventory } from '../types';
@@ -158,15 +158,30 @@ export async function analyzeRepositoryV2(
   const start = Date.now();
   const timings: Record<string, number> = {};
   const ingestionLimits = options?.ingestionLimits ?? DEFAULT_INGESTION_LIMITS;
+  const reportProgress = async (progress: AnalyzeProgress): Promise<void> => {
+    await options?.onProgress?.(progress);
+  };
 
   const t0 = Date.now();
   const v1 = await analyzeRepositoryFiles(discovery, options);
   timings.parse = Date.now() - t0;
 
   const t1 = Date.now();
+  await reportProgress({
+    stage: 'resolve_relationships',
+    completed: 5,
+    total: 6,
+    message: 'Materializing the canonical graph entities',
+  });
   // Convert via adapter (no fabricated evidence, preserves v1 architecture as projection)
   const v2 = adaptV1ToV2Viewer(v1);
   timings.adapt = Date.now() - t1;
+  await reportProgress({
+    stage: 'resolve_relationships',
+    completed: 6,
+    total: 6,
+    message: `Materialized ${v2.nodes.length.toLocaleString()} graph entities`,
+  });
 
   // Enrich with inventory truth (from ingestion if available, else derived)
   const ingestionInventory = discovery.inventory;
@@ -188,6 +203,25 @@ export async function analyzeRepositoryV2(
     if (ingestionInventory.skippedByReason) {
       v2.inventory.skippedByReason = { ...ingestionInventory.skippedByReason };
     }
+    if (ingestionInventory.acquisitionMode) {
+      v2.inventory.acquisitionMode = ingestionInventory.acquisitionMode;
+    }
+    if (typeof ingestionInventory.repositorySizeKb === 'number') {
+      v2.inventory.repositorySizeKb = ingestionInventory.repositorySizeKb;
+    }
+    if (ingestionInventory.truncation) {
+      v2.inventory.truncation = {
+        hitLimits: [...ingestionInventory.truncation.hitLimits],
+        maxFilesReached: ingestionInventory.truncation.maxFilesReached,
+        maxBytesReached: ingestionInventory.truncation.maxBytesReached,
+      };
+      v2.coverage.truncationReasons = [
+        ...new Set([
+          ...v2.coverage.truncationReasons,
+          ...ingestionInventory.truncation.hitLimits,
+        ]),
+      ];
+    }
   }
   // Override where provided
   if (options?.inventoryOverride) {
@@ -201,6 +235,10 @@ export async function analyzeRepositoryV2(
   v2.coverage.unsupported = v2.inventory.unsupportedSourceFileCount;
   v2.coverage.ignored = v2.inventory.ignoredFileCount;
   v2.coverage.skipped = v2.inventory.skippedByReason ? Object.values(v2.inventory.skippedByReason as Record<string, number>).reduce((a, b) => a + b, 0) : 0;
+  const coverageSourceTotal = ingestionInventory?.firstPartySourceFileCount ?? v1.repository.sourceFileCount;
+  if (coverageSourceTotal > 0) {
+    v2.coverage.percentage = Math.round((v2.coverage.parsed / coverageSourceTotal) * 1000) / 10;
+  }
 
   // Repository identity with commit
   v2.repository.commitSha = options?.commitSha ?? null;
@@ -218,9 +256,33 @@ export async function analyzeRepositoryV2(
 
   // Analytics (deterministic)
   const t2 = Date.now();
+  await reportProgress({
+    stage: 'analytics',
+    completed: 0,
+    total: 3,
+    message: 'Detecting graph communities',
+  });
   v2.communities = detectCommunities(v2.nodes, v2.edges);
+  await reportProgress({
+    stage: 'analytics',
+    completed: 1,
+    total: 3,
+    message: 'Checking dependency cycles',
+  });
   v2.dependencyCycles = detectDependencyCycles(v2.edges);
+  await reportProgress({
+    stage: 'analytics',
+    completed: 2,
+    total: 3,
+    message: 'Computing centrality and coupling signals',
+  });
   v2.centrality = detectCentrality(v2.nodes, v2.edges);
+  await reportProgress({
+    stage: 'analytics',
+    completed: 3,
+    total: 3,
+    message: 'Graph analytics complete',
+  });
   timings.analytics = Date.now() - t2;
 
   // Security limits
@@ -238,6 +300,7 @@ export async function analyzeRepositoryV2(
     },
     truncated: [...new Set([
       ...v1.diagnostics.filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE'].includes(d.code)).map((d) => d.code),
+      ...(v2.inventory.truncation?.hitLimits ?? []),
       ...graphTruncation,
     ])],
     executedRepositoryCode: false as const,
