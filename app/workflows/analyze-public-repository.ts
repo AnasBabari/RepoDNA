@@ -13,6 +13,7 @@ import {
 import { analyzeRepositoryV2 } from '../lib/analyzer/v2/pipeline';
 import type { RunStage } from '../lib/analyzer/v2/runs';
 import { validateArtifact } from '../lib/schema/artifact-loader';
+import { recordScannedPublicRepository } from '../lib/stats/scanned-repositories';
 
 export interface PublicAnalysisWorkflowInput {
   repositoryUrl: string;
@@ -75,6 +76,10 @@ async function analyzeAndCachePublicRepository(
     const cached = await readCachedPublicArtifact(input);
     if (cached) {
       await emit('complete', 100, 'Loaded a validated analysis from the seven-day public cache', 'completed');
+      // Record unique public repository — idempotent via SADD. Never fails the analysis.
+      try {
+        await recordScannedPublicRepository(input.owner, input.repo);
+      } catch {}
       return {
         repository: { owner: input.owner, name: input.repo, url: input.repositoryUrl },
         commitSha: input.commitSha,
@@ -139,6 +144,10 @@ async function analyzeAndCachePublicRepository(
       commitSha: input.commitSha,
       project,
     });
+    // Telemetry: increment durable public scan counter only after a validated artifact is durably stored.
+    try {
+      await recordScannedPublicRepository(input.owner, input.repo);
+    } catch {}
     await emit('complete', 100, 'Analysis complete and cached privately for seven days', 'completed');
 
     return {

@@ -10,6 +10,7 @@ import { CodeGraph } from './CodeGraph';
 import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
+import { ScannedRepositoryCounter } from './ScannedRepositoryCounter';
 import { analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
 import {
@@ -350,6 +351,8 @@ function LandingView({
         <p className="subtitle">
           Statically analyze Python, JavaScript, and TypeScript repositories. Discover architecture layers, execution traces, dependencies, data models, and entry points.
         </p>
+
+        <ScannedRepositoryCounter />
 
         <form className="landing-input-box" onSubmit={handleSubmit}>
           <span className="landing-input-glyph">⌕</span>
@@ -1669,6 +1672,10 @@ function WorkspaceContent() {
           setBrowserArtifactExpiresAt(null);
         }
       })();
+    }
+
+    if (origin === 'public-durable' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('repodna:analysis-complete'));
     }
   }
 

@@ -225,10 +225,60 @@ code, kbd {
 
 .landing-hero p.subtitle {
   max-width: 620px;
-  margin: 18px 0 36px;
+  margin: 18px 0 14px;
   color: #8495a4;
   font-size: clamp(14px, 1.6vw, 16px);
   line-height: 1.6;
+}
+
+.hero-scan-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 24px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #7a8b9a;
+  font: 500 11px var(--font-geist-mono);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.hero-scan-counter-label {
+  color: #7a8b9a;
+}
+
+.hero-scan-counter-count {
+  color: #e6f0f7;
+  font: 700 12px var(--font-geist-mono);
+  letter-spacing: -0.02em;
+  text-shadow: 0 0 12px rgba(76, 225, 245, 0.15);
+}
+
+.hero-scan-counter-skeleton {
+  display: inline-block;
+  min-width: 28px;
+  text-align: center;
+  color: #5a6b7a;
+  animation: pulse 1.2s ease-in-out infinite alternate;
+}
+
+.hero-scan-counter-unavailable {
+  opacity: 0.85;
+}
+
+.hero-scan-counter-unavailable-text {
+  color: #5a6b7a;
+}
+
+.hero-scan-counter-hint {
+  color: #5a6b7a;
+  font: 500 10px var(--font-geist-mono);
+  opacity: 0.9;
 }
 
 .landing-input-box {
