@@ -35,7 +35,7 @@ Paste any public GitHub repository link to decode architecture layers, execution
 
 ### 2. Private Repositories (Beta)
 Sign in with GitHub to access your private repositories:
-- **Scope Transparency**: Private repository support currently uses GitHub OAuth's `repo` scope because OAuth Apps do not provide read-only private source-code access. RepoDNA itself strictly performs read-only analysis transiently in memory, isolated from ambient server tokens, and never modifies or stores code. Migration to fine-grained GitHub App read-only permissions is planned.
+- **Scope Transparency**: When configured, private repository support uses a GitHub App installation with per-repository `contents:read` and `metadata:read` permissions. OAuth `repo` scope remains a compatibility fallback when the App is not configured. RepoDNA performs read-only analysis transiently in memory and never modifies repository code.
 - **Revocation**: Easily disconnect access at any time via the UI or GitHub Settings.
 - **Transience**: OAuth tokens and repository code are never saved to disk or databases.
 
@@ -43,6 +43,17 @@ Sign in with GitHub to access your private repositories:
 - **Local Folder Picker**: Select any project directory from your computer (`webkitdirectory`). All parsing runs 100% inside your browser tab.
 - **Local .zip / .json Upload**: Drop a zipped source archive or an existing `repodna.json` analysis.
 - **Automatic Fallback**: If server analysis is rate-limited or unavailable, the web app automatically falls back to in-browser parsing.
+
+## Graph exports
+
+Open **Relationship explorer → Code Graph → Export** to download the full canonical graph, independent of the current visual filter or layout. Each export includes nodes, relationships, groups, group memberships, unresolved links, source evidence, confidence, properties, coverage, and completeness metadata.
+
+- **Graph JSON**: validated against [`schema/repodna-graph-export-v1.schema.json`](schema/repodna-graph-export-v1.schema.json).
+- **CSV tables**: a deterministic ZIP containing `nodes.csv`, `relationships.csv`, `groups.csv`, `group_memberships.csv`, `unresolved.csv`, and `manifest.json`; spreadsheet formula-leading values are escaped.
+- **Neo4j Cypher**: deterministic, escaped, idempotent Neo4j 5+ `MERGE` statements with no APOC, LLM, or AI API key requirement.
+- **Parquet**: a five-table Snappy-compressed ZIP, implemented behind `NEXT_PUBLIC_REPODNA_PARQUET_EXPORT=true` and disabled by default until production verification.
+
+Exports use a private seven-day Vercel Blob cache for public commit-addressed analyses, short-lived signed download URLs, and an explicit opt-in IndexedDB cache for browser-local derived artifacts. See [`docs/graph-exports.md`](docs/graph-exports.md) for the exact schema, cache behavior, limits, import instructions, and verification contract.
 
 ---
 
