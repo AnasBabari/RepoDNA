@@ -723,6 +723,49 @@ async function fetchGitHubJson<T>(
   }
 }
 
+async function fetchGitHubJsonWithRetry<T>(
+  url: string,
+  owner: string,
+  repo: string,
+  signal: AbortSignal,
+  accessToken?: string,
+  attempts = 3
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await fetchGitHubJson<T>(url, owner, repo, signal, accessToken);
+    } catch (err) {
+      lastError = err;
+      if (signal.aborted) throw err;
+      const isTransient =
+        err instanceof IngestionError &&
+        (err.status === 429 ||
+          err.status === 502 ||
+          err.status === 503 ||
+          err.status === 504 ||
+          err.code === 'UPSTREAM_GITHUB_RATE_LIMITED' ||
+          err.code === 'UPSTREAM_GITHUB_ERROR');
+      const isNetwork = err instanceof Error && err.message.toLowerCase().includes('network');
+      if (!isTransient && !isNetwork) throw err;
+      if (attempt === attempts - 1) throw err;
+      const delayMs = 400 * Math.pow(2, attempt) + Math.random() * 200;
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, delayMs);
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(new DOMException('Aborted', 'AbortError'));
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+        // Ensure cleanup after resolve
+        setTimeout(() => signal.removeEventListener('abort', onAbort), delayMs + 10);
+      });
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    }
+  }
+  throw lastError as Error;
+}
+
 async function readBoundedTextResponse(response: Response, maxBytes: number): Promise<{ text: string; byteLength: number } | null> {
   if (!response.body) {
     const bytes = new Uint8Array(await response.arrayBuffer());
@@ -769,17 +812,18 @@ async function walkGitHubTree(
   limits: IngestionLimits,
   signal: AbortSignal,
   accessToken?: string
-): Promise<{ entries: GitHubTreeEntry[]; totalArchiveEntries: number }> {
+): Promise<{ entries: GitHubTreeEntry[]; totalArchiveEntries: number; truncated: boolean }> {
   const queue: { sha: string; prefix: string }[] = [{ sha: rootTreeSha, prefix: '' }];
   const entries: GitHubTreeEntry[] = [];
   let totalArchiveEntries = 0;
+  let truncated = false;
 
   while (queue.length > 0) {
     const batch = queue.splice(0, TREE_DIRECTORY_CONCURRENCY);
     const trees = await Promise.all(
       batch.map(async (current) => ({
         current,
-        tree: await fetchGitHubJson<GitHubTreeResponse>(
+        tree: await fetchGitHubJsonWithRetry<GitHubTreeResponse>(
           `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(current.sha)}`,
           owner,
           repo,
@@ -790,6 +834,7 @@ async function walkGitHubTree(
     );
 
     for (const { current, tree } of trees) {
+      if (tree.truncated) truncated = true;
       for (const entry of tree.tree ?? []) {
         const path = current.prefix ? `${current.prefix}/${entry.path}` : entry.path;
         validatePath(path);
@@ -814,7 +859,7 @@ async function walkGitHubTree(
     }
   }
 
-  return { entries, totalArchiveEntries };
+  return { entries, totalArchiveEntries, truncated };
 }
 
 async function readGitHubTreeFile(
@@ -831,7 +876,7 @@ async function readGitHubTreeFile(
   }
 
   if (accessToken) {
-    const blob = await fetchGitHubJson<GitHubBlobResponse>(
+    const blob = await fetchGitHubJsonWithRetry<GitHubBlobResponse>(
       `https://api.github.com/repos/${owner}/${repo}/git/blobs/${encodeURIComponent(entry.sha)}`,
       owner,
       repo,
@@ -884,7 +929,7 @@ async function fetchGitHubTreeRepo(
   const signal = controller.signal;
 
   try {
-    const metadata = metadataOverride ?? await fetchGitHubJson<GitHubRepositoryMetadata>(
+    const metadata = metadataOverride ?? await fetchGitHubJsonWithRetry<GitHubRepositoryMetadata>(
         `https://api.github.com/repos/${owner}/${repo}`,
         owner,
         repo,
@@ -894,7 +939,7 @@ async function fetchGitHubTreeRepo(
     const branch = metadata.default_branch || 'HEAD';
     const commit = commitShaOverride
       ? null
-      : await fetchGitHubJson<GitHubCommitResponse>(
+      : await fetchGitHubJsonWithRetry<GitHubCommitResponse>(
           `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(branch)}`,
           owner,
           repo,
@@ -904,16 +949,24 @@ async function fetchGitHubTreeRepo(
     const commitSha = commitShaOverride ?? commit?.sha;
     if (!commitSha) throw new IngestionError('UPSTREAM_GITHUB_ERROR', 'GitHub did not return a commit SHA.', 502);
 
-    const recursiveTree = await fetchGitHubJson<GitHubTreeResponse>(
+    const recursiveTree = await fetchGitHubJsonWithRetry<GitHubTreeResponse>(
       `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(commitSha)}?recursive=1`,
       owner,
       repo,
       signal,
       accessToken
     );
-    const treeResult = recursiveTree.truncated
-      ? await walkGitHubTree(owner, repo, recursiveTree.sha ?? commit?.commit?.tree?.sha ?? commitSha, limits, signal, accessToken)
-      : { entries: recursiveTree.tree ?? [], totalArchiveEntries: (recursiveTree.tree ?? []).length };
+    let treeResult: { entries: GitHubTreeEntry[]; totalArchiveEntries: number; truncated: boolean };
+    if (recursiveTree.truncated) {
+      const walked = await walkGitHubTree(owner, repo, recursiveTree.sha ?? commit?.commit?.tree?.sha ?? commitSha, limits, signal, accessToken);
+      treeResult = walked;
+    } else {
+      treeResult = {
+        entries: recursiveTree.tree ?? [],
+        totalArchiveEntries: (recursiveTree.tree ?? []).length,
+        truncated: false,
+      };
+    }
 
     const skipped: { path: string; reason: string }[] = [];
     const candidates: GitHubTreeEntry[] = [];
@@ -1014,6 +1067,9 @@ async function fetchGitHubTreeRepo(
 
     const skippedByReason: Record<string, number> = {};
     for (const item of skipped) skippedByReason[item.reason] = (skippedByReason[item.reason] ?? 0) + 1;
+    const hitLimits: string[] = [];
+    if (maxFilesReached) hitLimits.push('TOO_MANY_FILES');
+    if (treeResult.truncated) hitLimits.push('GITHUB_TREE_TRUNCATED');
 
     return {
       files: files.sort((a, b) => a.path.localeCompare(b.path)),
@@ -1033,7 +1089,7 @@ async function fetchGitHubTreeRepo(
         acquisitionMode: 'git-tree',
         repositorySizeKb: typeof metadata.size === 'number' ? metadata.size : undefined,
         truncation: {
-          hitLimits: maxFilesReached ? ['TOO_MANY_FILES'] : [],
+          hitLimits,
           maxFilesReached,
           maxBytesReached: false,
         },
@@ -1097,7 +1153,7 @@ export async function fetchGitHubRepo(
       Math.min(Math.max(limits.fetchTimeoutMs, 1_000), 8_000)
     );
     try {
-      const metadata = await fetchGitHubJson<GitHubRepositoryMetadata>(
+      const metadata = await fetchGitHubJsonWithRetry<GitHubRepositoryMetadata>(
         `https://api.github.com/repos/${owner}/${repo}`,
         owner,
         repo,

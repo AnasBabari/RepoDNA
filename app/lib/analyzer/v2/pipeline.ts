@@ -221,6 +221,25 @@ export async function analyzeRepositoryV2(
           ...ingestionInventory.truncation.hitLimits,
         ]),
       ];
+      for (const code of ingestionInventory.truncation.hitLimits) {
+        if (v2.diagnostics.some((d) => d.code === code)) continue;
+        if (code === 'GITHUB_TREE_TRUNCATED') {
+          v2.diagnostics.push({
+            severity: 'warning',
+            code,
+            message:
+              'GitHub tree response was truncated; directory traversal may be incomplete and coverage is partial. Check inventory.truncation and skippedByReason for details.',
+            file: null,
+          });
+        } else if (code === 'TOO_MANY_FILES') {
+          v2.diagnostics.push({
+            severity: 'warning',
+            code,
+            message: `Candidate file count exceeded limit of ${ingestionInventory.candidateFileCount?.toLocaleString?.() ?? 'max'}; analysis is partial and some files were skipped.`,
+            file: null,
+          });
+        }
+      }
     }
   }
   // Override where provided
