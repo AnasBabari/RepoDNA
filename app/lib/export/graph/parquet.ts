@@ -1,4 +1,4 @@
-import { zip } from 'fflate';
+import { zipSync } from 'fflate';
 
 import { graphExportFilename } from './index';
 import { compactStableStringify, sha256Hex, stableStringify, utf8Bytes } from './stable-json';
@@ -231,12 +231,10 @@ export async function buildParquetBundle(document: GraphExportDocumentV1): Promi
     zipEntries[table.filename] = [bytes, { mtime: FIXED_MTIME }];
   }
 
-  const zipped = await new Promise<Uint8Array>((resolve, reject) => {
-    zip(zipEntries, { level: 9, mtime: FIXED_MTIME }, (error, data) => {
-      if (error) reject(error);
-      else resolve(data);
-    });
-  });
+  // Keep compression in the existing export worker. fflate's async ZIP path
+  // creates a nested Blob worker for large table files, which production CSP
+  // blocks and can leave the export stuck at the packaging stage.
+  const zipped = zipSync(zipEntries, { level: 9, mtime: FIXED_MTIME });
 
   return {
     format: 'parquet',

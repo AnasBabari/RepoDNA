@@ -257,6 +257,8 @@ describe('graph export serializers', () => {
     expect(json.byteSize).toBeGreaterThan(0);
     expect(csv.byteSize).toBeGreaterThan(0);
     expect(cypher.byteSize).toBeGreaterThan(0);
+    const csvTables = unzipSync(csv.bytes);
+    expect(csvTables['relationships.csv'].byteLength).toBeGreaterThan(160_000);
     expect(Date.now() - start).toBeLessThan(4000);
     expect(utf8Bytes(JSON.stringify({ a: 1 })).length).toBeGreaterThan(0);
   });

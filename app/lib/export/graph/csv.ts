@@ -1,4 +1,4 @@
-import { zip } from 'fflate';
+import { zipSync } from 'fflate';
 
 import { compactStableStringify, sha256Hex, stableStringify, utf8Bytes } from './stable-json';
 import { graphExportFilename } from './index';
@@ -204,23 +204,22 @@ export async function buildCsvBundle(document: GraphExportDocumentV1): Promise<G
   const manifestJson = stableStringify(manifestPayload, 2);
   const manifestBytes = utf8Bytes(manifestJson);
 
-  const zipped = await new Promise<Uint8Array>((resolve, reject) => {
-    zip(
-      {
-        'manifest.json': [manifestBytes, { mtime: FIXED_MTIME }],
-        'nodes.csv': [nodesBytes, { mtime: FIXED_MTIME }],
-        'relationships.csv': [relationshipsBytes, { mtime: FIXED_MTIME }],
-        'groups.csv': [groupsBytes, { mtime: FIXED_MTIME }],
-        'group_memberships.csv': [membershipsBytes, { mtime: FIXED_MTIME }],
-        'unresolved.csv': [unresolvedBytes, { mtime: FIXED_MTIME }],
-      },
-      { level: 9, mtime: FIXED_MTIME },
-      (error, data) => {
-        if (error) reject(error);
-        else resolve(data);
-      }
-    );
-  });
+  // The export already runs inside a dedicated worker. fflate's async zip
+  // implementation starts a second Blob worker for files over 160 KiB; that
+  // nested worker is blocked by the production CSP and leaves the UI at
+  // "packaging" forever. Compress synchronously inside the existing worker
+  // instead, with the same deterministic timestamp and compression level.
+  const zipped = zipSync(
+    {
+      'manifest.json': [manifestBytes, { mtime: FIXED_MTIME }],
+      'nodes.csv': [nodesBytes, { mtime: FIXED_MTIME }],
+      'relationships.csv': [relationshipsBytes, { mtime: FIXED_MTIME }],
+      'groups.csv': [groupsBytes, { mtime: FIXED_MTIME }],
+      'group_memberships.csv': [membershipsBytes, { mtime: FIXED_MTIME }],
+      'unresolved.csv': [unresolvedBytes, { mtime: FIXED_MTIME }],
+    },
+    { level: 9, mtime: FIXED_MTIME }
+  );
 
   const sha256 = await sha256Hex(zipped);
   return {
