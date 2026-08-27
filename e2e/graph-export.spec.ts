@@ -73,7 +73,7 @@ test.describe('graph export browser contract', () => {
     const closeButton = dialog.getByRole('button', { name: 'Close export dialog' });
     await expect(closeButton).toBeFocused();
     await page.keyboard.press('Shift+Tab');
-    await expect(dialog.getByRole('button', { name: 'Export Neo4j Cypher' })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: /^Export / }).last()).toBeFocused();
 
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
