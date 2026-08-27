@@ -19,7 +19,7 @@ The export is independent of the graph's visual filter, layout, zoom, and viewpo
 | Graph JSON | `*-repodna-graph.json` | RepoDNA, scripts, long-term snapshots | Enabled |
 | CSV tables | `*-repodna-csv.zip` | Excel, DuckDB, pandas, SQL import | Enabled |
 | Neo4j Cypher | `*-repodna-cypher.txt` | Neo4j 5+ | Enabled |
-| Parquet tables | `*-repodna-parquet.zip` | DuckDB, PyArrow, data-lake tools | Implemented behind `NEXT_PUBLIC_REPODNA_PARQUET_EXPORT`; disabled by default until production verification |
+| Parquet tables | `*-repodna-parquet.zip` | DuckDB, PyArrow, data-lake tools | Production-verified and enabled on Vercel via `NEXT_PUBLIC_REPODNA_PARQUET_EXPORT=true` |
 
 Every format contains the same logical graph. Serializers use stable ID ordering, the export schema version, the source artifact SHA-256, and deterministic metadata. ZIP members use a fixed timestamp so repeated exports of the same artifact are byte-identical.
 
@@ -91,7 +91,9 @@ unresolved.parquet
 
 The writer uses the browser-compatible `hyparquet-writer` package, Snappy compression, 1,000-row groups, stable column order, and optional columns so null targets and nullable confidence/cohesion values remain lossless. Scalar ranges use `INT32`, numeric scores use `DOUBLE`, and arrays/objects use stable JSON strings in `STRING` columns. Each table contains Parquet key/value metadata identifying the RepoDNA export schema, table, and source digest. The ZIP manifest describes table columns, types, nullability, row files, sizes, and hashes.
 
-Parquet is generated only when `NEXT_PUBLIC_REPODNA_PARQUET_EXPORT=true`. Keeping the flag false hides the button and returns `PARQUET_EXPORT_DISABLED` from both the worker pipeline and server endpoint; this prevents advertising an unverified production feature.
+Parquet is generated only when `NEXT_PUBLIC_REPODNA_PARQUET_EXPORT=true`. The flag is enabled for the RepoDNA Vercel Production environment and remains independently switchable for preview/local deployments. Keeping it false hides the button and returns `PARQUET_EXPORT_DISABLED` from both the worker pipeline and server endpoint.
+
+Production verification covered both a small 81-node/582-relationship repository and the 6,013-node/39,317-relationship FreeToken graph. The large run produced all five readable tables in a 2.7 MiB ZIP through the browser fallback when the server export cache was unavailable.
 
 ## API and cache lifecycle
 

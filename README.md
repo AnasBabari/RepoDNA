@@ -51,7 +51,7 @@ Open **Relationship explorer → Code Graph → Export** to download the full ca
 - **Graph JSON**: validated against [`schema/repodna-graph-export-v1.schema.json`](schema/repodna-graph-export-v1.schema.json).
 - **CSV tables**: a deterministic ZIP containing `nodes.csv`, `relationships.csv`, `groups.csv`, `group_memberships.csv`, `unresolved.csv`, and `manifest.json`; spreadsheet formula-leading values are escaped.
 - **Neo4j Cypher**: deterministic, escaped, idempotent Neo4j 5+ `MERGE` statements with no APOC, LLM, or AI API key requirement.
-- **Parquet**: a five-table Snappy-compressed ZIP, implemented behind `NEXT_PUBLIC_REPODNA_PARQUET_EXPORT=true` and disabled by default until production verification.
+- **Parquet**: a five-table Snappy-compressed ZIP, enabled on the Vercel Production deployment via `NEXT_PUBLIC_REPODNA_PARQUET_EXPORT=true` and switchable per environment.
 
 Exports use a private seven-day Vercel Blob cache for public commit-addressed analyses, short-lived signed download URLs, and an explicit opt-in IndexedDB cache for browser-local derived artifacts. See [`docs/graph-exports.md`](docs/graph-exports.md) for the exact schema, cache behavior, limits, import instructions, and verification contract.
 

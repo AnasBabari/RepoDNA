@@ -13,7 +13,7 @@ The analyzer also has partial-resolution cases. Hiding those cases behind a comp
 ## Decision
 
 1. Maintain one canonical `GraphExportDocumentV1` IR containing nodes, relationships, groups, group memberships, unresolved entries, and a manifest with coverage/completeness.
-2. Serialize that IR deterministically into JSON, a five-table CSV ZIP, Neo4j 5+ Cypher, and—behind an explicit feature flag—a five-table Parquet ZIP.
+2. Serialize that IR deterministically into JSON, a five-table CSV ZIP, Neo4j 5+ Cypher, and—behind an explicit feature flag—a five-table Parquet ZIP. The feature flag is enabled for the Vercel Production deployment after live verification.
 3. Encode arrays and arbitrary properties as stable JSON strings in CSV/Parquet. Preserve nulls, `why`, evidence ranges, resolver metadata, confidence, and unresolved expressions.
 4. Generate Cypher in code with allowlists, literal escaping, `UNWIND` batches, uniqueness constraints, and `MERGE`. Do not use an LLM or AI API for export generation.
 5. Cache only derived artifacts/exports:
@@ -54,12 +54,12 @@ Positive:
 Trade-offs:
 
 - arbitrary properties remain JSON strings in CSV/Parquet rather than fully typed nested columns;
-- Parquet adds a dependency and remains opt-in until production validation is complete;
+- Parquet adds a dependency and remains independently switchable per deployment environment;
 - private browser caching is explicitly opt-in and bounded by browser quota;
 - the analyzer's completeness limits still apply and are surfaced rather than hidden.
 
 ## Verification
 
 - Unit tests validate stable bytes, schema parity, CSV formula protection, Parquet metadata/round-trip reads, cache TTL/LRU behavior, API validation, and worker fallback.
-- Playwright verifies the Export dialog, keyboard behavior, JSON/CSV/Cypher downloads, canonical export under a visual filter, server fallback, and the Parquet feature gate.
+- Playwright verifies the Export dialog, keyboard behavior, JSON/CSV/Cypher downloads, canonical export under a visual filter, server fallback, and the Parquet feature gate; live smoke tests verify all four formats against public repositories.
 - `tests/integration/run-neo4j-double-import.mjs` runs the generated Cypher against Neo4j 5 Community twice and verifies idempotency, counts, constraints, and injection safety.
