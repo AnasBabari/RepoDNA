@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { unzipSync } from 'fflate';
+import { parquetMetadata, parquetReadObjects } from 'hyparquet';
 import Ajv from 'ajv';
 import { describe, expect, it } from 'vitest';
 
@@ -7,11 +8,26 @@ import { buildCsvBundle } from '../../../app/lib/export/graph/csv';
 import { buildCypher } from '../../../app/lib/export/graph/cypher';
 import { buildGraphJson } from '../../../app/lib/export/graph/json';
 import { normalizeArtifactForExport } from '../../../app/lib/export/graph/normalize';
+import { buildParquetBundle } from '../../../app/lib/export/graph/parquet';
 import { stableStringify, utf8Bytes } from '../../../app/lib/export/graph/stable-json';
 import { makeSecurityFixture, makeSyntheticFixture, makeV2Fixture } from './fixtures';
 
+function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function asAsyncBuffer(bytes: Uint8Array) {
+  const copy = bytes.slice();
+  return {
+    byteLength: copy.byteLength,
+    slice(start: number, end?: number) {
+      return asArrayBuffer(copy.slice(start, end));
+    },
+  };
+}
+
 describe('graph export serializers', () => {
-  it('produces deterministic byte-identical JSON, CSV, and Cypher', async () => {
+  it('produces deterministic byte-identical JSON, CSV, Cypher, and Parquet', async () => {
     const artifact = makeV2Fixture();
     const first = await normalizeArtifactForExport(artifact);
     const second = await normalizeArtifactForExport(structuredClone(artifact));
@@ -28,6 +44,13 @@ describe('graph export serializers', () => {
     const [cypherA, cypherB] = await Promise.all([buildCypher(first.document), buildCypher(second.document)]);
     expect(Buffer.from(cypherA.bytes).toString('utf8')).toBe(Buffer.from(cypherB.bytes).toString('utf8'));
     expect(cypherA.sha256).toBe(cypherB.sha256);
+
+    const [parquetA, parquetB] = await Promise.all([
+      buildParquetBundle(first.document),
+      buildParquetBundle(second.document),
+    ]);
+    expect(Buffer.from(parquetA.bytes).equals(Buffer.from(parquetB.bytes))).toBe(true);
+    expect(parquetA.sha256).toBe(parquetB.sha256);
   });
 
   it('produces valid JSON that validates against the schema', async () => {
@@ -82,6 +105,70 @@ describe('graph export serializers', () => {
     );
     const csvA2 = await buildCsvBundle(document);
     expect(Buffer.from(file.bytes).equals(Buffer.from(csvA2.bytes))).toBe(true);
+  });
+
+  it('produces five readable Parquet tables with manifest parity and null preservation', async () => {
+    const { document } = await normalizeArtifactForExport(makeSecurityFixture());
+    const file = await buildParquetBundle(document);
+    expect(file.mediaType).toBe('application/zip');
+    expect(file.filename).toMatch(/-repodna-parquet\.zip$/);
+
+    const unzipped = unzipSync(file.bytes);
+    const filenames = Object.keys(unzipped).sort();
+    expect(filenames).toEqual([
+      'group_memberships.parquet',
+      'groups.parquet',
+      'manifest.json',
+      'nodes.parquet',
+      'relationships.parquet',
+      'unresolved.parquet',
+    ]);
+
+    const manifest = JSON.parse(Buffer.from(unzipped['manifest.json']).toString('utf8')) as {
+      format: string;
+      counts: Record<string, number>;
+      files: Array<{ name: string; byteSize: number; sha256: string }>;
+      parquet: { tables: Array<{ name: string; columns: Array<{ name: string; type: string }> }> };
+    };
+    expect(manifest.format).toBe('parquet');
+    expect(manifest.counts.nodes).toBe(document.nodes.length);
+    expect(manifest.counts.relationships).toBe(document.relationships.length);
+    expect(manifest.parquet.tables).toHaveLength(5);
+    expect(manifest.parquet.tables.find((table) => table.name === 'relationships')?.columns).toEqual(
+      expect.arrayContaining([
+        { name: 'source_id', type: 'STRING', nullable: true },
+        { name: 'target_id', type: 'STRING', nullable: true },
+        { name: 'why', type: 'STRING', nullable: true },
+        { name: 'properties_json', type: 'STRING', nullable: true },
+      ])
+    );
+
+    const rowCounts: Record<string, number> = {
+      'nodes.parquet': document.nodes.length,
+      'relationships.parquet': document.relationships.length,
+      'groups.parquet': document.groups.length,
+      'group_memberships.parquet': document.groupMemberships.length,
+      'unresolved.parquet': document.unresolved.length,
+    };
+    for (const [filename, expectedRows] of Object.entries(rowCounts)) {
+      const bytes = unzipped[filename];
+      const metadata = parquetMetadata(asArrayBuffer(bytes));
+      expect(Number(metadata.num_rows)).toBe(expectedRows);
+      const entry = manifest.files.find((candidate) => candidate.name === filename);
+      expect(entry?.byteSize).toBe(bytes.byteLength);
+      expect(entry?.sha256).toMatch(/^[0-9a-f]{64}$/);
+    }
+
+    const relationshipBytes = unzipped['relationships.parquet'];
+    const relationshipRows = await parquetReadObjects({
+      file: asAsyncBuffer(relationshipBytes),
+      columns: ['id', 'target_id', 'why', 'properties_json'],
+      rowFormat: 'object',
+    });
+    expect(relationshipRows).toHaveLength(document.relationships.length);
+    expect(relationshipRows.some((row) => row.target_id === null)).toBe(true);
+    expect(relationshipRows.every((row) => typeof row.why === 'string' && row.why.length > 0)).toBe(true);
+    expect(relationshipRows.every((row) => typeof row.properties_json === 'string')).toBe(true);
   });
 
   it('protects spreadsheet formula injection in CSV cells', async () => {
