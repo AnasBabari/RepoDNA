@@ -12,6 +12,7 @@ import {
 import { buildGraphExportViaWorker } from '../lib/export/graph/worker-client';
 import type { AnyExportableArtifact } from '../lib/export/graph/normalize';
 import type { GraphExportFormat } from '../lib/export/graph/types';
+import { generateTextReport } from '../lib/export/text-report';
 
 type ExportStatus = 'idle' | 'loading' | 'success' | 'error';
 type CacheLayer = 'vercel_blob' | 'indexeddb' | 'browser_worker';
@@ -352,6 +353,18 @@ export function GraphExportDialog({
     abortControllers.current[format]?.abort();
   }, []);
 
+  const handleTextReport = useCallback(() => {
+    if (!artifact) return;
+    const repoName =
+      ((artifact as unknown as { repository?: { name?: string } }).repository?.name ?? 'repository').replace(
+        /[^a-z0-9._-]+/gi,
+        '-'
+      ) || 'repository';
+    const text = generateTextReport(artifact as never);
+    const blob = new Blob([text], { type: 'text/plain; charset=utf-8' });
+    downloadBlob(blob, `${repoName}-repodna-architecture.txt`);
+  }, [artifact]);
+
   return (
     <div className="graph-export-overlay" role="presentation" onMouseDown={closeDialog}>
       <div
@@ -444,6 +457,17 @@ export function GraphExportDialog({
               </section>
             );
           })}
+          <section className="graph-export-row" aria-label="Architecture TXT">
+            <div className="graph-export-row-info">
+              <strong>Architecture TXT</strong>
+              <span>Human-readable architecture report — deterministic plain text, no AI, includes inventory, coverage, and unresolved paths</span>
+            </div>
+            <div className="graph-export-row-buttons">
+              <button type="button" className="chip-button" onClick={handleTextReport} disabled={!artifact}>
+                Export TXT
+              </button>
+            </div>
+          </section>
         </div>
 
         <div className="graph-export-foot">
