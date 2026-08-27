@@ -16,7 +16,7 @@ import {
   type GraphExportHarness,
 } from './harness';
 
-export type ExportFormatLabel = 'Graph JSON' | 'CSV tables' | 'Neo4j Cypher';
+export type ExportFormatLabel = 'Graph JSON' | 'CSV tables' | 'Neo4j Cypher' | 'Parquet';
 
 const NAV_TIMEOUT = 60_000;
 

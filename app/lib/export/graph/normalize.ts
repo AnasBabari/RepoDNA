@@ -39,55 +39,226 @@ function isV2Artifact(artifact: AnyExportableArtifact): artifact is RepoDNAProje
   return (artifact as RepoDNAProjectV2).schemaVersion === '2.0.0';
 }
 
+interface NodeProjection {
+  source: GraphNode;
+  exportId: string;
+  duplicateIndex: number;
+  synthetic: boolean;
+}
+
+interface NodeIndex {
+  projections: NodeProjection[];
+  firstBySourceId: Map<string, NodeProjection>;
+  allBySourceId: Map<string, NodeProjection[]>;
+  duplicateCount: number;
+  syntheticCount: number;
+}
+
+interface RelationshipProjection {
+  edge: GraphEdge;
+  exportId: string;
+  source: NodeProjection;
+  target: NodeProjection | null;
+  sourceMissing: boolean;
+  targetMissing: boolean;
+  status: GraphEdge['status'];
+}
+
+function allocateUniqueId(base: string, occurrenceByBase: Map<string, number>, usedIds: Set<string>): string {
+  let occurrence = occurrenceByBase.get(base) ?? 0;
+  let candidate = occurrence === 0 ? base : `${base}#duplicate-${occurrence + 1}`;
+  while (usedIds.has(candidate)) {
+    occurrence += 1;
+    candidate = `${base}#duplicate-${occurrence + 1}`;
+  }
+  occurrenceByBase.set(base, occurrence + 1);
+  usedIds.add(candidate);
+  return candidate;
+}
+
+function buildNodeIndex(project: RepoDNAProjectV2): NodeIndex {
+  const projections: NodeProjection[] = [];
+  const firstBySourceId = new Map<string, NodeProjection>();
+  const allBySourceId = new Map<string, NodeProjection[]>();
+  const occurrenceByBase = new Map<string, number>();
+  const usedIds = new Set<string>();
+
+  for (const source of project.nodes) {
+    const existing = allBySourceId.get(source.id) ?? [];
+    const projection: NodeProjection = {
+      source,
+      exportId: allocateUniqueId(source.id, occurrenceByBase, usedIds),
+      duplicateIndex: existing.length,
+      synthetic: false,
+    };
+    existing.push(projection);
+    allBySourceId.set(source.id, existing);
+    firstBySourceId.set(source.id, firstBySourceId.get(source.id) ?? projection);
+    projections.push(projection);
+  }
+
+  return {
+    projections,
+    firstBySourceId,
+    allBySourceId,
+    duplicateCount: projections.filter((projection) => projection.duplicateIndex > 0).length,
+    syntheticCount: 0,
+  };
+}
+
+function addSyntheticSourceNodes(project: RepoDNAProjectV2, index: NodeIndex): void {
+  const missingSourceIds = new Set(
+    project.edges
+      .map((edge) => edge.source)
+      .filter((sourceId) => !index.firstBySourceId.has(sourceId))
+  );
+  if (missingSourceIds.size === 0) return;
+
+  const occurrenceByBase = new Map<string, number>();
+  const usedIds = new Set(index.projections.map((projection) => projection.exportId));
+  for (const sourceId of [...missingSourceIds].sort(compareIds)) {
+    const edge = project.edges.find((candidate) => candidate.source === sourceId);
+    const syntheticNode: GraphNode = {
+      id: sourceId,
+      kind: 'external_system',
+      name: sourceId || 'Unresolved source',
+      qualifiedName: sourceId,
+      path: edge?.evidence.file ?? '',
+      language: 'unknown',
+      range: edge?.evidence.range ?? { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+      evidence: edge ? [`source-node-not-found:${edge.evidence.file}`] : ['source-node-not-found'],
+      metadata: { synthetic: true, unresolvedSourceId: sourceId },
+    };
+    const projection: NodeProjection = {
+      source: syntheticNode,
+      exportId: allocateUniqueId(`unresolved-source:${sourceId}`, occurrenceByBase, usedIds),
+      duplicateIndex: 0,
+      synthetic: true,
+    };
+    index.projections.push(projection);
+    index.firstBySourceId.set(sourceId, projection);
+    index.allBySourceId.set(sourceId, [projection]);
+    index.syntheticCount += 1;
+  }
+}
+
+function nodeProperties(projection: NodeProjection): Record<string, unknown> {
+  const properties = { ...(projection.source.metadata ?? {}) };
+  if (projection.duplicateIndex > 0) {
+    const existing = properties.__repodna;
+    properties.__repodna = {
+      ...(existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {}),
+      originalId: projection.source.id,
+      duplicateIndex: projection.duplicateIndex + 1,
+    };
+  }
+  return properties;
+}
+
 function buildNodes(
-  project: RepoDNAProjectV2,
+  index: NodeIndex,
   communityIdsByNode: Map<string, string[]>,
   architectureIdsByPath: Map<string, string[]>
 ): GraphExportNode[] {
-  return project.nodes
-    .map((node: GraphNode): GraphExportNode => ({
-      id: node.id,
-      kind: node.kind,
-      name: node.name,
-      qualifiedName: node.qualifiedName,
-      path: node.path,
-      language: node.language,
-      range: { ...node.range },
-      confidence: typeof node.confidence === 'number' ? node.confidence : null,
-      evidence: [...(node.evidence ?? [])],
-      properties: { ...(node.metadata ?? {}) },
-      communityIds: sortedUnique(communityIdsByNode.get(node.id) ?? []),
-      architectureGroupIds: sortedUnique(architectureIdsByPath.get(normalizePath(node.path)) ?? []),
+  return index.projections
+    .map((projection): GraphExportNode => ({
+      id: projection.exportId,
+      kind: projection.source.kind,
+      name: projection.source.name,
+      qualifiedName: projection.source.qualifiedName,
+      path: projection.source.path,
+      language: projection.source.language,
+      range: { ...projection.source.range },
+      confidence: typeof projection.source.confidence === 'number' ? projection.source.confidence : null,
+      evidence: [...(projection.source.evidence ?? [])],
+      properties: nodeProperties(projection),
+      communityIds: sortedUnique(communityIdsByNode.get(projection.source.id) ?? []),
+      architectureGroupIds: sortedUnique(architectureIdsByPath.get(normalizePath(projection.source.path)) ?? []),
     }))
     .sort((a, b) => compareIds(a.id, b.id));
 }
 
-function buildRelationships(project: RepoDNAProjectV2, nodesById: Map<string, GraphNode>): GraphExportRelationship[] {
-  return project.edges
-    .map((edge: GraphEdge): GraphExportRelationship => {
-      const source = nodesById.get(edge.source) ?? null;
-      const target = edge.target === null ? null : nodesById.get(edge.target) ?? null;
+function buildRelationshipProjections(project: RepoDNAProjectV2, index: NodeIndex): RelationshipProjection[] {
+  const occurrenceByBase = new Map<string, number>();
+  const usedIds = new Set<string>();
+  return project.edges.map((edge) => {
+    const source = index.firstBySourceId.get(edge.source);
+    const target = edge.target === null ? null : index.firstBySourceId.get(edge.target) ?? null;
+    const sourceMissing = source === undefined;
+    const targetMissing = edge.target !== null && target === null;
+    const status = sourceMissing || targetMissing || edge.target === null
+      ? edge.status === 'ambiguous' || edge.status === 'unresolved' ? edge.status : 'unresolved'
+      : edge.status;
+    return {
+      edge,
+      exportId: allocateUniqueId(edge.id, occurrenceByBase, usedIds),
+      source: source ?? {
+        source: {
+          id: edge.source,
+          kind: 'external_system',
+          name: edge.source || 'Unresolved source',
+          qualifiedName: edge.source,
+          path: edge.evidence.file,
+          language: 'unknown',
+          range: { ...edge.evidence.range },
+          evidence: ['source-node-not-found'],
+          metadata: { synthetic: true },
+        },
+        exportId: `unresolved-source:${edge.source}`,
+        duplicateIndex: 0,
+        synthetic: true,
+      },
+      target,
+      sourceMissing,
+      targetMissing,
+      status,
+    };
+  });
+}
+
+function edgeWhy(projection: RelationshipProjection): string {
+  if (typeof projection.edge.explanation === 'string' && projection.edge.explanation.trim()) {
+    return projection.edge.explanation;
+  }
+  if (projection.sourceMissing) return 'Source node was not present in the analyzed graph.';
+  if (projection.targetMissing) return 'Target node was not present in the analyzed graph.';
+  return `Relationship status: ${projection.status}`;
+}
+
+function buildRelationships(projections: RelationshipProjection[]): GraphExportRelationship[] {
+  return projections
+    .map((projection): GraphExportRelationship => {
+      const { edge, source, target } = projection;
+      const properties = { ...(edge.metadata ?? {}) };
+      if (projection.sourceMissing || projection.targetMissing) {
+        const existing = properties.__repodna;
+        properties.__repodna = {
+          ...(existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {}),
+          ...(projection.sourceMissing ? { sourceNodeMissing: true } : {}),
+          ...(projection.targetMissing ? { targetNodeMissing: true, originalTargetId: edge.target } : {}),
+        };
+      }
       return {
-        id: edge.id,
-        sourceId: edge.source,
-        targetId: edge.target,
-        sourceName: source?.name ?? '',
-        sourceKind: source?.kind ?? null,
-        sourcePath: source?.path ?? '',
-        targetName: target?.name ?? null,
-        targetKind: target?.kind ?? null,
-        targetPath: target?.path ?? null,
+        id: projection.exportId,
+        sourceId: source.exportId,
+        targetId: target?.exportId ?? null,
+        sourceName: source.source.name,
+        sourceKind: source.source.kind,
+        sourcePath: source.source.path,
+        targetName: target?.source.name ?? null,
+        targetKind: target?.source.kind ?? null,
+        targetPath: target?.source.path ?? null,
         type: edge.type,
-        status: edge.status,
+        status: projection.status,
         confidence: edge.confidence,
-        why: edge.explanation,
+        why: edgeWhy(projection),
         evidenceFile: edge.evidence.file,
         evidenceRange: { ...edge.evidence.range },
         resolverName: edge.resolver.name,
         resolverVersion: edge.resolver.version,
         alternativeCandidateIds: sortedUnique(edge.alternativeCandidates ?? []),
-        unresolvedExpression: edge.unresolvedExpression ?? null,
-        properties: { ...(edge.metadata ?? {}) },
+        unresolvedExpression: edge.unresolvedExpression ?? (projection.targetMissing ? edge.target : null),
+        properties,
       };
     })
     .sort((a, b) => compareIds(a.id, b.id));
@@ -119,18 +290,19 @@ function buildGroups(project: RepoDNAProjectV2): GraphExportGroup[] {
 
 function buildMemberships(
   project: RepoDNAProjectV2,
-  nodeIds: Set<string>,
+  index: NodeIndex,
   nodeIdsByPath: Map<string, string[]>
 ): GraphGroupMembership[] {
   const memberships: GraphGroupMembership[] = [];
   for (const community of project.communities) {
     for (const member of community.members) {
-      if (!nodeIds.has(member)) continue;
-      memberships.push({
-        groupId: `community:${community.id}`,
-        nodeId: member,
-        membershipReason: 'community-detection',
-      });
+      for (const projection of index.allBySourceId.get(member) ?? []) {
+        memberships.push({
+          groupId: `community:${community.id}`,
+          nodeId: projection.exportId,
+          membershipReason: 'community-detection',
+        });
+      }
     }
   }
   for (const component of project.architecture.components) {
@@ -153,21 +325,39 @@ function buildMemberships(
   );
 }
 
-function buildUnresolved(project: RepoDNAProjectV2): GraphExportUnresolved[] {
-  const reasonByEdgeId = new Map(project.unresolved.map((entry) => [entry.edgeId, entry]));
-  return project.edges
-    .filter((edge) => edge.status === 'unresolved' || edge.status === 'ambiguous')
-    .map((edge): GraphExportUnresolved => {
-      const recorded = reasonByEdgeId.get(edge.id);
+function buildUnresolved(
+  project: RepoDNAProjectV2,
+  projections: RelationshipProjection[]
+): GraphExportUnresolved[] {
+  const recordedByEdgeId = new Map<string, RepoDNAProjectV2['unresolved']>();
+  for (const entry of project.unresolved) {
+    const bucket = recordedByEdgeId.get(entry.edgeId);
+    if (bucket) bucket.push(entry);
+    else recordedByEdgeId.set(entry.edgeId, [entry]);
+  }
+  const occurrenceByEdgeId = new Map<string, number>();
+  return projections
+    .filter((projection) => projection.status === 'unresolved' || projection.status === 'ambiguous')
+    .map((projection): GraphExportUnresolved => {
+      const occurrence = occurrenceByEdgeId.get(projection.edge.id) ?? 0;
+      occurrenceByEdgeId.set(projection.edge.id, occurrence + 1);
+      const recorded = recordedByEdgeId.get(projection.edge.id)?.[occurrence];
+      const missingTargetReason = projection.targetMissing ? 'target-node-not-found' : null;
+      const missingSourceReason = projection.sourceMissing ? 'source-node-not-found' : null;
       return {
-        edgeId: edge.id,
-        sourceId: edge.source,
-        relationshipType: edge.type,
-        reason: recorded?.reason ?? `status:${edge.status}`,
-        unresolvedExpression: edge.unresolvedExpression ?? null,
-        candidateIds: sortedUnique([...(edge.alternativeCandidates ?? []), ...(recorded?.candidates ?? [])]),
-        evidenceFile: edge.evidence.file,
-        evidenceRange: { ...edge.evidence.range },
+        edgeId: projection.exportId,
+        sourceId: projection.source.exportId,
+        relationshipType: projection.edge.type,
+        reason: recorded?.reason ?? missingSourceReason ?? missingTargetReason ?? `status:${projection.status}`,
+        unresolvedExpression:
+          projection.edge.unresolvedExpression ?? (projection.targetMissing ? projection.edge.target : null),
+        candidateIds: sortedUnique([
+          ...(projection.edge.alternativeCandidates ?? []),
+          ...(projection.targetMissing && projection.edge.target ? [projection.edge.target] : []),
+          ...(recorded?.candidates ?? []),
+        ]),
+        evidenceFile: projection.edge.evidence.file,
+        evidenceRange: { ...projection.edge.evidence.range },
       };
     })
     .sort((a, b) => compareIds(a.edgeId, b.edgeId));
@@ -181,16 +371,16 @@ export function buildGraphExportDocument(
     adaptedFromLegacy: boolean;
   }
 ): GraphExportDocumentV1 {
-  const nodesById = new Map(project.nodes.map((node) => [node.id, node]));
-  const nodeIds = new Set(nodesById.keys());
+  const nodeIndex = buildNodeIndex(project);
+  addSyntheticSourceNodes(project, nodeIndex);
 
   const nodeIdsByPath = new Map<string, string[]>();
-  for (const node of project.nodes) {
-    const key = normalizePath(node.path);
+  for (const projection of nodeIndex.projections) {
+    const key = normalizePath(projection.source.path);
     if (!key) continue;
     const bucket = nodeIdsByPath.get(key);
-    if (bucket) bucket.push(node.id);
-    else nodeIdsByPath.set(key, [node.id]);
+    if (bucket) bucket.push(projection.exportId);
+    else nodeIdsByPath.set(key, [projection.exportId]);
   }
 
   const communityIdsByNode = new Map<string, string[]>();
@@ -214,11 +404,28 @@ export function buildGraphExportDocument(
     }
   }
 
-  const nodes = buildNodes(project, communityIdsByNode, architectureIdsByPath);
-  const relationships = buildRelationships(project, nodesById);
+  const nodes = buildNodes(nodeIndex, communityIdsByNode, architectureIdsByPath);
+  const relationshipProjections = buildRelationshipProjections(project, nodeIndex);
+  const relationships = buildRelationships(relationshipProjections);
   const groups = buildGroups(project);
-  const groupMemberships = buildMemberships(project, nodeIds, nodeIdsByPath);
-  const unresolved = buildUnresolved(project);
+  const groupMemberships = buildMemberships(project, nodeIndex, nodeIdsByPath);
+  const unresolved = buildUnresolved(project, relationshipProjections);
+
+  const normalizationReasons: string[] = [];
+  if (nodeIndex.duplicateCount > 0) {
+    normalizationReasons.push(`export-disambiguated-${nodeIndex.duplicateCount}-duplicate-node-ids`);
+  }
+  const duplicateRelationshipCount = relationshipProjections.length - new Set(relationshipProjections.map((entry) => entry.edge.id)).size;
+  if (duplicateRelationshipCount > 0) {
+    normalizationReasons.push(`export-disambiguated-${duplicateRelationshipCount}-duplicate-relationship-ids`);
+  }
+  if (nodeIndex.syntheticCount > 0) {
+    normalizationReasons.push(`export-added-${nodeIndex.syntheticCount}-unresolved-source-nodes`);
+  }
+  const missingTargetCount = relationshipProjections.filter((projection) => projection.targetMissing).length;
+  if (missingTargetCount > 0) {
+    normalizationReasons.push(`export-marked-${missingTargetCount}-missing-targets-unresolved`);
+  }
 
   const manifest: GraphExportManifest = {
     exportSchemaVersion: GRAPH_EXPORT_SCHEMA_VERSION,
@@ -239,7 +446,7 @@ export function buildGraphExportDocument(
     },
     completeness: {
       status: project.completeness.status,
-      reasons: [...project.completeness.reasons],
+      reasons: [...project.completeness.reasons, ...normalizationReasons],
     },
     executedRepositoryCode: false,
     adaptedFromLegacy: options.adaptedFromLegacy,

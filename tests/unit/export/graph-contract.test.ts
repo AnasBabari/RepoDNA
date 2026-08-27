@@ -5,7 +5,6 @@ import Ajv from 'ajv';
 import { compactStableStringify, stableStringify } from '../../../app/lib/export/graph/stable-json';
 import { graphExportFilename, sanitizeFilenameSegment } from '../../../app/lib/export/graph';
 import { computeSourceArtifactDigest, normalizeArtifactForExport } from '../../../app/lib/export/graph/normalize';
-import { GraphExportError } from '../../../app/lib/export/graph/types';
 import { makeSyntheticFixture, makeV2Fixture } from './fixtures';
 
 function reorderKeys(value: unknown): unknown {
@@ -109,7 +108,7 @@ describe('graph export contract', () => {
     expect(ambiguous?.candidateIds).toEqual(['n-class-c', 'n-file-a']);
   });
 
-  it('fails closed on a dangling relationship target', async () => {
+  it('preserves a dangling relationship target as an explicit unresolved record', async () => {
     const artifact = makeV2Fixture();
     artifact.edges.push({
       id: 'e-dangling',
@@ -122,21 +121,60 @@ describe('graph export contract', () => {
       explanation: 'dangling',
       resolver: { name: 'test', version: '1.0.0' },
     });
-    await expect(normalizeArtifactForExport(artifact)).rejects.toBeInstanceOf(GraphExportError);
-    await expect(normalizeArtifactForExport(artifact)).rejects.toMatchObject({ code: 'EXPORT_GRAPH_INVALID' });
+    const { document } = await normalizeArtifactForExport(artifact);
+    const dangling = document.relationships.find((relationship) => relationship.id === 'e-dangling');
+    expect(dangling).toMatchObject({
+      sourceId: 'n-file-a',
+      targetId: null,
+      status: 'unresolved',
+      unresolvedExpression: 'missing-node',
+      why: 'dangling',
+      properties: { __repodna: { targetNodeMissing: true, originalTargetId: 'missing-node' } },
+    });
+    expect(document.unresolved).toContainEqual(expect.objectContaining({
+      edgeId: 'e-dangling',
+      reason: 'target-node-not-found',
+      candidateIds: ['missing-node'],
+    }));
+    expect(document.manifest.completeness.reasons).toContain('export-marked-1-missing-targets-unresolved');
   });
 
-  it('fails closed on duplicate node ids', async () => {
+  it('disambiguates duplicate node and relationship ids without dropping source records', async () => {
     const artifact = makeV2Fixture();
     artifact.nodes.push({ ...artifact.nodes[0] });
-    await expect(normalizeArtifactForExport(artifact)).rejects.toMatchObject({ code: 'EXPORT_GRAPH_INVALID' });
+    artifact.edges.push({ ...artifact.edges[0] });
+
+    const { document } = await normalizeArtifactForExport(artifact);
+    const nodeIds = document.nodes.map((node) => node.id);
+    const relationshipIds = document.relationships.map((relationship) => relationship.id);
+    expect(new Set(nodeIds).size).toBe(nodeIds.length);
+    expect(new Set(relationshipIds).size).toBe(relationshipIds.length);
+    expect(nodeIds).toContain('n-file-a#duplicate-2');
+    expect(relationshipIds).toContain('e-defines#duplicate-2');
+    expect(document.nodes.find((node) => node.id === 'n-file-a#duplicate-2')?.properties).toMatchObject({
+      __repodna: { originalId: 'n-file-a', duplicateIndex: 2 },
+    });
+    expect(document.manifest.completeness.reasons).toEqual(expect.arrayContaining([
+      'export-disambiguated-1-duplicate-node-ids',
+      'export-disambiguated-1-duplicate-relationship-ids',
+    ]));
+    expect(document.relationships).toHaveLength(artifact.edges.length);
+    expect(document.nodes).toHaveLength(artifact.nodes.length);
   });
 
-  it('fails closed when a resolved relationship has a null target', async () => {
+  it('converts a resolved relationship with a null target into a visible unresolved record', async () => {
     const artifact = makeV2Fixture();
     artifact.edges[0].target = null;
     artifact.edges[0].status = 'resolved';
-    await expect(normalizeArtifactForExport(artifact)).rejects.toMatchObject({ code: 'EXPORT_GRAPH_INVALID' });
+    const { document } = await normalizeArtifactForExport(artifact);
+    expect(document.relationships.find((relationship) => relationship.id === artifact.edges[0].id)).toMatchObject({
+      targetId: null,
+      status: 'unresolved',
+    });
+    expect(document.unresolved).toContainEqual(expect.objectContaining({
+      edgeId: artifact.edges[0].id,
+      reason: 'status:unresolved',
+    }));
   });
 
   it('sanitizes filenames, caps at 120 chars, and falls back to digest when commit is null', async () => {

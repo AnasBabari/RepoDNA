@@ -25,6 +25,7 @@ import {
 const GRAPH_JSON: ExportFormatLabel = 'Graph JSON';
 const CSV: ExportFormatLabel = 'CSV tables';
 const CYPHER: ExportFormatLabel = 'Neo4j Cypher';
+const PARQUET: ExportFormatLabel = 'Parquet';
 
 const EXPECTED_CSV_FILES = [
   'manifest.json',
@@ -182,7 +183,38 @@ test.describe('graph export browser contract', () => {
   });
 
   test('does not expose Parquet while the production feature gate is disabled', async ({ page }) => {
+    test.skip(process.env.NEXT_PUBLIC_REPODNA_PARQUET_EXPORT === 'true', 'Parquet is enabled for this run');
     await openSampleExport(page);
     await expect(page.getByRole('button', { name: /Export Parquet/ })).toHaveCount(0);
+  });
+
+  test('exports readable Parquet tables when the feature gate is enabled', async ({ page }) => {
+    test.skip(process.env.NEXT_PUBLIC_REPODNA_PARQUET_EXPORT !== 'true', 'Run with NEXT_PUBLIC_REPODNA_PARQUET_EXPORT=true');
+    await openSampleExport(page);
+
+    const download = await generateExportToSuccess(page, PARQUET);
+    expect(download.filename).toMatch(/-repodna-parquet\.zip$/);
+    const files = unzipSync(new Uint8Array(download.bytes));
+    expect(Object.keys(files).sort()).toEqual([
+      'manifest.json',
+      'nodes.parquet',
+      'relationships.parquet',
+      'groups.parquet',
+      'group_memberships.parquet',
+      'unresolved.parquet',
+    ].sort());
+    for (const name of Object.keys(files).filter((file) => file.endsWith('.parquet'))) {
+      expect(decode(files[name].slice(0, 4))).toBe('PAR1');
+      expect(decode(files[name].slice(-4))).toBe('PAR1');
+    }
+    const manifest = JSON.parse(decode(files['manifest.json'])) as {
+      format: string;
+      parquet: { tables: Array<{ name: string; filename: string; columns: unknown[] }> };
+      files: Array<{ name: string; byteSize: number; sha256: string }>;
+    };
+    expect(manifest.format).toBe('parquet');
+    expect(manifest.parquet.tables).toHaveLength(5);
+    expect(manifest.files).toHaveLength(5);
+    expect(manifest.files.every((file) => /^[0-9a-f]{64}$/.test(file.sha256) && file.byteSize > 0)).toBe(true);
   });
 });
