@@ -720,10 +720,12 @@ function isRoutePathIncomplete(project: RepoDNAProject, route: RouteRecord): boo
 
 function Overview({
   project,
+  deepProject,
   onOpenArchitecture,
   onOpenRoutes,
 }: {
   project: RepoDNAProject;
+  deepProject?: RepoDNAProjectV2 | null;
   onOpenArchitecture: () => void;
   onOpenRoutes: () => void;
 }) {
@@ -732,8 +734,10 @@ function Overview({
   const incompletePaths = project.diagnostics.filter((item) => item.code === 'EXPRESS_ROUTE_PATH_INCOMPLETE').length;
   // Truthful size classification per spec: use first-party source files AND LOC
   // Small: <50 files AND <10k LOC, Medium: 50–249 OR 10k–50k, Large: 250–999 OR 50k–250k, Very large: >=1000 OR >=250k
-  const firstPartyFileCount = project.repository.sourceFileCount;
-  const firstPartyLoc = project.files
+  const inventory = deepProject?.inventory ?? null;
+  const coverage = deepProject?.coverage ?? null;
+  const firstPartyFileCount = inventory?.firstPartySourceFileCount ?? project.repository.sourceFileCount;
+  const firstPartyLoc = inventory?.firstPartyLoc ?? project.files
     .filter((f) => ['Python', 'JavaScript', 'TypeScript', 'Go'].includes(f.language))
     .reduce((acc, f) => acc + f.lines, 0);
   const codebaseSize = (() => {
@@ -742,10 +746,19 @@ function Overview({
     if (firstPartyFileCount >= 50 || firstPartyLoc >= 10_000) return 'Medium codebase';
     return 'Small codebase';
   })();
+  const coveragePercentage = coverage?.percentage ?? project.metrics.parseSuccessRate;
+  const parsedCount = coverage?.parsed ?? inventory?.parsedFileCount ?? project.repository.sourceFileCount;
+  const partialCount = coverage?.partial ?? inventory?.partiallyParsedFileCount ?? 0;
+  const failedCount = inventory?.failedFileCount ?? project.files.filter((f) => f.error).length;
+  const skippedCount = coverage?.skipped ?? (inventory ? Object.values(inventory.skippedByReason).reduce((a, b) => a + b, 0) : 0);
+  const ignoredCount = coverage?.ignored ?? inventory?.ignoredFileCount ?? 0;
+  const unsupportedCount = coverage?.unsupported ?? inventory?.unsupportedSourceFileCount ?? 0;
+  const unresolvedRelationships = deepProject?.unresolved.length ?? project.diagnostics.filter((d) => d.code.includes('UNRESOLVED')).length;
+  const truncationReasons = coverage?.truncationReasons ?? inventory?.truncation?.hitLimits ?? [];
   // Never display "Fully mapped" unless all supported first-party files parsed and no limits/truncation
   const hasSkippedDiagnostics = project.diagnostics.some(
-    (d) => d.code.startsWith('skipped_') || ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_PARSE_PARTIAL', 'SOURCE_PARSE_FAILED', 'GRAPH_NODES_COMPACTED', 'GRAPH_EDGES_COMPACTED'].includes(d.code)
-  );
+    (d) => d.code.startsWith('skipped_') || ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_PARSE_PARTIAL', 'SOURCE_PARSE_FAILED', 'GRAPH_NODES_COMPACTED', 'GRAPH_EDGES_COMPACTED', 'GITHUB_TREE_TRUNCATED'].includes(d.code)
+  ) || truncationReasons.length > 0 || skippedCount > 0;
   const hasUnresolvedRoutes = incompletePaths > 0;
   const isFullyMapped = project.metrics.parseSuccessRate === 100 && !hasSkippedDiagnostics && !hasUnresolvedRoutes;
   const mapQualityLabel = isFullyMapped ? 'Fully mapped' : hasUnresolvedRoutes || hasSkippedDiagnostics ? (project.metrics.parseSuccessRate < 70 ? 'Coverage limited' : 'Mostly mapped') : 'Mostly mapped';
@@ -837,6 +850,29 @@ function Overview({
 
           <RouteCoverageWarning project={project} collapsible />
 
+          <section className="panel coverage-panel" aria-label="Scan coverage">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Scan coverage</p>
+                <h2>{coveragePercentage}% · {mapQualityLabel}</h2>
+              </div>
+              <span>{formatNumber(parsedCount)} parsed</span>
+            </div>
+            <div className="coverage-grid">
+              <div><span>Parsed</span><strong>{formatNumber(parsedCount)}</strong></div>
+              <div><span>Skipped</span><strong>{formatNumber(skippedCount)}</strong></div>
+              <div><span>Partial</span><strong>{formatNumber(partialCount)}</strong></div>
+              <div><span>Unresolved relationships</span><strong>{formatNumber(unresolvedRelationships)}</strong></div>
+            </div>
+            {truncationReasons.length > 0 && (
+              <div className="coverage-truncation">
+                <p className="eyebrow">Truncation</p>
+                <p>{truncationReasons.join(', ')}</p>
+              </div>
+            )}
+            <p className="coverage-note">Some connections could not be proven statically. RepoDNA has marked them as uncertain instead of presenting them as confirmed.</p>
+          </section>
+
           <section className="panel reading-panel">
             <div className="panel-heading">
               <div>
@@ -881,6 +917,35 @@ function Overview({
               <strong>{project.metrics.complexityScore}/100</strong>
               <i>Structural score</i>
             </article>
+          </section>
+
+          <section className="panel coverage-panel" aria-label="Scan coverage details">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Scan coverage</p>
+                <h2>{coveragePercentage}% parsed · {formatNumber(parsedCount)}/{formatNumber(firstPartyFileCount)} files</h2>
+              </div>
+              <span>{truncationReasons.length ? truncationReasons.join(', ') : 'No truncation'}</span>
+            </div>
+            <div className="coverage-grid technical">
+              <div><span>Parsed</span><strong>{formatNumber(parsedCount)}</strong></div>
+              <div><span>Partial</span><strong>{formatNumber(partialCount)}</strong></div>
+              <div><span>Failed</span><strong>{formatNumber(failedCount)}</strong></div>
+              <div><span>Skipped</span><strong>{formatNumber(skippedCount)}</strong></div>
+              <div><span>Ignored</span><strong>{formatNumber(ignoredCount)}</strong></div>
+              <div><span>Unsupported</span><strong>{formatNumber(unsupportedCount)}</strong></div>
+              <div><span>Unresolved routes</span><strong>{formatNumber(incompletePaths)}</strong></div>
+              <div><span>Unresolved relationships</span><strong>{formatNumber(unresolvedRelationships)}</strong></div>
+            </div>
+            {inventory && (
+              <div className="coverage-inventory">
+                <p className="eyebrow">Inventory</p>
+                <p>{formatNumber(inventory.totalFileCount)} total files · {formatNumber(inventory.candidateFileCount)} candidates · {formatNumber(inventory.firstPartySourceFileCount)} first-party · {inventory.acquisitionMode ?? 'archive'}{inventory.truncation?.hitLimits.length ? ` · ${inventory.truncation.hitLimits.join(', ')}` : ''}</p>
+                {Object.keys(inventory.skippedByReason).length > 0 && (
+                  <p>Skipped: {Object.entries(inventory.skippedByReason).map(([reason, count]) => `${reason} ${count}`).join(' · ')}</p>
+                )}
+              </div>
+            )}
           </section>
 
           <RouteCoverageWarning project={project} collapsible />
@@ -2362,6 +2427,7 @@ function WorkspaceContent() {
         {view === 'overview' && (
           <Overview
             project={project}
+            deepProject={deepProject}
             onOpenArchitecture={() => handleSwitchView('architecture')}
             onOpenRoutes={() => handleSwitchView('routes')}
           />
