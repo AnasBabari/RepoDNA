@@ -1,7 +1,11 @@
 import NextAuth, { type NextAuthConfig } from 'next-auth';
 import GitHub from 'next-auth/providers/github';
 import crypto from 'crypto';
-import { getGitHubAppCredentials, getGitHubAuthMode } from './github-app';
+import {
+  assertGitHubAppEnvIfRequired,
+  getGitHubAppCredentials,
+  getGitHubAuthMode,
+} from './github-app';
 
 export const AUTH_MAX_AGE_SECONDS = 8 * 60 * 60; // 8 hours
 
@@ -41,6 +45,7 @@ function resolveGitHubProviderConfig() {
 }
 
 const githubProviderConfig = resolveGitHubProviderConfig();
+assertGitHubAppEnvIfRequired();
 
 export const authConfig: NextAuthConfig = {
   providers: [

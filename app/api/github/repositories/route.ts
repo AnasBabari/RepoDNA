@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '../../../lib/auth';
-import { isGitHubAppMode } from '../../../lib/github-app';
+import {
+  GitHubAppRequestError,
+  isGitHubAppMode,
+  listUserInstallationRepositories,
+  listUserInstallations,
+  type GitHubAppInstallation,
+  type GitHubAppRepository,
+} from '../../../lib/github-app';
 import { getGitHubAccessToken } from '../../../lib/github-session';
 
 export const dynamic = 'force-dynamic';
+
+const REPOSITORIES_PER_RESPONSE = 15;
+const GITHUB_PAGE_SIZE = 100;
+const MAX_INSTALLATION_PAGES = 10;
+const MAX_REPOSITORY_PAGES_PER_INSTALLATION = 50;
+
+function privateJson(body: unknown, init: ResponseInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set('Cache-Control', 'no-store, private, max-age=0');
+  headers.set('Vary', 'Cookie');
+  return NextResponse.json(body, { ...init, headers });
+}
 
 export interface SafeRepositoryItem {
   id: number;
@@ -18,6 +37,57 @@ export interface SafeRepositoryItem {
   stars: number;
 }
 
+async function listInstalledRepositories(
+  accessToken: string,
+  signal: AbortSignal
+): Promise<{ repositories: GitHubAppRepository[]; truncated: boolean }> {
+  const installations: GitHubAppInstallation[] = [];
+  let truncated = false;
+
+  for (let page = 1; page <= MAX_INSTALLATION_PAGES; page += 1) {
+    const result = await listUserInstallations(accessToken, {
+      page,
+      perPage: GITHUB_PAGE_SIZE,
+      signal,
+    });
+    installations.push(...result.installations);
+    if (
+      result.installations.length < GITHUB_PAGE_SIZE ||
+      installations.length >= result.total_count
+    ) {
+      break;
+    }
+    if (page === MAX_INSTALLATION_PAGES) truncated = true;
+  }
+
+  const repositories: GitHubAppRepository[] = [];
+  for (const installation of installations) {
+    let installationRepositoryCount = 0;
+    for (let page = 1; page <= MAX_REPOSITORY_PAGES_PER_INSTALLATION; page += 1) {
+      const result = await listUserInstallationRepositories(accessToken, installation.id, {
+        page,
+        perPage: GITHUB_PAGE_SIZE,
+        signal,
+      });
+      repositories.push(...result.repositories);
+      installationRepositoryCount += result.repositories.length;
+
+      if (
+        result.repositories.length < GITHUB_PAGE_SIZE ||
+        installationRepositoryCount >= result.total_count
+      ) {
+        break;
+      }
+      if (page === MAX_REPOSITORY_PAGES_PER_INSTALLATION) truncated = true;
+    }
+  }
+
+  const uniqueRepositories = new Map<number, GitHubAppRepository>();
+  for (const repository of repositories) uniqueRepositories.set(repository.id, repository);
+
+  return { repositories: [...uniqueRepositories.values()], truncated };
+}
+
 export async function GET(request: NextRequest) {
   let session = null;
   let accessToken: string | undefined;
@@ -28,7 +98,7 @@ export async function GET(request: NextRequest) {
   } catch {}
 
   if (!session?.user || !accessToken) {
-    return NextResponse.json(
+    return privateJson(
       {
         success: false,
         error: {
@@ -42,148 +112,183 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const requestedPage = Number(searchParams.get('page') || '1');
+    const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
     const query = searchParams.get('query')?.trim() || '';
-    const perPage = 15;
-    // In GitHub App mode the user token is installation-scoped (contents:read).
-    // Primary source is still /user/repos (GitHub filters to installed repos when
-    // the token is from a GitHub App). We keep that as default for parity and
-    // fall back to the installation endpoint for completeness.
-    let githubUrl: string;
-    if (query) {
-      githubUrl = `https://api.github.com/user/repos?sort=updated&direction=desc&per_page=100&affiliation=owner,collaborator,organization_member`;
-    } else {
-      githubUrl = `https://api.github.com/user/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}&affiliation=owner,collaborator,organization_member`;
-    }
-    // Note: installation-scoped strict listing via
-    // `GET /installation/repositories` after exchanging an installation token
-    // is available in `app/lib/github-app.ts:createInstallationAccessToken` and
-    // can replace the above when a specific installationId is resolved.
-    // Keeping /user/repos as default preserves pagination/filtering behavior
-    // across both OAuth and App OAuth tokens without additional round-trips.
-
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    let ghResponse: Response;
     try {
-      ghResponse = await fetch(githubUrl, {
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'RepoDNA-V1.1',
-        },
+      let rawRepos: GitHubAppRepository[];
+      let listingTruncated = false;
+
+      if (isGitHubAppMode()) {
+        // A GitHub App user token can enumerate only the installations and
+        // repositories the user is allowed to access. Do not use /user/repos
+        // here: it is an OAuth-oriented endpoint and obscures install scope.
+        const listing = await listInstalledRepositories(accessToken, controller.signal);
+        rawRepos = listing.repositories;
+        listingTruncated = listing.truncated;
+      } else {
+        let githubUrl: string;
+        if (query) {
+          githubUrl = `https://api.github.com/user/repos?sort=updated&direction=desc&per_page=${GITHUB_PAGE_SIZE}&affiliation=owner,collaborator,organization_member`;
+        } else {
+          githubUrl = `https://api.github.com/user/repos?sort=updated&direction=desc&per_page=${REPOSITORIES_PER_RESPONSE}&page=${page}&affiliation=owner,collaborator,organization_member`;
+        }
+
+        const ghResponse = await fetch(githubUrl, {
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'RepoDNA-V1.1',
+          },
+        });
+
+        if (ghResponse.status === 401) {
+          return privateJson(
+            {
+              success: false,
+              error: {
+                code: 'UNAUTHORIZED',
+                message: 'GitHub OAuth token expired or was revoked. Please sign in again.',
+              },
+            },
+            { status: 401 }
+          );
+        }
+
+        if (ghResponse.status === 403) {
+          return privateJson(
+            {
+              success: false,
+              error: {
+                code: 'FORBIDDEN',
+                message: 'Access denied by GitHub. If accessing organization repositories, ensure OAuth App access is granted in organization settings.',
+              },
+            },
+            { status: 403 }
+          );
+        }
+
+        if (ghResponse.status === 429) {
+          return privateJson(
+            {
+              success: false,
+              error: {
+                code: 'RATE_LIMITED',
+                message: 'GitHub API rate limit reached. Please try again in a few minutes.',
+              },
+            },
+            { status: 429 }
+          );
+        }
+
+        if (!ghResponse.ok) {
+          return privateJson(
+            {
+              success: false,
+              error: {
+                code: 'UPSTREAM_GITHUB_ERROR',
+                message: `GitHub returned status ${ghResponse.status}: ${ghResponse.statusText}`,
+              },
+            },
+            { status: 502 }
+          );
+        }
+
+        rawRepos = (await ghResponse.json()) as GitHubAppRepository[];
+      }
+
+      let filtered = rawRepos;
+      if (query) {
+        const qLower = query.toLowerCase();
+        filtered = rawRepos.filter(
+          (repository) =>
+            repository.name.toLowerCase().includes(qLower) ||
+            repository.full_name.toLowerCase().includes(qLower) ||
+            (repository.description && repository.description.toLowerCase().includes(qLower))
+        );
+      }
+
+      filtered.sort((left, right) => {
+        const updatedDifference =
+          (Date.parse(right.updated_at) || 0) - (Date.parse(left.updated_at) || 0);
+        return updatedDifference || left.full_name.localeCompare(right.full_name);
+      });
+
+      const startIndex = (page - 1) * REPOSITORIES_PER_RESPONSE;
+      const pageRepositories = filtered.slice(startIndex, startIndex + REPOSITORIES_PER_RESPONSE);
+
+      // Map strictly to safe subset (no sensitive metadata)
+      const repositories: SafeRepositoryItem[] = pageRepositories.map((repository) => ({
+        id: repository.id,
+        fullName: repository.full_name,
+        name: repository.name,
+        owner: repository.owner.login,
+        isPrivate: repository.private,
+        defaultBranch: repository.default_branch || 'main',
+        updatedAt: repository.updated_at,
+        description: repository.description ?? null,
+        language: repository.language ?? null,
+        stars: repository.stargazers_count || 0,
+      }));
+
+      return privateJson({
+        success: true,
+        page,
+        perPage: REPOSITORIES_PER_RESPONSE,
+        hasMore: listingTruncated || startIndex + repositories.length < filtered.length,
+        repositories,
       });
     } finally {
       clearTimeout(timeoutId);
     }
-
-    if (ghResponse.status === 401) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'GitHub OAuth token expired or was revoked. Please sign in again.',
+  } catch (error) {
+    // GitHub App user tokens use fine-grained installation endpoints. Keep
+    // their failure messages distinct so the picker can explain remediation.
+    // OAuth errors above retain the existing response contract.
+    if (error instanceof GitHubAppRequestError) {
+      if (error.status === 401) {
+        return privateJson(
+          {
+            success: false,
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'GitHub App access expired or was revoked. Please sign in again.',
+            },
           },
-        },
-        { status: 401 }
-      );
-    }
-
-    if (ghResponse.status === 403) {
-      const isApp = isGitHubAppMode();
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'FORBIDDEN',
-            message: isApp
-              ? 'Access denied by GitHub. If accessing organization repositories, ensure the GitHub App is installed on the requested repositories/organization and the installation has contents:read.'
-              : 'Access denied by GitHub. If accessing organization repositories, ensure OAuth App access is granted in organization settings.',
+          { status: 401 }
+        );
+      }
+      if (error.status === 403) {
+        return privateJson(
+          {
+            success: false,
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Access denied by GitHub. Install RepoDNA on the organization or repositories you want to inspect, with contents:read and metadata:read.',
+            },
           },
-        },
-        { status: 403 }
-      );
-    }
-
-    if (ghResponse.status === 429) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'RATE_LIMITED',
-            message: 'GitHub API rate limit reached. Please try again in a few minutes.',
+          { status: 403 }
+        );
+      }
+      if (error.status === 429) {
+        return privateJson(
+          {
+            success: false,
+            error: {
+              code: 'RATE_LIMITED',
+              message: 'GitHub API rate limit reached. Please try again in a few minutes.',
+            },
           },
-        },
-        { status: 429 }
-      );
+          { status: 429 }
+        );
+      }
     }
-
-    if (!ghResponse.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'UPSTREAM_GITHUB_ERROR',
-            message: `GitHub returned status ${ghResponse.status}: ${ghResponse.statusText}`,
-          },
-        },
-        { status: 502 }
-      );
-    }
-
-    const rawRepos = (await ghResponse.json()) as Array<{
-      id: number;
-      full_name: string;
-      name: string;
-      owner: { login: string };
-      private: boolean;
-      default_branch: string;
-      updated_at: string;
-      description: string | null;
-      language: string | null;
-      stargazers_count: number;
-    }>;
-
-    let filtered = rawRepos;
-    if (query) {
-      const qLower = query.toLowerCase();
-      filtered = rawRepos.filter(
-        (r) =>
-          r.name.toLowerCase().includes(qLower) ||
-          r.full_name.toLowerCase().includes(qLower) ||
-          (r.description && r.description.toLowerCase().includes(qLower))
-      );
-      // Slice for pagination when doing client query filtering
-      const startIndex = (page - 1) * perPage;
-      filtered = filtered.slice(startIndex, startIndex + perPage);
-    }
-
-    // Map strictly to safe subset (no sensitive metadata)
-    const repositories: SafeRepositoryItem[] = filtered.map((r) => ({
-      id: r.id,
-      fullName: r.full_name,
-      name: r.name,
-      owner: r.owner.login,
-      isPrivate: r.private,
-      defaultBranch: r.default_branch || 'main',
-      updatedAt: r.updated_at,
-      description: r.description ?? null,
-      language: r.language ?? null,
-      stars: r.stargazers_count || 0,
-    }));
-
-    return NextResponse.json({
-      success: true,
-      page,
-      perPage,
-      hasMore: repositories.length === perPage,
-      repositories,
-    });
-  } catch {
-    return NextResponse.json(
+    return privateJson(
       {
         success: false,
         error: {

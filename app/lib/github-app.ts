@@ -6,14 +6,78 @@ import crypto from 'crypto';
  * This module is intentionally side-effect free and never reads ambient
  * GITHUB_TOKEN/GITHUB_PAT. It only signs a short-lived App JWT (RS256, 10m)
  * from GITHUB_APP_PRIVATE_KEY and exchanges it for per-installation / user
- * tokens. When env is absent, all helpers return null / isGitHubAppMode()
- * is false and callers fall back to the existing OAuth App flow.
+ * tokens. Credential and JWT helpers fail closed when env is absent;
+ * GitHub listing helpers surface non-2xx responses as
+ * GitHubAppRequestError; token exchange fails closed with null.
+ * The route boundary decides when it is safe to fall back to OAuth.
  *
  * No caller should ever fall back to an ambient server PAT — see
  * tests/unit/security-invariants.test.ts:8.
  */
 
 export type GitHubAuthMode = 'github-app' | 'oauth';
+
+const GITHUB_API_VERSION = '2022-11-28';
+
+export interface GitHubAppListOptions {
+  page?: number;
+  perPage?: number;
+  signal?: AbortSignal;
+}
+
+export interface GitHubAppInstallation {
+  id: number;
+  account: { login: string; type?: string };
+  repository_selection: string;
+}
+
+export interface GitHubAppRepository {
+  id: number;
+  full_name: string;
+  name: string;
+  owner: { login: string };
+  private: boolean;
+  default_branch: string;
+  updated_at: string;
+  description: string | null;
+  language: string | null;
+  stargazers_count: number;
+}
+
+export class GitHubAppRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`GitHub App API request failed with status ${status}.`);
+    this.name = 'GitHubAppRequestError';
+    this.status = status;
+  }
+}
+
+function githubApiHeaders(token: string, scheme: 'Bearer' | 'token' = 'Bearer'): HeadersInit {
+  return {
+    Authorization: `${scheme} ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': GITHUB_API_VERSION,
+    'User-Agent': 'RepoDNA-V1.1',
+  };
+}
+
+function normalizeListOptions(options?: GitHubAppListOptions | AbortSignal): GitHubAppListOptions {
+  if (options && typeof options === 'object' && 'aborted' in options) {
+    return { signal: options as AbortSignal };
+  }
+  return options ?? {};
+}
+
+async function fetchGitHubAppJson<T>(url: string, token: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(url, {
+    signal,
+    headers: githubApiHeaders(token),
+  });
+  if (!response.ok) throw new GitHubAppRequestError(response.status);
+  return (await response.json()) as T;
+}
 
 export function getGitHubAuthMode(): GitHubAuthMode {
   const override = (process.env.GITHUB_AUTH_MODE || '').toLowerCase().trim();
@@ -22,7 +86,8 @@ export function getGitHubAuthMode(): GitHubAuthMode {
   const hasAppCreds = Boolean(
     process.env.GITHUB_APP_ID &&
       process.env.GITHUB_APP_PRIVATE_KEY &&
-      (process.env.GITHUB_APP_CLIENT_ID || process.env.AUTH_GITHUB_ID)
+      (process.env.GITHUB_APP_CLIENT_ID || process.env.AUTH_GITHUB_ID) &&
+      (process.env.GITHUB_APP_CLIENT_SECRET || process.env.AUTH_GITHUB_SECRET)
   );
   return hasAppCreds ? 'github-app' : 'oauth';
 }
@@ -98,7 +163,8 @@ export async function createInstallationAccessToken(
     signal: opts?.signal,
     headers: {
       Authorization: `Bearer ${jwt}`,
-      Accept: 'application/vnd.github.v3+json',
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': GITHUB_API_VERSION,
       'User-Agent': 'RepoDNA-V1.1',
     },
   });
@@ -109,24 +175,44 @@ export async function createInstallationAccessToken(
 }
 
 /**
- * List installations accessible to the authenticated user (via user-to-server token).
- * When in GitHub App OAuth mode, this is the installation-scoped listing that
- * respects per-repo install selection — unlike /user/repos with broad `repo` scope.
+ * List installations accessible to the authenticated user (via a GitHub App
+ * user access token). The token does not need the broad OAuth `repo` scope.
  */
-export async function listUserInstallations(userAccessToken: string, signal?: AbortSignal) {
-  const res = await fetch('https://api.github.com/user/installations', {
-    signal,
-    headers: {
-      Authorization: `Bearer ${userAccessToken}`,
-      Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'RepoDNA-V1.1',
-    },
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as {
+export async function listUserInstallations(
+  userAccessToken: string,
+  options?: GitHubAppListOptions | AbortSignal
+): Promise<{
     total_count: number;
-    installations: Array<{ id: number; account: { login: string }; repository_selection: string }>;
-  };
+    installations: GitHubAppInstallation[];
+  }> {
+  const normalized = normalizeListOptions(options);
+  const url = new URL('https://api.github.com/user/installations');
+  url.searchParams.set('per_page', String(Math.min(100, Math.max(1, normalized.perPage ?? 100))));
+  url.searchParams.set('page', String(Math.max(1, normalized.page ?? 1)));
+  return fetchGitHubAppJson(url.toString(), userAccessToken, normalized.signal);
+}
+
+/**
+ * List only the repositories the authenticated user can access through one
+ * installation. This is the authoritative GitHub App endpoint for selected
+ * repository installations and avoids treating every user repository as App
+ * accessible.
+ */
+export async function listUserInstallationRepositories(
+  userAccessToken: string,
+  installationId: number | string,
+  options?: GitHubAppListOptions | AbortSignal
+): Promise<{
+  total_count: number;
+  repositories: GitHubAppRepository[];
+}> {
+  const normalized = normalizeListOptions(options);
+  const url = new URL(
+    `https://api.github.com/user/installations/${encodeURIComponent(String(installationId))}/repositories`
+  );
+  url.searchParams.set('per_page', String(Math.min(100, Math.max(1, normalized.perPage ?? 100))));
+  url.searchParams.set('page', String(Math.max(1, normalized.page ?? 1)));
+  return fetchGitHubAppJson(url.toString(), userAccessToken, normalized.signal);
 }
 
 /**
