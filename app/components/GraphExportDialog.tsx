@@ -125,6 +125,7 @@ export function GraphExportDialog({
   const [cacheWarning, setCacheWarning] = useState<string | null>(null);
   const abortControllers = useRef<Partial<Record<GraphExportFormat, AbortController>>>({});
   const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   const visibleFormats = useMemo(
     () => ALL_FORMATS.filter((format) => format !== 'parquet' || process.env.NEXT_PUBLIC_REPODNA_PARQUET_EXPORT === 'true'),
@@ -138,11 +139,12 @@ export function GraphExportDialog({
   }, [onClose]);
 
   useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
     const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
     const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
-    focusables()[0]?.focus();
+    const initialFocus = dialog?.querySelector<HTMLElement>('.graph-export-close') ?? focusables()[0];
+    initialFocus?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -167,7 +169,7 @@ export function GraphExportDialog({
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      previouslyFocused?.focus();
+      if (previouslyFocusedRef.current?.isConnected) previouslyFocusedRef.current.focus();
     };
   }, [closeDialog]);
 
@@ -335,15 +337,17 @@ export function GraphExportDialog({
           expiresAt,
         });
         recordAnalytics(format, cacheLayer, false, true, startedAt, file.byteSize);
-      } catch (error) {
-        if ((error as Error).name === 'AbortError' || controller.signal.aborted) {
-          updateState(format, emptyState());
+    } catch (error) {
+      if ((error as Error).name === 'AbortError' || controller.signal.aborted) {
+        updateState(format, emptyState());
           return;
         }
         updateState(format, { status: 'error', error: friendlyError(error) });
         recordAnalytics(format, cacheLayer, false, false, startedAt, 0);
       } finally {
-        delete abortControllers.current[format];
+        if (abortControllers.current[format] === controller) {
+          delete abortControllers.current[format];
+        }
       }
     },
     [artifact, browserRetention, manifest, origin, publicIdentity, recordAnalytics, updateState]
@@ -366,7 +370,7 @@ export function GraphExportDialog({
   }, [artifact]);
 
   return (
-    <div className="graph-export-overlay" role="presentation" onMouseDown={closeDialog}>
+    <div className="graph-export-overlay" role="presentation" onPointerDown={closeDialog}>
       <div
         ref={dialogRef}
         className="graph-export-dialog"
@@ -374,7 +378,7 @@ export function GraphExportDialog({
         aria-modal="true"
         aria-labelledby="graph-export-title"
         aria-describedby="graph-export-description"
-        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="graph-export-header">
           <div>

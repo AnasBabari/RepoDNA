@@ -6,7 +6,7 @@ RepoDNA has one canonical, provider-neutral graph document and several determini
 
 1. Analyze a repository and open **Relationship explorer → Code Graph**.
 2. Select **Export**.
-3. Choose JSON, CSV tables, Neo4j Cypher, or Parquet when the Parquet feature flag is enabled.
+3. Choose JSON, CSV tables, Neo4j Cypher, Parquet when the Parquet feature flag is enabled, or the human-readable Architecture TXT report.
 4. The export is generated in a worker when the browser supports workers. A cached browser copy or a private Vercel Blob copy is reused when available.
 5. The dialog reports whether the result was generated or served from cache and downloads the verified bytes.
 
@@ -20,6 +20,7 @@ The export is independent of the graph's visual filter, layout, zoom, and viewpo
 | CSV tables | `*-repodna-csv.zip` | Excel, DuckDB, pandas, SQL import | Enabled |
 | Neo4j Cypher | `*-repodna-cypher.txt` | Neo4j 5+ | Enabled |
 | Parquet tables | `*-repodna-parquet.zip` | DuckDB, PyArrow, data-lake tools | Production-verified and enabled on Vercel via `NEXT_PUBLIC_REPODNA_PARQUET_EXPORT=true` |
+| Architecture TXT | `*-repodna-architecture.txt` | Reviews, tickets, offline handoff | Enabled; deterministic report, no AI |
 
 Every format contains the same logical graph. Serializers use stable ID ordering, the export schema version, the source artifact SHA-256, and deterministic metadata. ZIP members use a fixed timestamp so repeated exports of the same artifact are byte-identical.
 
@@ -125,7 +126,7 @@ For an explicit browser-cache opt-in, IndexedDB stores normalized analysis artif
 
 ## Large repositories and honest completeness
 
-The archive guardrails still apply before graph export: 25 MiB compressed archive, 100 MiB extracted content, 20,000 archive entries, 10,000 candidate source files, 1 MiB per file, and a 20-second GitHub fetch timeout. These are resource-safety limits, not a claim that every repository has been fully understood.
+Private/browser analysis retains the strict 25 MiB compressed-archive, 100 MiB extracted-content, 20,000-entry, 10,000-candidate-file, 1 MiB-per-file, and 20-second fetch limits. Public durable analysis has a separate bounded path: it permits up to a 128 MiB archive, 192 MiB extracted content, 100,000 archive entries, and 20,000 candidate files, and preflights large repositories into Git tree acquisition at 50,000 KB. The interactive v2 artifact then caps the graph at 8,000 nodes and 12,000 edges, while the canvas renders at most 240 nodes and 240 edges. These are resource-safety and responsiveness limits, not a claim that every repository has been fully understood.
 
 When analysis is partial, the export preserves the analyzer's `coverage.percentage`, `coverage.truncationReasons`, `completeness.status`, and `completeness.reasons`. A relationship that cannot be resolved is represented in `relationships` and `unresolved` rather than replaced by a visually complete edge. Consumers should use `status`, `confidence`, and the unresolved table when making decisions about architecture.
 
