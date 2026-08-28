@@ -26,6 +26,20 @@ RepoDNA performs **purely static syntax and structural analysis** without execut
   - `0.80`: Repository-unique symbol resolution.
   - `0.55`: Heuristic name matching across modules.
 
+### 5. Large repositories and bounded graph rendering
+- **What is detected**: Public durable analyses inventory the repository first and
+  use Git tree acquisition when GitHub's repository-size hint reaches the large-
+  repository threshold. The resulting artifact retains inventory counts,
+  skipped-path reasons, coverage, and graph-compaction diagnostics.
+- **Limitation**: The v2 artifact and interactive canvas use explicit node/edge
+  budgets so a dense repository does not freeze the browser. Compaction keeps
+  high-signal structural entities and balanced relationship families, but the
+  rendered graph is not a complete list of every source-level entity.
+- **How to interpret it**: Treat `coverage`, `completeness`, `security.truncated`,
+  `inventory.skippedByReason`, and unresolved relationships as part of the result.
+  RepoDNA reports omitted or uncertain material instead of drawing a complete-
+  looking graph.
+
 ---
 
 ## Why Pure Static Analysis?

@@ -9,7 +9,7 @@ Live Demo: **[repodna-one.vercel.app](https://repodna-one.vercel.app)**
 ### 🌟 What's New in v1.1.0
 
 #### 1. 🔒 Private Repository Ingestion (Beta)
-- **GitHub OAuth Integration**: Connect your GitHub account with transparent scope handling (using OAuth `repo` scope required by GitHub OAuth Apps for private archive access; RepoDNA itself performs strictly read-only analysis in memory).
+- **GitHub private access**: Connect your GitHub account; configured deployments use a GitHub App with per-installation `contents:read` and `metadata:read` permissions, while the legacy OAuth `repo` scope remains a compatibility fallback. RepoDNA itself performs strictly read-only analysis in memory.
 - **Transience by Design**: Private archives are parsed strictly in memory and never stored to disk or databases.
 - **Interactive Repository Selector**: Search, filter, and analyze private and public repos with explicit scope disclosure and one-click disconnect.
 

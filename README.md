@@ -36,6 +36,7 @@ Paste any public GitHub repository link to decode architecture layers, execution
 ### 2. Private Repositories (Beta)
 Sign in with GitHub to access your private repositories:
 - **Scope Transparency**: When configured, private repository support uses a GitHub App installation with per-repository `contents:read` and `metadata:read` permissions. OAuth `repo` scope remains a compatibility fallback when the App is not configured. RepoDNA performs read-only analysis transiently in memory and never modifies repository code.
+- **Installed-repository listing**: In App mode, RepoDNA first lists the installations you can access and then calls the per-installation repository endpoint. It does not use a broad `/user/repos` listing in this mode.
 - **Revocation**: Easily disconnect access at any time via the UI or GitHub Settings.
 - **Transience**: OAuth tokens and repository code are never saved to disk or databases.
 
@@ -101,9 +102,12 @@ Exports use a private seven-day Vercel Blob cache for public commit-addressed an
 | **Candidate repository files** | 10,000 files | Returns `413 TOO_MANY_FILES` |
 | **Individual file size** | 1 MB (1,000,000 bytes) | Skipped with diagnostic (`exceeds_file_size_limit`) |
 | **Declared compression ratio** | 200:1 (entries > 256 KB) | Returns `413 SUSPICIOUS_COMPRESSION_RATIO` |
-| **Compressed archive** | 25 MB (26,214,400 bytes) | Returns `413 ARCHIVE_TOO_LARGE` |
-| **Total extracted content** | 100 MB (104,857,600 bytes) | Returns `413 EXTRACTED_TOO_LARGE` (ZIP bomb protection) |
-| **GitHub fetch timeout** | 20 seconds | Returns `504 FETCH_TIMEOUT` |
+| **Private/browser compressed archive** | 25 MB (26,214,400 bytes) | Returns `413 ARCHIVE_TOO_LARGE` |
+| **Private/browser extracted content** | 100 MB (104,857,600 bytes) | Returns `413 EXTRACTED_TOO_LARGE` (ZIP bomb protection) |
+| **Public durable compressed archive** | 128 MB before Git tree fallback | Uses bounded archive or Git tree acquisition |
+| **Public durable extracted content** | 192 MB | Produces an honest partial inventory when bounded limits are reached |
+| **Interactive graph** | 8,000 nodes / 12,000 edges in the v2 artifact; 240 rendered nodes / edges in the live canvas | Preserves full inventory and reports compaction diagnostics |
+| **GitHub fetch timeout** | 20 seconds private/browser; 60 seconds public durable | Returns a controlled upstream timeout/failure |
 
 ---
 
@@ -116,6 +120,13 @@ For production deployments on Vercel:
 AUTH_SECRET="your-32-byte-auth-secret"
 AUTH_GITHUB_ID="your-github-oauth-client-id"
 AUTH_GITHUB_SECRET="your-github-oauth-client-secret"
+
+# Preferred GitHub App mode (contents:read + metadata:read per installation)
+GITHUB_APP_ID="your-numeric-app-id"
+GITHUB_APP_PRIVATE_KEY="your-pem-or-base64-private-key"
+GITHUB_APP_CLIENT_ID="your-Iv1-client-id"
+GITHUB_APP_CLIENT_SECRET="your-app-client-secret"
+GITHUB_AUTH_MODE="github-app" # optional; auto-detects when omitted
 
 # Privacy-Safe Analytics (PostHog EU)
 NEXT_PUBLIC_POSTHOG_KEY="your-posthog-project-api-key"
@@ -131,14 +142,14 @@ UPSTASH_REDIS_REST_TOKEN="your-upstash-token"
 ## Testing, Schema Parity & Quality Assurance
 
 ```bash
-# Run all 104 Vitest unit, security invariant, and smoke tests
+# Run the Vitest unit, security invariant, analyzer, and export-contract tests
 npm run test:unit
 
 # Run Python core test suite (28 unit, parity, and conformance tests)
 npm run test:python
 
-# Run Chrome E2E browser smoke test for drag & view persistence
-node tests/smoke/browser-drag-persistence.mjs
+# Run Playwright browser contracts (use REPODNA_E2E_PORT if port 3000 is busy)
+REPODNA_E2E_PORT=3100 npm run test:e2e
 
 # Run ESLint + Vitest + Next.js build
 npm test

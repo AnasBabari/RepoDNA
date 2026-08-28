@@ -25,7 +25,7 @@ RepoDNA is architected around **Zero Code Execution**:
 
 3. **Isolated Credential Model & Scope Transparency**:
    - Web server ingestion paths never inherit ambient server Personal Access Tokens (`GITHUB_TOKEN` / `GITHUB_PAT`).
-   - Private repository support currently uses GitHub OAuth's `repo` scope because OAuth Apps do not provide read-only private source-code access. RepoDNA itself strictly performs read-only analysis transiently in memory and never modifies repositories or files. Migration to fine-grained GitHub App read-only permissions is planned.
+   - When configured, private repository support uses a GitHub App user token with per-installation `contents:read` and `metadata:read` permissions; users select which repositories the App may access. The legacy OAuth App `repo` scope remains an explicit compatibility fallback only when App mode is not configured. RepoDNA itself strictly performs read-only analysis transiently in memory and never modifies repositories or files.
 
 4. **Resource Bounds & Streaming Ingestion Defenses**:
    - Bounded download sizes with streaming network byte caps (25 MB default archive limit) that cancel downstream connections immediately upon breach.

@@ -128,7 +128,16 @@ export async function checkAnalysisRateLimit({
     }
   }
 
-  // Fallback to in-memory window when Upstash is not configured (e.g. dev)
+  // Fallback to in-memory window when Upstash is not configured.
+  // In production, distributed rate limiting is a security invariant — fail closed
+  // if Upstash is missing so a horizontally-scaled deployment cannot bypass limits
+  // via per-instance memory windows.
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[RateLimit] Upstash Redis not configured in production — failing closed');
+    const error = new Error('Rate limit infrastructure unavailable');
+    (error as Error & { code: string }).code = 'RATE_LIMIT_UNAVAILABLE';
+    throw error;
+  }
   return checkMemoryRateLimit(identifier, limit, quotaType);
 }
 
