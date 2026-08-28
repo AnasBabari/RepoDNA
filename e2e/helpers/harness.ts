@@ -57,7 +57,8 @@ export async function installGraphExportHarness(page: Page): Promise<GraphExport
     [ANALYTICS_CONSENT_KEY]
   );
 
-  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
+  const configuredPort = process.env.REPODNA_E2E_PORT ?? '3000';
+  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${configuredPort}`;
 
   await page.route('**/*', async (route) => {
     const url = route.request().url();

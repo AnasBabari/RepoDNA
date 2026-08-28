@@ -74,7 +74,7 @@ test.describe('graph export browser contract', () => {
     const closeButton = dialog.getByRole('button', { name: 'Close export dialog' });
     await expect(closeButton).toBeFocused();
     await page.keyboard.press('Shift+Tab');
-    await expect(dialog.getByRole('button', { name: /^Export / }).last()).toBeFocused();
+    await expect(dialog.getByRole('button', { name: 'Export TXT', exact: true })).toBeFocused();
 
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
@@ -216,5 +216,22 @@ test.describe('graph export browser contract', () => {
     expect(manifest.parquet.tables).toHaveLength(5);
     expect(manifest.files).toHaveLength(5);
     expect(manifest.files.every((file) => /^[0-9a-f]{64}$/.test(file.sha256) && file.byteSize > 0)).toBe(true);
+  });
+
+  test('exports the human-readable Architecture TXT report', async ({ page }) => {
+    await openSampleExport(page);
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export TXT', exact: true }).click();
+    const download = await downloadPromise;
+    const filename = download.suggestedFilename();
+    const path = await download.path();
+    if (!path) throw new Error(`Download ${filename} did not produce a file path`);
+    const report = readFileSync(path, 'utf8');
+
+    expect(filename).toMatch(/-repodna-architecture\.txt$/);
+    expect(report).toContain('Repository identity');
+    expect(report).toContain('Scan coverage and limitations');
+    expect(report).toContain('Unresolved and ambiguous relationships');
   });
 });

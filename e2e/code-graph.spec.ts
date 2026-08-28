@@ -193,4 +193,26 @@ test.describe('Code Graph view', () => {
 
     await expect(page.locator('aside[aria-label="Node details"]')).toBeVisible();
   });
+
+  test('keeps a large repository graph bounded and represented in the minimap', async ({ page }) => {
+    await page.goto('/?repo=https://github.com/usestrix/strix');
+    await expect(page.getByRole('button', { name: 'Code Graph' })).toBeVisible({ timeout: 60_000 });
+    await page.getByRole('button', { name: 'Code Graph' }).click();
+    await expect(page.locator('.react-flow__node[data-id]').first()).toBeVisible({ timeout: 30_000 });
+
+    const status = await page.locator('.code-graph-status').textContent();
+    expect(status).toMatch(/nodes/);
+    const nodeCount = await page.locator('.react-flow__node[data-id]').count();
+    const minimapNodeCount = await page.locator('.react-flow__minimap-node').count();
+    expect(nodeCount).toBeLessThanOrEqual(240);
+    expect(minimapNodeCount).toBeGreaterThan(0);
+    expect(minimapNodeCount).toBeLessThanOrEqual(nodeCount);
+
+    for (const index of [0, 1, 2, 3, 4, 5, 6, 7]) {
+      await page.locator('.react-flow__node[data-id]').nth(index).locator('.code-node-glyph').click();
+    }
+    await page.waitForTimeout(300);
+    expect(await page.locator('.react-flow__node[data-id]').count()).toBeLessThanOrEqual(240);
+    expect(await page.locator('.react-flow__minimap-node').count()).toBeGreaterThan(0);
+  });
 });
