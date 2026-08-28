@@ -3,6 +3,16 @@ import { defineConfig } from '@playwright/test';
 const requestedPort = Number(process.env.REPODNA_E2E_PORT ?? '3000');
 const e2ePort = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort < 65_536 ? requestedPort : 3000;
 const e2eBaseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${e2ePort}`;
+const webServer = process.env.PLAYWRIGHT_BASE_URL
+  ? undefined
+  : {
+      command: `npm run dev -- --port ${e2ePort}`,
+      url: e2eBaseURL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 240_000,
+      stdout: 'ignore' as const,
+      stderr: 'pipe' as const,
+    };
 
 export default defineConfig({
   testDir: 'e2e',
@@ -19,12 +29,5 @@ export default defineConfig({
     navigationTimeout: 90_000,
     trace: 'retain-on-failure',
   },
-  webServer: {
-    command: `npm run dev -- --port ${e2ePort}`,
-    url: e2eBaseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 240_000,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
+  webServer,
 });
