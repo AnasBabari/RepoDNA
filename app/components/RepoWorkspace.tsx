@@ -244,8 +244,6 @@ function LandingView({
   onOpenPrivatePicker,
   onOpenFeedback,
   session,
-  retentionEnabled,
-  onRetentionChange,
   recentArtifacts,
   onOpenRecent,
   onRemoveRecent,
@@ -258,8 +256,6 @@ function LandingView({
   onOpenPrivatePicker: () => void;
   onOpenFeedback: () => void;
   session: { user?: { name?: string; image?: string } } | null;
-  retentionEnabled: boolean;
-  onRetentionChange: (enabled: boolean) => void;
   recentArtifacts: BrowserCachedArtifact[];
   onOpenRecent: (entry: BrowserCachedArtifact) => void;
   onRemoveRecent: (entry: BrowserCachedArtifact) => void;
@@ -368,8 +364,6 @@ function LandingView({
             Analyze Repository <span>→</span>
           </button>
         </form>
-
-        <BrowserRetentionToggle checked={retentionEnabled} onChange={onRetentionChange} />
 
         <div className="landing-chips-row">
           <span className="label">Featured repos:</span>
@@ -2361,8 +2355,6 @@ function WorkspaceContent() {
           }}
           onOpenFeedback={() => setFeedbackModalOpen(true)}
           session={session}
-          retentionEnabled={exportConsent}
-          onRetentionChange={handleRetentionChange}
           recentArtifacts={recentArtifacts}
           onOpenRecent={handleOpenRecent}
           onRemoveRecent={(entry) => void handleRemoveRecent(entry)}

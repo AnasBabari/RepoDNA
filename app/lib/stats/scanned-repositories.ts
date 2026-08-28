@@ -49,6 +49,7 @@ export function hashOwnerRepo(owner: string, repo: string): string | null {
 
 /**
  * Record a unique public repository that completed a successful server-side analysis.
+ * The durable workflow and the legacy server fallback both use this hook.
  * Idempotent: repeated calls for the same owner/repo do not inflate the counter.
  * Never stores raw repository names, only the SHA-256 hash of the normalized identity.
  * Telemetry failure never throws to the caller — analysis must succeed regardless.

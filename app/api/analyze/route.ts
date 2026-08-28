@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { analyzeGitHubUrl } from '../../lib/analyzer';
+import { analyzeGitHubUrl, parseGitHubUrl } from '../../lib/analyzer';
 import { IngestionError, PUBLIC_REPOSITORY_INGESTION_LIMITS } from '../../lib/analyzer/types';
 import { auth } from '../../lib/auth';
 import { checkAnalysisRateLimit } from '../../lib/ratelimit';
 import { createApiErrorResponse } from '../../lib/api-error';
 import { validateRepoDNAProject } from '../../lib/schema/validator';
 import { getGitHubAccessToken } from '../../lib/github-session';
+import { recordScannedPublicRepository } from '../../lib/stats/scanned-repositories';
 
 export const dynamic = 'force-dynamic';
 
@@ -209,6 +210,15 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
         500,
         { requestId }
       );
+    }
+
+    // This legacy server-side path is also a real public scan. Keep the
+    // durable counter accurate when the workflow is unavailable and the
+    // client falls back here. Authenticated requests may target private
+    // repositories, so only unauthenticated analyses are eligible.
+    const publicRepository = !accessToken ? parseGitHubUrl(url.trim()) : null;
+    if (publicRepository) {
+      await recordScannedPublicRepository(publicRepository.owner, publicRepository.repo);
     }
 
     logStructured({

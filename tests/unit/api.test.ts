@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { readFileSync } from 'node:fs';
 import { POST } from '../../app/api/analyze/route';
 import * as ratelimitModule from '../../app/lib/ratelimit';
 import * as analyzerModule from '../../app/lib/analyzer';
+import * as statsModule from '../../app/lib/stats/scanned-repositories';
 import { IngestionError } from '../../app/lib/analyzer/types';
+import type { RepoDNAProject } from '../../app/lib/types';
+
+const validProject = JSON.parse(readFileSync('public/demo-project.json', 'utf8')) as RepoDNAProject;
 
 describe('/api/analyze Route Handler', () => {
   it('returns 400 for POST without url or repo field', async () => {
@@ -184,6 +189,33 @@ describe('/api/analyze Route Handler', () => {
     expect(data.success).toBe(false);
     expect(data.error.code).toBe('ANALYSIS_SCHEMA_ERROR');
     expect(data.error.message).toBe('Repository analysis produced an invalid result.');
+
+    vi.restoreAllMocks();
+  });
+
+  it('records a validated unauthenticated public server fallback in the scan counter', async () => {
+    vi.spyOn(ratelimitModule, 'checkAnalysisRateLimit').mockResolvedValue({
+      allowed: true,
+      limit: 5,
+      remaining: 4,
+      reset: Date.now() + 60000,
+      quotaType: 'public',
+    });
+    vi.spyOn(analyzerModule, 'analyzeGitHubUrl').mockResolvedValueOnce(validProject);
+    const recordSpy = vi.spyOn(statsModule, 'recordScannedPublicRepository').mockResolvedValueOnce();
+
+    const req = new NextRequest('http://localhost:3000/api/analyze', {
+      method: 'POST',
+      body: JSON.stringify({ url: 'https://github.com/owner/repo' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(recordSpy).toHaveBeenCalledWith('owner', 'repo');
 
     vi.restoreAllMocks();
   });

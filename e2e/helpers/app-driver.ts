@@ -40,15 +40,9 @@ export async function loadSampleWorkspace(page: Page): Promise<void> {
  */
 export async function importJsonViaLanding(
   page: Page,
-  options: { large?: boolean; enabledRetention?: boolean } = {}
+  options: { large?: boolean } = {}
 ): Promise<void> {
   await page.goto('/');
-  const retentionToggle = page.locator('.browser-retention-toggle input[type="checkbox"]');
-  if (options.enabledRetention) {
-    await retentionToggle.check();
-  } else if ((await retentionToggle.count()) > 0) {
-    await expect(retentionToggle).toBeChecked({ checked: false }).catch(() => undefined);
-  }
   // The landing page is SSR-rendered, so wait for the client event handlers to
   // hydrate before setting a hidden file input.
   await page.waitForTimeout(2_000);
