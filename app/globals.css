@@ -2550,6 +2550,75 @@ code, kbd {
   text-align: right;
 }
 
+.route-list-panel.is-empty {
+  min-height: 292px;
+}
+
+.route-empty-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 32px 28px;
+}
+
+.route-empty-mark,
+.trace-empty-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(76, 225, 245, 0.36);
+  border-radius: 12px;
+  background: rgba(76, 225, 245, 0.08);
+  color: var(--cyan);
+  font: 500 24px var(--font-geist-mono);
+  box-shadow: 0 0 24px rgba(76, 225, 245, 0.12);
+}
+
+.route-empty-state .eyebrow {
+  margin: 2px 0 6px;
+  color: var(--cyan);
+}
+
+.route-empty-state h2 {
+  margin: 0;
+  color: #e4edf3;
+  font-size: 17px;
+}
+
+.route-empty-state p {
+  max-width: 560px;
+  margin: 8px 0 0;
+  color: #8595a2;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.route-empty-state .route-empty-hint {
+  color: #607280;
+  font-size: 10px;
+}
+
+.route-empty-meta {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.route-empty-meta span {
+  border: 1px solid #263946;
+  border-radius: 999px;
+  background: rgba(8, 15, 21, 0.7);
+  padding: 5px 9px;
+  color: #6d8290;
+  font: 600 8px var(--font-geist-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .method {
   width: fit-content;
   border-radius: 4px;
@@ -2590,6 +2659,28 @@ code, kbd {
 .trace-panel {
   position: sticky;
   top: 90px;
+}
+
+.trace-empty-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-height: 170px;
+  padding: 24px 22px 28px;
+}
+
+.trace-empty-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 18px;
+}
+
+.trace-empty-state p {
+  margin: 4px 0 0;
+  color: #6e7f8e;
+  font-size: 11px;
+  line-height: 1.65;
 }
 
 .flow-timeline {
@@ -2825,33 +2916,97 @@ code, kbd {
 }
 
 .cycle-panel {
-  padding-bottom: 18px;
-  border-color: #5c3540;
+  overflow: hidden;
+  border-color: rgba(248, 113, 113, 0.3);
+  background: linear-gradient(135deg, rgba(55, 10, 22, 0.28), rgba(13, 19, 26, 0.72));
 }
 
-.cycle-panel .eyebrow, .cycle-panel h2 {
-  margin-left: 22px;
-  margin-right: 22px;
+.cycle-panel-heading {
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(248, 113, 113, 0.16);
+  padding: 20px 22px 16px;
 }
 
-.cycle-panel .eyebrow {
-  margin-top: 20px;
+.cycle-panel-heading .eyebrow {
+  margin-bottom: 5px;
   color: #f87171;
 }
 
-.cycle-panel h2 {
+.cycle-panel-heading h2 {
+  margin: 0;
   font-size: 15px;
 }
 
-.cycle-panel code {
-  display: block;
-  margin: 10px 22px;
-  border: 1px solid #583742;
+.cycle-panel-heading > span {
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 999px;
+  background: rgba(55, 10, 22, 0.45);
+  padding: 5px 9px;
+  color: #f48a9c;
+  font: 650 8px var(--font-geist-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cycle-summary {
+  margin: 7px 0 0;
+  color: #8e737a;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.cycle-list {
+  display: grid;
+  gap: 8px;
+  padding: 16px 22px 18px;
+}
+
+.cycle-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.cycle-index {
+  display: grid;
+  place-items: center;
+  min-height: 28px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
   border-radius: 6px;
-  background: #180d12;
-  padding: 10px 14px;
+  background: rgba(55, 10, 22, 0.35);
+  color: #b9707d;
+  font: 650 8px var(--font-geist-mono);
+}
+
+.cycle-row code {
+  display: block;
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 7px;
+  background: rgba(24, 13, 18, 0.75);
+  padding: 8px 11px;
   color: #f48a9c;
   font-size: 9px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.cycle-more-button {
+  margin: 0 22px 20px;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 6px;
+  background: rgba(55, 10, 22, 0.22);
+  padding: 8px 11px;
+  color: #f48a9c;
+  font: 650 9px var(--font-geist-mono);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.cycle-more-button:hover {
+  border-color: rgba(248, 113, 113, 0.52);
+  background: rgba(55, 10, 22, 0.45);
 }
 
 /* Files & Symbols Table */

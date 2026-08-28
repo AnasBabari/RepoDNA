@@ -439,6 +439,7 @@ export function CodeGraph({
   const [layoutSeed, setLayoutSeed] = useState(0);
   const sig = `${resetKey}:${layoutSeed}`;
   const [exportOpen, setExportOpen] = useState(false);
+  const closeExportDialog = useCallback(() => setExportOpen(false), []);
   const exportManifest = useMemo(
     () => ({
       counts: {
@@ -921,7 +922,7 @@ export function CodeGraph({
       {exportOpen && (
         <GraphExportDialog
           key={exportArtifactKey}
-          onClose={() => setExportOpen(false)}
+          onClose={closeExportDialog}
           artifact={project}
           manifest={exportManifest}
           origin={exportOrigin ?? 'public-browser'}

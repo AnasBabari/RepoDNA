@@ -1,4 +1,5 @@
 import type { RepoDNAProjectV2 } from '../analyzer/v2/types';
+import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 import type {
   CallRecord,
   FileRecord,
@@ -159,11 +160,12 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     ...project.repository.fingerprint.databases,
     ...project.repository.fingerprint.buildTools,
   ])];
+  const dependencyCycles = filterMeaningfulDependencyCycles(project.dependencyCycles);
   const complexityScore = Math.min(
     100,
     Math.round(
       (project.edges.length / Math.max(1, project.nodes.length)) * 20 +
-      project.dependencyCycles.length * 8 +
+      dependencyCycles.length * 8 +
       project.centrality.godNodes.length * 5
     )
   );
@@ -210,9 +212,9 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     onboarding,
     metrics: {
       complexityScore,
-      localDependencies: imports.filter((record) => !record.external && record.target).length,
+      localDependencies: imports.filter((record) => !record.external && record.target && record.source !== record.target).length,
       externalDependencies: imports.filter((record) => record.external).length,
-      dependencyCycles: project.dependencyCycles,
+      dependencyCycles,
       mostConnectedFiles: importantFiles.map((file) => ({ file: file.file, connections: file.score })),
       highCouplingFiles: project.centrality.highCoupling
         .map((item) => {

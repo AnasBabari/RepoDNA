@@ -1,5 +1,6 @@
 import type { RepoDNAProject } from '../types';
 import type { RepoDNAProjectV2, GraphNode, GraphEdge } from '../analyzer/v2/types';
+import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 
 /**
  * Deterministic plain-text architecture report.
@@ -86,7 +87,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   const inventory = v2 ? project.inventory : null;
   const coverage = v2 ? project.coverage : null;
   const communities = v2 ? project.communities : [];
-  const dependencyCycles = v2 ? project.dependencyCycles : metrics?.dependencyCycles ?? [];
+  const dependencyCycles = filterMeaningfulDependencyCycles(v2 ? project.dependencyCycles : metrics?.dependencyCycles ?? []);
   const centrality = v2 ? project.centrality : null;
   const unresolved = v2 ? project.unresolved : [];
   const timings = v2 ? project.timings : null;
@@ -411,7 +412,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   // 21. Cycles
   out.push(...heading(21, 'Dependency cycles'));
   if (dependencyCycles.length > 0) {
-    const sorted = [...dependencyCycles].map((c) => [...c].sort()).sort((a, b) => a.join('|').localeCompare(b.join('|')));
+    const sorted = [...dependencyCycles].sort((a, b) => a.join('|').localeCompare(b.join('|')));
     for (const c of sorted.slice(0, MAX_LIST)) out.push(`  ${c.join(' -> ')}`);
     if (sorted.length > MAX_LIST) out.push(truncationFooter({ total: sorted.length, shown: MAX_LIST }));
   } else {

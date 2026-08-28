@@ -143,6 +143,7 @@ export function GraphExportDialog({
     const dialog = dialogRef.current;
     const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
     const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
+    const closeButton = dialog?.querySelector<HTMLElement>('.graph-export-close');
     const initialFocus = dialog?.querySelector<HTMLElement>('.graph-export-close') ?? focusables()[0];
     initialFocus?.focus();
 
@@ -157,10 +158,15 @@ export function GraphExportDialog({
       if (items.length === 0) return;
       const first = items[0];
       const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const activeIndex = active ? items.indexOf(active) : -1;
+      if (activeIndex === -1) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && (active === closeButton || activeIndex === 0)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && activeIndex === items.length - 1) {
         event.preventDefault();
         first.focus();
       }

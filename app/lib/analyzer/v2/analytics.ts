@@ -1,4 +1,5 @@
 import type { GraphEdge, GraphNode } from './types';
+import { filterMeaningfulDependencyCycles } from '../cycles';
 
 export interface CommunityResult {
   id: string;
@@ -71,6 +72,9 @@ export function detectDependencyCycles(edges: GraphEdge[]): string[][] {
   for (const e of edges) {
     if (!e.target) continue;
     if (!['DEPENDS_ON', 'IMPORTS', 'CALLS'].includes(e.type)) continue;
+    // Recursive calls remain visible in the graph, but a node pointing to
+    // itself is not an architectural dependency cycle.
+    if (e.source === e.target) continue;
     if (!graph.has(e.source)) graph.set(e.source, new Set());
     graph.get(e.source)!.add(e.target);
   }
@@ -97,18 +101,28 @@ export function detectDependencyCycles(edges: GraphEdge[]): string[][] {
 
   const sortedNodes = Array.from(graph.keys()).sort();
   for (const n of sortedNodes) dfs(n);
-  // Deterministic dedup and sort
-  const seen = new Set<string>();
-  const unique: string[][] = [];
-  for (const cycle of cycles) {
-    const key = [...cycle].sort().join('|');
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push([...cycle].sort());
+
+  // Canonicalize only by rotation. Sorting the members would make a directed
+  // cycle look like a different path from the one the analyzer traversed,
+  // which makes the UI and exports misleading.
+  const unique = new Map<string, string[]>();
+  for (const cycle of filterMeaningfulDependencyCycles(cycles)) {
+    let canonical = cycle;
+    let canonicalKey = cycle.join('\u0000');
+    for (let offset = 1; offset < cycle.length; offset++) {
+      const rotation = [...cycle.slice(offset), ...cycle.slice(0, offset)];
+      const key = rotation.join('\u0000');
+      if (key < canonicalKey) {
+        canonical = rotation;
+        canonicalKey = key;
+      }
     }
+    unique.set(canonical.join('|'), canonical);
   }
-  unique.sort((a, b) => a.join(',').localeCompare(b.join(',')));
-  return unique.slice(0, 20);
+
+  return [...unique.values()]
+    .sort((a, b) => a.join('|').localeCompare(b.join('|')))
+    .slice(0, 20);
 }
 
 export function detectCentrality(nodes: GraphNode[], edges: GraphEdge[]): CentralityResult {

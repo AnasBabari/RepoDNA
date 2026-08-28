@@ -14,6 +14,7 @@ import { ScannedRepositoryCounter } from './ScannedRepositoryCounter';
 import { MobileDetailSheet } from './MobileDetailSheet';
 import { Activity, Download, FileCode, FileText, Github, LayoutDashboard, Map, MessageCircle, Network, Route, Sparkles } from './icons';
 import { analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
+import { filterMeaningfulDependencyCycles } from '../lib/analyzer/cycles';
 import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
 import {
   analyzePublicRepositoryDurably,
@@ -786,6 +787,7 @@ function Overview({
   const ignoredCount = coverage?.ignored ?? inventory?.ignoredFileCount ?? 0;
   const unsupportedCount = coverage?.unsupported ?? inventory?.unsupportedSourceFileCount ?? 0;
   const unresolvedRelationships = deepProject?.unresolved.length ?? project.diagnostics.filter((d) => d.code.includes('UNRESOLVED')).length;
+  const dependencyCycleCount = filterMeaningfulDependencyCycles(project.metrics.dependencyCycles).length;
   const truncationReasons = coverage?.truncationReasons ?? inventory?.truncation?.hitLimits ?? [];
   // Never display "Fully mapped" unless all supported first-party files parsed and no limits/truncation
   const hasSkippedDiagnostics = project.diagnostics.some(
@@ -938,7 +940,7 @@ function Overview({
             <article>
               <span>Dependencies</span>
               <strong>{formatNumber(project.metrics.localDependencies)}</strong>
-              <i>{project.metrics.externalDependencies} external · {project.metrics.dependencyCycles.length} cycles</i>
+              <i>{project.metrics.externalDependencies} external · {dependencyCycleCount} cycles</i>
             </article>
             <article>
               <span>Routes</span>
@@ -1084,6 +1086,11 @@ function RoutesView({
   const flow = selected
     ? project.flows.find((candidate) => candidate.name === `${selected.method} ${selected.path}`) ?? null
     : null;
+  const hasRoutes = project.routes.length > 0;
+  const routeDescription = hasRoutes
+    ? 'Select a route to follow the statically resolved call sequence.'
+    : 'No statically recognized HTTP entrypoints were found in this repository.';
+  const traceTitle = flow?.name ?? (selected ? 'Trace unavailable' : hasRoutes ? 'Select a route' : 'No route traces available');
 
   return (
     <div className="view-stack routes-view">
@@ -1091,45 +1098,76 @@ function RoutesView({
         <div>
           <p className="eyebrow cyan-text">Request surface</p>
           <h1>Routes & execution traces</h1>
-          <p>Select a route to follow the statically resolved call sequence.</p>
+          <p>{routeDescription}</p>
         </div>
-        <span>{project.routes.length} routes</span>
+        <span>{project.routes.length} route{project.routes.length === 1 ? '' : 's'} detected</span>
       </section>
       <RouteCoverageWarning project={project} />
       <div className="route-layout">
-        <section className="panel route-list-panel">
-          <div className="table-head">
-            <span>Method</span>
-            <span>Path</span>
-            <span>Handler</span>
-            <span>Confidence</span>
-          </div>
-          {project.routes.map((route) => (
-            <button
-              className={`route-row ${selected?.id === route.id ? 'is-selected' : ''} ${isRoutePathIncomplete(project, route) ? 'is-incomplete' : ''}`}
-              key={route.id}
-              onClick={() => onSelect(route)}
-              type="button"
-            >
-              <span className={`method ${methodTone[route.method] ?? ''}`}>{route.method}</span>
-              <span className="route-path">
-                <code>{route.path}</code>
-                {isRoutePathIncomplete(project, route) && <small title="The runtime mount prefix could not be resolved">partial path</small>}
-              </span>
-              <span>{route.handler.split('::').at(-1)}</span>
-              <i>{Math.round(route.confidence * 100)}%</i>
-            </button>
-          ))}
+        <section className={`panel route-list-panel ${hasRoutes ? '' : 'is-empty'}`}>
+          {hasRoutes ? (
+            <>
+              <div className="table-head">
+                <span>Method</span>
+                <span>Path</span>
+                <span>Handler</span>
+                <span>Confidence</span>
+              </div>
+              {project.routes.map((route) => (
+                <button
+                  className={`route-row ${selected?.id === route.id ? 'is-selected' : ''} ${isRoutePathIncomplete(project, route) ? 'is-incomplete' : ''}`}
+                  key={route.id}
+                  onClick={() => onSelect(route)}
+                  type="button"
+                >
+                  <span className={`method ${methodTone[route.method] ?? ''}`}>{route.method}</span>
+                  <span className="route-path">
+                    <code>{route.path}</code>
+                    {isRoutePathIncomplete(project, route) && <small title="The runtime mount prefix could not be resolved">partial path</small>}
+                  </span>
+                  <span>{route.handler.split('::').at(-1)}</span>
+                  <i>{Math.round(route.confidence * 100)}%</i>
+                </button>
+              ))}
+            </>
+          ) : (
+            <div className="route-empty-state" role="status">
+              <div className="route-empty-mark" aria-hidden="true">∅</div>
+              <div>
+                <p className="eyebrow">No request surface found</p>
+                <h2>No HTTP routes detected</h2>
+                <p>RepoDNA did not find a statically declared handler in the analyzed files.</p>
+                <p className="route-empty-hint">This is normal for libraries, CLIs, SDKs, and data or tooling repositories. Runtime-generated mounts may need manual inspection in Files & symbols and Diagnostics.</p>
+              </div>
+              <div className="route-empty-meta">
+                <span>0 routes</span>
+                <span>{formatNumber(project.files.length)} files represented</span>
+              </div>
+            </div>
+          )}
         </section>
         <section className="panel trace-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Trace flow</p>
-              <h2>{flow?.name ?? 'Select a route'}</h2>
+              <h2>{traceTitle}</h2>
             </div>
             {flow && <span>{Math.round(flow.confidence * 100)}% trace confidence</span>}
           </div>
-          {flow ? <FlowTimeline flow={flow} /> : <p className="empty-copy">Choose a route from the list to reveal its handler call path.</p>}
+          {flow ? (
+            <FlowTimeline flow={flow} />
+          ) : (
+            <div className="trace-empty-state">
+              <div className="trace-empty-mark" aria-hidden="true">↳</div>
+              <p>
+                {selected
+                  ? 'The route was detected, but no complete statically resolved call sequence is available.'
+                  : hasRoutes
+                    ? 'Choose a route from the list to reveal its handler call path.'
+                    : 'A trace appears here when RepoDNA identifies an HTTP entrypoint and can follow its calls.'}
+              </p>
+            </div>
+          )}
         </section>
       </div>
     </div>
@@ -1155,6 +1193,7 @@ function FlowTimeline({ flow }: { flow: FlowRecord }) {
 
 function DependenciesView({ project }: { project: RepoDNAProject }) {
   const [query, setQuery] = useState('');
+  const [showAllCycles, setShowAllCycles] = useState(false);
   const impacts = useMemo(() => {
     const value = query.trim().toLowerCase();
     if (!value) return [];
@@ -1171,7 +1210,9 @@ function DependenciesView({ project }: { project: RepoDNAProject }) {
     ];
   }, [project, query]);
 
-  const localImports = project.imports.filter((edge) => edge.target);
+  const localImports = project.imports.filter((edge) => edge.target && edge.target !== edge.source);
+  const dependencyCycles = filterMeaningfulDependencyCycles(project.metrics.dependencyCycles);
+  const visibleCycles = showAllCycles ? dependencyCycles : dependencyCycles.slice(0, 6);
 
   return (
     <div className="view-stack dependencies-view">
@@ -1260,13 +1301,29 @@ function DependenciesView({ project }: { project: RepoDNAProject }) {
         </section>
       </div>
 
-      {project.metrics.dependencyCycles.length > 0 && (
-        <section className="panel cycle-panel">
-          <p className="eyebrow">Health signal</p>
-          <h2>Dependency cycles</h2>
-          {project.metrics.dependencyCycles.map((cycle, index) => (
-            <code key={index}>{[...cycle, cycle[0]].join(' → ')}</code>
-          ))}
+      {dependencyCycles.length > 0 && (
+        <section className="panel cycle-panel" aria-labelledby="dependency-cycles-heading">
+          <div className="panel-heading cycle-panel-heading">
+            <div>
+              <p className="eyebrow">Health signal</p>
+              <h2 id="dependency-cycles-heading">Dependency cycles</h2>
+              <p className="cycle-summary">These directed relationships can make changes harder to reason about.</p>
+            </div>
+            <span>{dependencyCycles.length} detected</span>
+          </div>
+          <div className="cycle-list">
+            {visibleCycles.map((cycle, index) => (
+              <div className="cycle-row" key={`${cycle.join('|')}-${index}`}>
+                <span className="cycle-index">{String(index + 1).padStart(2, '0')}</span>
+                <code>{[...cycle, cycle[0]].join(' → ')}</code>
+              </div>
+            ))}
+          </div>
+          {dependencyCycles.length > 6 && (
+            <button className="cycle-more-button" onClick={() => setShowAllCycles((current) => !current)} type="button" aria-expanded={showAllCycles}>
+              {showAllCycles ? 'Show fewer cycles' : `Show all ${dependencyCycles.length} cycles`}
+            </button>
+          )}
         </section>
       )}
     </div>

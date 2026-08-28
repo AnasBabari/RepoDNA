@@ -10,6 +10,7 @@ import type {
   RouteRecord,
   SymbolRecord,
 } from './types';
+import { filterMeaningfulDependencyCycles } from './cycles';
 
 export const COMPONENT_NAMES: Record<string, string> = {
   frontend: 'Frontend',
@@ -561,7 +562,7 @@ export function graphMetrics(files: FileRecord[], imports: ImportRecord[], symbo
   let extDeps = 0;
 
   for (const edge of imports) {
-    if (edge.target) {
+    if (edge.target && edge.target !== edge.source) {
       localDeps++;
       inbound.set(edge.target, (inbound.get(edge.target) ?? 0) + 1);
       outbound.set(edge.source, (outbound.get(edge.source) ?? 0) + 1);
@@ -605,6 +606,8 @@ export function graphMetrics(files: FileRecord[], imports: ImportRecord[], symbo
     dfs(node);
   }
 
+  const meaningfulCycles = filterMeaningfulDependencyCycles(cycles);
+
   const mostConnected = files
     .map((f) => ({
       file: f.path,
@@ -615,14 +618,14 @@ export function graphMetrics(files: FileRecord[], imports: ImportRecord[], symbo
 
   const complexity = Math.min(
     100,
-    Math.round(files.length * 0.15 + symbols.length * 0.04 + localDeps * 0.1 + cycles.length * 5)
+    Math.round(files.length * 0.15 + symbols.length * 0.04 + localDeps * 0.1 + meaningfulCycles.length * 5)
   );
 
   return {
     complexityScore: complexity,
     localDependencies: localDeps,
     externalDependencies: extDeps,
-    dependencyCycles: cycles.slice(0, 10),
+    dependencyCycles: meaningfulCycles.slice(0, 10),
     mostConnectedFiles: mostConnected.slice(0, 10),
     highCouplingFiles: mostConnected.filter((item) => item.connections > 20),
   };

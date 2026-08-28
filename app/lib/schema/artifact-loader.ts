@@ -1,6 +1,7 @@
 import { validateAnyArtifact } from './safe-validator';
 import type { RepoDNAProject } from '../types';
 import type { GraphEdge, GraphNode, GraphNodeKind, RepoDNAProjectV2 } from '../analyzer/v2/types';
+import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 
 export type AnyRepoDNAArtifact = RepoDNAProject | RepoDNAProjectV2;
 export type ArtifactVersion = '1.1.0' | '2.0.0' | 'unknown';
@@ -274,6 +275,7 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
       reason: edge.type === 'CALLS' ? 'unresolved call' : edge.type === 'HANDLES' ? 'unresolved route handler' : 'unresolved import',
       candidates: edge.alternativeCandidates ?? [],
     }));
+  const dependencyCycles = filterMeaningfulDependencyCycles(project.metrics.dependencyCycles);
 
   return {
     schemaVersion: '2.0.0',
@@ -336,7 +338,7 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     architecture: project.architecture,
     flows: project.flows,
     communities: [],
-    dependencyCycles: project.metrics.dependencyCycles,
+    dependencyCycles,
     centrality: {
       mostConnected: project.metrics.mostConnectedFiles.map((f) => ({
         nodeId: `file:${f.file}`,

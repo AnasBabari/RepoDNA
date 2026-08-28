@@ -101,6 +101,20 @@ describe('Graph Resolution & Architecture Engine', () => {
     expect(metrics.dependencyCycles.length).toBeGreaterThan(0);
     expect(metrics.localDependencies).toBe(2);
   });
+
+  it('does not treat a self-referential import as a dependency cycle', () => {
+    const files: FileRecord[] = [
+      { id: 'f1', path: 'src/self.ts', language: 'TypeScript', lines: 10, bytes: 100, hash: 'h1', role: 'source', parsed: true, error: null },
+    ];
+    const imports: ImportRecord[] = [
+      { id: 'i1', source: 'src/self.ts', module: './self', names: [], line: 1, target: 'src/self.ts', external: false },
+    ];
+
+    const metrics = graphMetrics(files, imports, []);
+
+    expect(metrics.dependencyCycles).toEqual([]);
+    expect(metrics.localDependencies).toBe(0);
+  });
 });
 
 describe('graphMetrics ranking', () => {
