@@ -36,6 +36,7 @@
     "ajv-formats": "^3.0.1",
     "fflate": "^0.8.3",
     "hyparquet-writer": "0.16.6",
+    "lucide-react": "^1.34.0",
     "next": "^16.3.2",
     "next-auth": "^5.0.0-beta.32",
     "posthog-js": "^1.418.10",

@@ -27,6 +27,10 @@ function formatCount(value: number): string {
   return Intl.NumberFormat('en-GB').format(value);
 }
 
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
+}
+
 export function ScannedRepositoryCounter() {
   const [state, setState] = useState<CounterState>({ status: 'loading' });
   const abortRef = useRef<AbortController | null>(null);
@@ -61,30 +65,31 @@ export function ScannedRepositoryCounter() {
       // Fallback: treat non-success as unavailable without inventing a number
       setState({ status: 'unavailable' });
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (isAbortError(error)) return;
       // Network error or parse failure — keep last known good value if present, otherwise show unavailable after initial load fails
       setState((prev) => (prev.status === 'ready' ? prev : { status: 'unavailable' }));
     }
   };
 
   useEffect(() => {
-    const controller = new AbortController();
-    abortRef.current = controller;
+    let disposed = false;
+    const startFetch = () => {
+      if (disposed) return;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      void fetchStats(controller.signal);
+    };
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount that syncs external stats
-    void fetchStats(controller.signal);
+    startFetch();
 
     const intervalId = window.setInterval(() => {
-      const pollController = new AbortController();
-      abortRef.current = pollController;
-      void fetchStats(pollController.signal);
+      startFetch();
     }, POLL_INTERVAL_MS);
     intervalRef.current = intervalId as unknown as number;
 
     const handleFocus = () => {
-      const c = new AbortController();
-      abortRef.current = c;
-      void fetchStats(c.signal);
+      startFetch();
     };
 
     const handleVisibility = () => {
@@ -94,9 +99,7 @@ export function ScannedRepositoryCounter() {
     };
 
     const handleAnalysisComplete = () => {
-      const c = new AbortController();
-      abortRef.current = c;
-      void fetchStats(c.signal);
+      startFetch();
     };
 
     window.addEventListener('focus', handleFocus);
@@ -104,10 +107,12 @@ export function ScannedRepositoryCounter() {
     window.addEventListener('repodna:analysis-complete' as never, handleAnalysisComplete as EventListener);
 
     return () => {
-      controller.abort();
+      disposed = true;
       abortRef.current?.abort();
+      abortRef.current = null;
       if (intervalRef.current !== null) {
         window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);

@@ -11,6 +11,8 @@ import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
 import { ScannedRepositoryCounter } from './ScannedRepositoryCounter';
+import { MobileDetailSheet } from './MobileDetailSheet';
+import { Activity, Download, FileCode, FileText, Github, LayoutDashboard, Map, MessageCircle, Network, Route, Sparkles } from './icons';
 import { analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
 import {
@@ -284,7 +286,7 @@ function LandingView({
         </Link>
         <div className="landing-nav-center">
           <button className="chip-button" onClick={onLoadDemo} type="button">
-            <span>✨</span> Try Demo Project
+            <Sparkles size={14} aria-hidden="true" /> Try Demo Project
           </button>
           <button
             className="chip-button"
@@ -292,7 +294,7 @@ function LandingView({
             type="button"
             style={{ fontSize: '0.8rem', padding: '5px 12px', color: '#fbbf24', borderColor: 'rgba(251, 191, 36, 0.4)' }}
           >
-            <span>⭐</span> Feedback
+            <MessageCircle size={14} aria-hidden="true" /> Feedback
           </button>
           <a
             href="https://github.com/AnasBabari/RepoDNA"
@@ -301,7 +303,7 @@ function LandingView({
             className="chip-button"
             style={{ fontSize: '0.8rem', padding: '5px 12px', textDecoration: 'none' }}
           >
-            <span>★</span> GitHub
+            <Github size={14} aria-hidden="true" /> GitHub
           </a>
         </div>
 
@@ -407,7 +409,7 @@ function LandingView({
             onClick={onOpenPrivatePicker}
             type="button"
           >
-            <span className="icon">🔒</span>
+            <span className="icon" aria-hidden="true">🔒</span>
             <strong>Private Repositories (Beta)</strong>
             <p>Select from your authorized GitHub private & public repositories</p>
           </button>
@@ -417,7 +419,7 @@ function LandingView({
             onClick={() => folderInputRef.current?.click()}
             type="button"
           >
-            <span className="icon">📁</span>
+            <span className="icon" aria-hidden="true">📁</span>
             <strong>Select Local Directory</strong>
             <p>Analyze a local project folder directly in your browser tab</p>
           </button>
@@ -440,7 +442,7 @@ function LandingView({
             onClick={() => zipInputRef.current?.click()}
             type="button"
           >
-            <span className="icon">📦</span>
+            <span className="icon" aria-hidden="true">📦</span>
             <strong>Upload Repository .zip or .json</strong>
             <p>Load a zipped source archive or existing RepoDNA JSON file</p>
           </button>
@@ -718,6 +720,42 @@ function isRoutePathIncomplete(project: RepoDNAProject, route: RouteRecord): boo
   );
 }
 
+function SkippedPathsDisclosure({
+  project,
+  totalCount,
+}: {
+  project: RepoDNAProject;
+  totalCount: number;
+}) {
+  const paths = project.diagnostics
+    .filter((diagnostic) => diagnostic.code.startsWith('skipped_') && diagnostic.file)
+    .map((diagnostic) => ({
+      path: diagnostic.file!,
+      reason: diagnostic.code.replace(/^skipped_/, '').replaceAll('_', ' '),
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path) || left.reason.localeCompare(right.reason));
+  if (!paths.length) return null;
+
+  const visiblePaths = paths.slice(0, 20);
+  const omittedCount = Math.max(0, totalCount - visiblePaths.length);
+  return (
+    <details className="coverage-skipped-details">
+      <summary>
+        Show {formatNumber(visiblePaths.length)} of {formatNumber(totalCount)} skipped paths
+      </summary>
+      <ul>
+        {visiblePaths.map((item, index) => (
+          <li key={`${item.path}-${item.reason}-${index}`}>
+            <code>{item.path}</code>
+            <span>{item.reason}</span>
+          </li>
+        ))}
+        {omittedCount > 0 && <li className="coverage-skipped-more">+ {formatNumber(omittedCount)} more paths are summarized above.</li>}
+      </ul>
+    </details>
+  );
+}
+
 function Overview({
   project,
   deepProject,
@@ -870,6 +908,7 @@ function Overview({
                 <p>{truncationReasons.join(', ')}</p>
               </div>
             )}
+            <SkippedPathsDisclosure project={project} totalCount={skippedCount} />
             <p className="coverage-note">Some connections could not be proven statically. RepoDNA has marked them as uncertain instead of presenting them as confirmed.</p>
           </section>
 
@@ -946,6 +985,7 @@ function Overview({
                 )}
               </div>
             )}
+            <SkippedPathsDisclosure project={project} totalCount={skippedCount} />
           </section>
 
           <RouteCoverageWarning project={project} collapsible />
@@ -1593,6 +1633,7 @@ function WorkspaceContent() {
   const [selectedComponent, setSelectedComponent] = useState<ArchitectureComponent | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<RouteRecord | null>(null);
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copiedMermaid, setCopiedMermaid] = useState(false);
   const [privatePickerOpen, setPrivatePickerOpen] = useState(false);
@@ -1812,6 +1853,7 @@ function WorkspaceContent() {
   }, [dialogOpen, privatePickerOpen, feedbackModalOpen]);
 
   function handleSwitchView(newView: View) {
+    setMobileDetailsOpen(false);
     setView(newView);
     trackViewChanged(newView);
   }
@@ -2218,18 +2260,21 @@ function WorkspaceContent() {
     setSelectedComponent(component);
     setSelectedRoute(null);
     setSelectedFile(null);
+    if (window.matchMedia('(max-width: 1180px)').matches) setMobileDetailsOpen(true);
   }
 
   function selectRoute(route: RouteRecord) {
     setSelectedRoute(route);
     setSelectedComponent(null);
     setSelectedFile(null);
+    if (window.matchMedia('(max-width: 1180px)').matches) setMobileDetailsOpen(true);
   }
 
   function selectFile(file: FileRecord) {
     setSelectedFile(file);
     setSelectedRoute(null);
     setSelectedComponent(null);
+    if (window.matchMedia('(max-width: 1180px)').matches) setMobileDetailsOpen(true);
   }
 
   async function copyMermaidDiagram() {
@@ -2376,13 +2421,13 @@ function WorkspaceContent() {
             type="button"
             title="Give feedback or request features"
           >
-            <span>⭐</span> Feedback
+            <MessageCircle size={14} aria-hidden="true" /> Feedback
           </button>
           <button className="chip-button" onClick={exportJsonArtifact} type="button" title="Download portable JSON analysis">
-            <span>↓</span> JSON
+            <Download size={14} aria-hidden="true" /> JSON
           </button>
           <button className="chip-button" onClick={exportTextReport} type="button" title="Download plain-text architecture report">
-            <span>↓</span> TXT
+            <FileText size={14} aria-hidden="true" /> TXT
           </button>
           <button className="analyse-button" onClick={() => setDialogOpen(true)} type="button">
             New analysis
@@ -2395,11 +2440,19 @@ function WorkspaceContent() {
         {navigation.map((item, index) => (
           <button
             className={`nav-item ${view === item.id ? 'active' : ''}`}
+            aria-current={view === item.id ? 'page' : undefined}
+            title={item.label}
             key={item.id}
             onClick={() => handleSwitchView(item.id)}
             type="button"
           >
             <span className="nav-index">0{index + 1}</span>
+            {item.id === 'overview' && <LayoutDashboard size={16} aria-hidden="true" />}
+            {item.id === 'architecture' && <Map size={16} aria-hidden="true" />}
+            {item.id === 'routes' && <Route size={16} aria-hidden="true" />}
+            {item.id === 'dependencies' && <Network size={16} aria-hidden="true" />}
+            {item.id === 'files' && <FileCode size={16} aria-hidden="true" />}
+            {item.id === 'graph' && <Activity size={16} aria-hidden="true" />}
             {item.label}
           </button>
         ))}
@@ -2424,6 +2477,25 @@ function WorkspaceContent() {
       </aside>
 
       <section className="workspace">
+        <nav className="mobile-view-nav" aria-label="Workspace views">
+          {navigation.map((item) => (
+            <button
+              className={`mobile-view-nav-item ${view === item.id ? 'active' : ''}`}
+              aria-current={view === item.id ? 'page' : undefined}
+              key={item.id}
+              onClick={() => handleSwitchView(item.id)}
+              type="button"
+            >
+              {item.id === 'overview' && <LayoutDashboard size={14} aria-hidden="true" />}
+              {item.id === 'architecture' && <Map size={14} aria-hidden="true" />}
+              {item.id === 'routes' && <Route size={14} aria-hidden="true" />}
+              {item.id === 'dependencies' && <Network size={14} aria-hidden="true" />}
+              {item.id === 'files' && <FileCode size={14} aria-hidden="true" />}
+              {item.id === 'graph' && <Activity size={14} aria-hidden="true" />}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
         {view === 'overview' && (
           <Overview
             project={project}
@@ -2488,6 +2560,18 @@ function WorkspaceContent() {
         project={project}
         onTrace={() => setView('routes')}
       />
+      <MobileDetailSheet open={mobileDetailsOpen} onClose={() => setMobileDetailsOpen(false)}>
+        <DetailPanel
+          component={selectedComponent}
+          route={selectedRoute}
+          file={selectedFile}
+          project={project}
+          onTrace={() => {
+            setMobileDetailsOpen(false);
+            setView('routes');
+          }}
+        />
+      </MobileDetailSheet>
       <AnalyseDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}

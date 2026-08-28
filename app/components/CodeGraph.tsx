@@ -30,6 +30,10 @@ import {
 import '@xyflow/react/dist/style.css';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { Box, Download, RefreshCw, nodeKindIcons } from './icons';
+import { CodeGraphEvidenceDrawer } from './CodeGraphEvidenceDrawer';
+import { CodeGraphNodeDetail } from './CodeGraphNodeDetail';
+
 import { adaptV1ToV2Viewer } from '../lib/schema/artifact-loader';
 import type { RepoDNAProject } from '../lib/types';
 import type { GraphEdge, RepoDNAProjectV2, GraphNode } from '../lib/analyzer/v2/types';
@@ -38,6 +42,7 @@ import type { BrowserCacheSourceType } from '../lib/export/browser-export-cache'
 
 const INITIAL_NODE_LIMIT = 80;
 const EXPAND_LIMIT = 24;
+const MAX_VISIBLE_NODE_LIMIT = 240;
 const MAX_RENDERED_EDGE_LIMIT = 240;
 
 const kindTone: Record<string, string> = {
@@ -226,7 +231,10 @@ function stepSimulation(
   state: { alpha: number },
   pinned: Set<string> | null
 ): boolean {
-  if (state.alpha <= 0.004 && !pinned) return false;
+  if (state.alpha <= 0.004 && !pinned) {
+    state.alpha = 0;
+    return false;
+  }
 
   const nodes = ids.filter((id) => points.has(id));
   const forces = new Map<string, GraphPoint>(nodes.map((id) => [id, { x: 0, y: 0 }]));
@@ -466,6 +474,7 @@ export function CodeGraph({
 
   const structureKinds = useMemo(() => new Set(['repository', 'workspace', 'package', 'directory', 'module', 'file', 'route', 'data_model', 'table', 'dependency', 'configuration', 'external_system']), []);
   const symbolKinds = useMemo(() => new Set(['class', 'interface', 'function', 'method', 'controller', 'service', 'repository_layer', 'component', 'attribute', 'variable']), []);
+  const nodeById = useMemo(() => new Map(graph.nodes.map((node) => [node.id, node])), [graph.nodes]);
 
   const filteredEdges = useMemo(() => {
     let edges = graph.edges;
@@ -516,6 +525,7 @@ export function CodeGraph({
     for (const n of ranked.slice(0, INITIAL_NODE_LIMIT)) selected.set(n.id, n);
 
     for (const expandId of expandedIds) {
+      if (selected.size >= MAX_VISIBLE_NODE_LIMIT) break;
       if (!selected.has(expandId)) continue;
       const neighbors: string[] = [];
       for (const e of filteredEdges) {
@@ -523,7 +533,8 @@ export function CodeGraph({
         if (e.target === expandId) neighbors.push(e.source);
       }
       for (const nbId of neighbors.sort().slice(0, EXPAND_LIMIT)) {
-        const nb = graph.nodes.find((n) => n.id === nbId);
+        if (selected.size >= MAX_VISIBLE_NODE_LIMIT) break;
+        const nb = nodeById.get(nbId);
         if (nb && !selected.has(nbId)) {
           // Respect granularity only loosely on expansion (neighbors may be symbols).
           selected.set(nbId, nb);
@@ -536,7 +547,7 @@ export function CodeGraph({
       if (n) selected.set(n.id, n);
     }
     return Array.from(selected.values());
-  }, [graph.nodes, filteredEdges, granularity, structureKinds, symbolKinds, search, degreeById, expandedIds, selectedNodeId]);
+  }, [graph.nodes, filteredEdges, granularity, structureKinds, symbolKinds, search, degreeById, expandedIds, selectedNodeId, nodeById]);
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
 
@@ -797,7 +808,7 @@ export function CodeGraph({
   const edgesTruncated = renderedEdges.length < candidateEdges.length;
 
   return (
-    <div className="code-graph-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 480 }}>
+    <div className="code-graph-container">
       <section className="view-heading code-graph-heading">
         <div>
           <p className="eyebrow cyan-text">Relationship explorer</p>
@@ -807,18 +818,18 @@ export function CodeGraph({
         <div className="view-heading-actions">
           <span>{graph.nodes.length} entities · {graph.edges.length} relationships</span>
           <button className="export-pill-btn" onClick={() => setExportOpen(true)} type="button">
-            Export
+            <Download size={14} aria-hidden="true" /> Export
           </button>
-          <button className="export-pill-btn" onClick={() => setLayoutSeed((k) => k + 1)} type="button">Re-layout</button>
+          <button className="export-pill-btn" onClick={() => setLayoutSeed((k) => k + 1)} type="button"><RefreshCw size={14} aria-hidden="true" /> Re-layout</button>
         </div>
       </section>
-      <div className="code-graph-controls" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+      <div className="code-graph-controls">
         <input
           className="search-input"
           placeholder="Search entities or paths…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ padding: '6px 10px', background: 'rgba(6,9,13,0.8)', border: '1px solid var(--line)', borderRadius: 8, color: 'inherit', minWidth: 200 }}
+
           aria-label="Search graph entities"
         />
         <select value={granularity} onChange={(e) => setGranularity(e.target.value as 'structure' | 'symbols')} aria-label="Entity granularity" className="chip-button">
@@ -835,7 +846,7 @@ export function CodeGraph({
           Unresolved only
         </button>
         <button className="chip-button" onClick={resetView} type="button">Reset view</button>
-        <span style={{ opacity: 0.65, fontSize: 12 }} role="status">
+        <span className="code-graph-status" role="status">
           {visibleNodes.length}{nodesTruncated ? ` of ${candidateNodeCount}` : ''} nodes · {renderedEdges.length}{edgesTruncated ? ` of ${candidateEdges.length}` : ''} edges shown · drag nodes, click to expand
         </span>
       </div>
@@ -889,10 +900,10 @@ export function CodeGraph({
         </ReactFlow>
       </div>
 
-      <div className="code-graph-legend" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8, fontSize: 11, opacity: 0.85 }}>
+      <div className="code-graph-legend">
         {[...new Set(visibleNodes.map((n) => n.kind))].sort().map((k) => (
-          <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 8, height: 8, borderRadius: 2, background: kindTone[k] ?? '#9ca3af', display: 'inline-block' }} />
+          <span key={k} className="code-graph-legend-item">
+            <span className="code-graph-legend-dot" style={{ background: kindTone[k] ?? '#9ca3af' }} />
             {k.replace('_', ' ')}
           </span>
         ))}
@@ -900,41 +911,11 @@ export function CodeGraph({
       </div>
 
       {selectedEdge && (
-        <aside className="graph-evidence-drawer" aria-label="Why are these connected" style={{ marginTop: 10, border: '1px solid var(--line)', borderRadius: 12, padding: '12px 16px', background: 'rgba(6,9,13,0.92)' }}>
-          <h4 style={{ margin: '0 0 6px', color: 'var(--cyan)' }}>Why are these connected?</h4>
-          <p style={{ margin: '0 0 4px', fontSize: 13 }}>
-            <strong>{selectedEdge.type}</strong> ({selectedEdge.status}, confidence {Math.round(selectedEdge.confidence * 100)}%)
-          </p>
-          <p style={{ margin: '0 0 4px', fontSize: 13 }}>{selectedEdge.explanation}</p>
-          <p style={{ margin: 0, fontSize: 12, fontFamily: 'var(--font-geist-mono)', opacity: 0.85 }}>
-            Evidence: {selectedEdge.evidence.file}:{selectedEdge.evidence.range.startLine}:{selectedEdge.evidence.range.startCol}-{selectedEdge.evidence.range.endLine}:{selectedEdge.evidence.range.endCol}
-            {' '}· resolver {selectedEdge.resolver.name}@{selectedEdge.resolver.version}
-          </p>
-          {selectedEdge.unresolvedExpression && (
-            <p style={{ margin: '6px 0 0', fontSize: 12, fontFamily: 'var(--font-geist-mono)', color: '#fbbf24' }}>
-              Unresolved expression: {selectedEdge.unresolvedExpression}
-            </p>
-          )}
-          {(selectedEdge.alternativeCandidates?.length ?? 0) > 0 && (
-            <p style={{ margin: '4px 0 0', fontSize: 12, opacity: 0.8 }}>
-              Alternative candidates: {selectedEdge.alternativeCandidates!.join(', ')}
-            </p>
-          )}
-          <button className="chip-button" style={{ marginTop: 8 }} onClick={() => setSelectedEdgeId(null)} type="button">Close</button>
-        </aside>
+        <CodeGraphEvidenceDrawer edge={selectedEdge} onClose={() => setSelectedEdgeId(null)} />
       )}
 
       {selectedNode && !selectedEdge && (
-        <aside aria-label="Node details" style={{ marginTop: 10, border: '1px solid var(--line)', borderRadius: 12, padding: '12px 16px', background: 'rgba(6,9,13,0.92)' }}>
-          <h4 style={{ margin: '0 0 6px', color: 'var(--cyan)' }}>{selectedNode.qualifiedName}</h4>
-          <p style={{ margin: 0, fontSize: 12, fontFamily: 'var(--font-geist-mono)', opacity: 0.85 }}>
-            {selectedNode.kind} · {selectedNode.language || 'n/a'} · {selectedNode.path || '—'}:{selectedNode.range.startLine}
-            {degreeById.get(selectedNode.id) ? ` · ${degreeById.get(selectedNode.id)} connections` : ''}
-          </p>
-          {(selectedNode.evidence?.length ?? 0) > 0 && (
-            <p style={{ margin: '6px 0 0', fontSize: 12, opacity: 0.8 }}>Evidence: {selectedNode.evidence!.join(' · ')}</p>
-          )}
-        </aside>
+        <CodeGraphNodeDetail node={selectedNode} degree={degreeById.get(selectedNode.id) ?? 0} />
       )}
 
       {exportOpen && (
@@ -969,7 +950,10 @@ const CodeGraphNode = memo(function CodeGraphNode({ data }: { data: CodeGraphNod
       }}
     >
       <span className="code-node-glyph" aria-hidden="true">
-        {(data.label.replace(/[^a-zA-Z0-9]/g, '')[0] ?? '?').toUpperCase()}
+        {(() => {
+          const NodeIcon = nodeKindIcons[data.kind] ?? Box;
+          return <NodeIcon size={14} aria-hidden="true" />;
+        })()}
       </span>
       <span className="code-node-caption" aria-hidden="true">
         <span className="code-node-title">{data.label}</span>

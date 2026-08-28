@@ -15,6 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useMemo, useState } from 'react';
+import { Box, Bug, Cpu, Database, Layers, LayoutDashboard, Server, Settings } from './icons';
 
 import type { ArchitectureComponent, ArchitectureConnection } from '../lib/types';
 
@@ -546,19 +547,44 @@ export function ArchitectureGraph({
       {/* Bottom Architectural Legend Bar */}
       <div className="arch-legend-bar">
         <div className="arch-legend-item">
-          <span className="arch-legend-dot" style={{ background: '#4fe0f4' }} /> Frontend
+          <span className="arch-legend-dot" style={{ background: '#4fe0f4' }} />
+          <LayoutDashboard size={12} aria-hidden="true" /> Frontend
         </div>
         <div className="arch-legend-item">
-          <span className="arch-legend-dot" style={{ background: '#a78bfa' }} /> API
+          <span className="arch-legend-dot" style={{ background: '#a78bfa' }} />
+          <Box size={12} aria-hidden="true" /> API
         </div>
         <div className="arch-legend-item">
-          <span className="arch-legend-dot" style={{ background: '#f59e0b' }} /> Services
+          <span className="arch-legend-dot" style={{ background: '#f59e0b' }} />
+          <Server size={12} aria-hidden="true" /> Services
         </div>
         <div className="arch-legend-item">
-          <span className="arch-legend-dot" style={{ background: '#60a5fa' }} /> Repositories
+          <span className="arch-legend-dot" style={{ background: '#60a5fa' }} />
+          <Database size={12} aria-hidden="true" /> Repositories
         </div>
         <div className="arch-legend-item">
-          <span className="arch-legend-dot" style={{ background: '#34d399' }} /> Database
+          <span className="arch-legend-dot" style={{ background: '#34d399' }} />
+          <Database size={12} aria-hidden="true" /> Database
+        </div>
+        <div className="arch-legend-item">
+          <span className="arch-legend-dot" style={{ background: '#c084fc' }} />
+          <Layers size={12} aria-hidden="true" /> Domain
+        </div>
+        <div className="arch-legend-item">
+          <span className="arch-legend-dot" style={{ background: '#fb7185' }} />
+          <Cpu size={12} aria-hidden="true" /> Workers
+        </div>
+        <div className="arch-legend-item">
+          <span className="arch-legend-dot" style={{ background: '#f97316' }} />
+          <Server size={12} aria-hidden="true" /> Infrastructure
+        </div>
+        <div className="arch-legend-item">
+          <span className="arch-legend-dot" style={{ background: '#facc15' }} />
+          <Settings size={12} aria-hidden="true" /> Configuration
+        </div>
+        <div className="arch-legend-item">
+          <span className="arch-legend-dot" style={{ background: '#f472b6' }} />
+          <Bug size={12} aria-hidden="true" /> Tests
         </div>
       </div>
     </div>
