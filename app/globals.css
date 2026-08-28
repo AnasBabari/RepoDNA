@@ -1971,6 +1971,14 @@ code, kbd {
   flex-direction: column;
 }
 
+.architecture-graph-stack {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .arch-toolbar {
   position: absolute;
   top: 14px;
@@ -2050,10 +2058,8 @@ code, kbd {
 }
 
 .arch-legend-bar {
-  position: absolute;
-  bottom: 14px;
-  left: 16px;
-  z-index: 10;
+  position: relative;
+  align-self: flex-start;
   display: flex;
   align-items: center;
   gap: 14px;

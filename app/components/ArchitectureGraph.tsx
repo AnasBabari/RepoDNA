@@ -452,7 +452,8 @@ export function ArchitectureGraph({
   }, [filteredComponents, connections, selectedId, components, customPositions]);
 
   return (
-    <div className="react-flow-shell" aria-label="Interactive architecture graph">
+    <div className="architecture-graph-stack">
+      <div className="react-flow-shell" aria-label="Interactive architecture graph">
       {/* Top Layer Filtering Toolbar & Custom Layout Actions */}
       <div className="arch-toolbar">
         <div className="arch-filter-group">
@@ -544,7 +545,9 @@ export function ArchitectureGraph({
         Navigator · drag to pan · scroll to zoom
       </div>
 
-      {/* Bottom Architectural Legend Bar */}
+      </div>
+
+      {/* Architectural legend sits below the graph window so it never covers nodes. */}
       <div className="arch-legend-bar">
         <div className="arch-legend-item">
           <span className="arch-legend-dot" style={{ background: '#4fe0f4' }} />
