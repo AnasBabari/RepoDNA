@@ -353,16 +353,19 @@ function LandingView({
 
         <ScannedRepositoryCounter />
 
-        <form className="landing-input-box" onSubmit={handleSubmit}>
-          <span className="landing-input-glyph">⌕</span>
+        <form className="landing-input-box" onSubmit={handleSubmit} aria-label="Analyze public GitHub repository">
+          <span className="landing-input-glyph" aria-hidden="true">⌕</span>
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://github.com/owner/repository"
+            aria-label="GitHub repository URL"
+            autoComplete="off"
+            spellCheck={false}
             autoFocus
           />
-          <button className="analyse-button" type="submit">
-            Analyze Repository <span>→</span>
+          <button className="analyse-button" type="submit" aria-label="Analyze repository">
+            Analyze Repository <span aria-hidden="true">→</span>
           </button>
         </form>
 
@@ -2450,16 +2453,19 @@ function WorkspaceContent() {
         </div>
 
         <div className="topbar-center">
-          <label className="global-search">
-            <span>⌕</span>
+          <label className="global-search" aria-label="Search files, symbols and routes">
+            <span aria-hidden="true">⌕</span>
             <input
               ref={searchInputRef}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               onFocus={() => handleSwitchView('files')}
               placeholder="Search files, symbols, routes…"
+              aria-label="Search files, symbols and routes"
+              autoComplete="off"
+              spellCheck={false}
             />
-            <kbd>⌘ K</kbd>
+            <kbd aria-hidden="true">⌘ K</kbd>
           </label>
         </div>
 

@@ -135,6 +135,15 @@ button {
   cursor: pointer;
 }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 code, kbd {
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -240,6 +249,8 @@ code, kbd {
   justify-content: center;
   flex-wrap: wrap;
   gap: 6px;
+  min-height: 32px;
+  box-sizing: border-box;
   margin: 0 0 24px;
   padding: 6px 14px;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -256,6 +267,9 @@ code, kbd {
 }
 
 .hero-scan-counter-count {
+  display: inline-block;
+  min-width: 28px;
+  text-align: center;
   color: #e6f0f7;
   font: 700 12px var(--font-geist-mono);
   letter-spacing: -0.02em;
@@ -275,6 +289,9 @@ code, kbd {
 }
 
 .hero-scan-counter-unavailable-text {
+  display: inline-block;
+  min-width: 28px;
+  text-align: center;
   color: #5a6b7a;
 }
 
@@ -3592,7 +3609,7 @@ button.file-row:hover {
   .landing-topbar { padding: 12px 14px; gap: 10px; }
   .landing-nav-center { display: none; }
   .landing-auth-right { gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 58vw; }
-  .topbar { height: 64px; display: flex; justify-content: space-between; padding: 0 14px; }
+  .topbar { height: auto; min-height: 64px; display: flex; flex-wrap: wrap; justify-content: space-between; padding: 10px 14px; gap: 10px; }
   .topbar-actions { gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 62vw; }
   .topbar-actions .chip-button { padding: 6px 8px; font-size: 11px; }
   .repo-pill { max-width: 96px; }
@@ -3638,11 +3655,15 @@ button.file-row:hover {
   .arch-toolbar { left: 8px; right: 8px; align-items: flex-start; flex-direction: column; }
   .arch-filter-group { max-width: 100%; overflow-x: auto; }
   .arch-legend-bar { right: 8px; left: 8px; flex-wrap: wrap; gap: 8px 12px; }
+  .coverage-grid, .coverage-grid.technical { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .coverage-grid div:nth-child(4n) { border-right: 1px solid var(--line); }
+  .coverage-grid div:nth-child(2n) { border-right: 0; }
+  .coverage-grid div { border-bottom: 1px solid var(--line); }
+  .coverage-grid div:nth-last-child(-n+2) { border-bottom: 0; }
 }
 
 @media (max-width: 480px) {
-  .analyse-button { padding: 9px; font-size: 0; }
-  .analyse-button::after { content: 'Analyse'; font-size: 10px; }
+  .landing-input-box .analyse-button { padding: 10px 14px; font-size: 11px; }
   .overview-hero h1 { font-size: 38px; }
   .overview-actions { display: grid; }
   .overview-actions button { width: 100%; }
@@ -3652,7 +3673,12 @@ button.file-row:hover {
   .metric-grid article:first-child { border-top: 0; }
   .command-box { grid-template-columns: 1fr; }
   .command-box button { border-top: 1px solid #283745; border-left: 0; padding: 10px; }
-  .landing-input-box { grid-template-columns: 1fr; gap: 8px; }
+  .landing-input-box { grid-template-columns: auto 1fr; gap: 8px; }
+  .landing-input-box .analyse-button { grid-column: 1 / -1; width: 100%; justify-content: center; }
+  .coverage-grid, .coverage-grid.technical { grid-template-columns: 1fr; }
+  .coverage-grid div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .coverage-grid div:last-child { border-bottom: 0; }
+  .hero-scan-counter { width: 100%; justify-content: center; text-align: center; }
   .code-graph-controls > .chip-button,
   .code-graph-controls > select {
     flex-basis: 100%;
@@ -3673,7 +3699,7 @@ button.file-row:hover {
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 9999;
+  z-index: 40;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4063,6 +4089,21 @@ button.file-row:hover {
 
   .graph-export-row-buttons .chip-button {
     width: 100%;
+  }
+
+  .modal-backdrop,
+  .dialog-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .analyse-dialog,
+  .dialog-card {
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 20px 16px;
+    border-radius: 14px 14px 0 0;
   }
 
   .recent-analysis-card {
