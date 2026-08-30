@@ -64,6 +64,7 @@ launch_posts.md
 launch_*.md
 # Tooling, scripts & IDE clutter
 .vscode/
+.kilo/
 scripts/
 tsconfig.tsbuildinfo
 /.swc

@@ -89,7 +89,13 @@ async function pickNodeWithMostEdges(page: Page): Promise<string> {
 test.describe('Code Graph view', () => {
   test('renders the constellation with nodes and edges', async ({ page }) => {
     const pageErrors: string[] = [];
+    const schemaConsoleErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error' && message.text().includes('Error compiling schema')) {
+        schemaConsoleErrors.push(message.text());
+      }
+    });
 
     await openCodeGraph(page);
 
@@ -101,6 +107,7 @@ test.describe('Code Graph view', () => {
     expect(await edges.count()).toBeGreaterThan(10);
 
     expect(pageErrors).toEqual([]);
+    expect(schemaConsoleErrors).toEqual([]);
   });
 
   test('edge endpoints anchor to node handles', async ({ page }) => {

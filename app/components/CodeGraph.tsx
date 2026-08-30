@@ -44,6 +44,7 @@ const INITIAL_NODE_LIMIT = 80;
 const EXPAND_LIMIT = 24;
 const MAX_VISIBLE_NODE_LIMIT = 240;
 const MAX_RENDERED_EDGE_LIMIT = 240;
+const MIN_SPAWN_DISTANCE = 86;
 
 const kindTone: Record<string, string> = {
   repository: '#e879f9',
@@ -329,17 +330,51 @@ function buildNeighborhood(edges: GraphEdge[]): Map<string, Set<string>> {
 }
 
 function spawnPoint(id: string, adjacency: Map<string, Set<string>>, pos: Map<string, GraphPoint>, index: number): GraphPoint {
-  for (const neighbor of adjacency.get(id) ?? []) {
-    const base = pos.get(neighbor);
-    if (base) {
-      const angle = index * 2.399963 + hashSeed(`${id}:spawn`) * 1.2;
-      const radius = 120 + hashSeed(`${id}:spawn:r`) * 90;
-      return { x: base.x + Math.cos(angle) * radius, y: base.y + Math.sin(angle) * radius };
+  let bestPoint: GraphPoint | null = null;
+  let bestClearance = -Infinity;
+
+  const consider = (point: GraphPoint) => {
+    let nearest = Infinity;
+    for (const other of pos.values()) {
+      nearest = Math.min(nearest, Math.hypot(point.x - other.x, point.y - other.y));
+    }
+    if (nearest >= MIN_SPAWN_DISTANCE) return point;
+    if (nearest > bestClearance) {
+      bestClearance = nearest;
+      bestPoint = point;
+    }
+    return null;
+  };
+
+  const bases = [...(adjacency.get(id) ?? [])]
+    .map((neighbor) => pos.get(neighbor))
+    .filter((point): point is GraphPoint => !!point)
+    .slice(0, 3);
+
+  for (const [baseIndex, base] of bases.entries()) {
+    for (let ring = 0; ring < 8; ring++) {
+      const radius = 150 + ring * 84 + hashSeed(`${id}:spawn:${baseIndex}:${ring}:radius`) * 28;
+      for (let slot = 0; slot < 16; slot++) {
+        const angle = hashSeed(`${id}:spawn:${baseIndex}:${ring}:${slot}:angle`) * Math.PI * 2;
+        const point = {
+          x: base.x + Math.cos(angle) * radius,
+          y: base.y + Math.sin(angle) * radius,
+        };
+        const clearPoint = consider(point);
+        if (clearPoint) return clearPoint;
+      }
     }
   }
-  const fallbackAngle = index * 2.399963 + hashSeed(`${id}:spawn`) * 0.45;
-  const fallbackRadius = 260 + Math.sqrt(index + 1) * 105 + hashSeed(`${id}:spawn:r`) * 120;
-  return { x: Math.cos(fallbackAngle) * fallbackRadius, y: Math.sin(fallbackAngle) * fallbackRadius };
+
+  for (let ring = 0; ring < 8; ring++) {
+    const radius = 360 + ring * 96 + Math.sqrt(index + 1) * 24;
+    const angle = index * 2.399963 + hashSeed(`${id}:fallback:${ring}`) * 0.8;
+    const point = { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+    const clearPoint = consider(point);
+    if (clearPoint) return clearPoint;
+  }
+
+  return bestPoint ?? { x: 0, y: 0 };
 }
 
 function pickSides(a: GraphPoint, b: GraphPoint): { s: Side; t: Side } {
@@ -569,6 +604,8 @@ export function CodeGraph({
 
   const wakeRef = useRef<() => void>(() => {});
   const pinnedRef = useRef<Set<string> | null>(null);
+  const simulationPausedRef = useRef(false);
+  const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const adjacencyRef = useRef<Map<string, Set<string>>>(new Map());
   const springRef = useRef<Array<{ a: string; b: string }>>([]);
   const velRef = useRef<Map<string, GraphPoint>>(new Map());
@@ -580,6 +617,35 @@ export function CodeGraph({
   const reheat = useCallback((alpha: number) => {
     alphaRef.current.alpha = Math.max(alphaRef.current.alpha, alpha);
     wakeRef.current();
+  }, []);
+
+  // Keep node targets stable while the pointer is over them. This preserves
+  // the live layout but prevents a moving node from sliding away between a
+  // hover and click, especially while expanding a dense graph.
+  const pauseSimulation = useCallback(() => {
+    if (resumeTimerRef.current) {
+      clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = null;
+    }
+    simulationPausedRef.current = true;
+  }, []);
+
+  const resumeSimulationNow = useCallback(() => {
+    if (resumeTimerRef.current) {
+      clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = null;
+    }
+    simulationPausedRef.current = false;
+    wakeRef.current();
+  }, []);
+
+  const resumeSimulation = useCallback(() => {
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = setTimeout(() => {
+      resumeTimerRef.current = null;
+      simulationPausedRef.current = false;
+      wakeRef.current();
+    }, 160);
   }, []);
 
   useEffect(() => {
@@ -618,7 +684,11 @@ export function CodeGraph({
     const spawnPositions = new Map<string, GraphPoint>();
     visibleNodes.forEach((n, index) => {
       if (!currentPositions.has(n.id)) {
-        spawnPositions.set(n.id, spawnPoint(n.id, adjacencyRef.current, currentPositions, index));
+        const spawn = spawnPoint(n.id, adjacencyRef.current, currentPositions, index);
+        spawnPositions.set(n.id, spawn);
+        // Reserve each spawn before placing the next one so a burst of
+        // expanded neighbors cannot land on top of one another.
+        currentPositions.set(n.id, spawn);
         velRef.current.set(n.id, { x: 0, y: 0 });
         spawned++;
       }
@@ -643,6 +713,10 @@ export function CodeGraph({
     let sleeping = false;
 
     const tick = () => {
+      if (simulationPausedRef.current) {
+        sleeping = true;
+        return;
+      }
       const pinned = pinnedRef.current;
       const points = new Map<string, GraphPoint>(
         latestNodesRef.current.map((n) => [n.id, { x: n.position.x, y: n.position.y }])
@@ -672,6 +746,7 @@ export function CodeGraph({
     };
 
     wakeRef.current = () => {
+      if (simulationPausedRef.current) return;
       if (!sleeping) return;
       sleeping = false;
       cancelAnimationFrame(frame);
@@ -686,24 +761,30 @@ export function CodeGraph({
     };
   }, [sig]);
 
+  useEffect(() => () => {
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+  }, []);
+
   const onNodesChange = useCallback((changes: NodeChange<Node<CodeGraphNodeData>>[]) => {
     setRfNodes((prev) => applyNodeChanges(changes, prev));
   }, []);
 
   const onNodeDragStart = useCallback(
     (_: unknown, node: Node<CodeGraphNodeData>) => {
+      resumeSimulationNow();
       pinnedRef.current = new Set([node.id]);
       reheat(0.35);
     },
-    [reheat]
+    [reheat, resumeSimulationNow]
   );
 
   const onNodeDragStop = useCallback(
     () => {
       pinnedRef.current = null;
+      resumeSimulation();
       reheat(0.28);
     },
-    [reheat]
+    [reheat, resumeSimulation]
   );
 
   const neighborhood = useMemo(() => buildNeighborhood(renderedEdges), [renderedEdges]);
@@ -787,9 +868,10 @@ export function CodeGraph({
   }, []);
 
   const onPaneClick = useCallback(() => {
+    resumeSimulationNow();
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
-  }, []);
+  }, [resumeSimulationNow]);
 
   function resetView() {
     setExpandedIds(new Set());
@@ -852,7 +934,7 @@ export function CodeGraph({
         </span>
       </div>
 
-      <div style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', minHeight: 420 }}>
+      <div className="code-graph-canvas-shell">
         <ReactFlow
           key={resetKey}
           nodes={decoratedNodes}
@@ -862,8 +944,14 @@ export function CodeGraph({
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
           onPaneClick={onPaneClick}
-          onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
-          onNodeMouseLeave={() => setHoveredNodeId(null)}
+          onNodeMouseEnter={(_, node) => {
+            pauseSimulation();
+            setHoveredNodeId(node.id);
+          }}
+          onNodeMouseLeave={() => {
+            setHoveredNodeId(null);
+            resumeSimulation();
+          }}
           onEdgeMouseEnter={(_, edge) => setHoveredEdgeId(edge.id)}
           onEdgeMouseLeave={() => setHoveredEdgeId(null)}
           onNodeDragStart={onNodeDragStart}
