@@ -8,6 +8,10 @@ export const runtime = 'nodejs';
 
 const MAX_BLOBS_PER_RUN = 5000;
 const BATCH_SIZE = 100;
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, private, max-age=0',
+  'X-Content-Type-Options': 'nosniff',
+};
 
 export async function GET(request: NextRequest) {
   return handleCleanup(request);
@@ -20,13 +24,13 @@ export async function POST(request: NextRequest) {
 async function handleCleanup(request: NextRequest): Promise<NextResponse> {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
-    return NextResponse.json({ code: 'CRON_SECRET_NOT_CONFIGURED', message: 'Cron secret is not configured.' }, { status: 503 });
+    return NextResponse.json({ code: 'CRON_SECRET_NOT_CONFIGURED', message: 'Cron secret is not configured.' }, { status: 503, headers: NO_STORE_HEADERS });
   }
 
   const authHeader = request.headers.get('authorization');
   const expected = `Bearer ${cronSecret}`;
   if (authHeader !== expected) {
-    return NextResponse.json({ code: 'UNAUTHORIZED', message: 'Invalid cron token.' }, { status: 401 });
+    return NextResponse.json({ code: 'UNAUTHORIZED', message: 'Invalid cron token.' }, { status: 401, headers: NO_STORE_HEADERS });
   }
 
   try {
@@ -90,8 +94,8 @@ async function handleCleanup(request: NextRequest): Promise<NextResponse> {
       deletedTotal: deletedCanonical + deletedExports,
       failedDeletions,
       failedBatches,
-    });
+    }, { headers: NO_STORE_HEADERS });
   } catch {
-    return NextResponse.json({ code: 'CLEANUP_FAILED', message: 'Cleanup failed.' }, { status: 500 });
+    return NextResponse.json({ code: 'CLEANUP_FAILED', message: 'Cleanup failed.' }, { status: 500, headers: NO_STORE_HEADERS });
   }
 }

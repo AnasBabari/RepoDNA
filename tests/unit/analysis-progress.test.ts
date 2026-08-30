@@ -68,4 +68,18 @@ describe('bounded analysis progress', () => {
     expect(project.security.truncated).toContain('TOO_MANY_FILES');
     expect(project.inventory.acquisitionMode).toBe('git-tree');
   });
+
+  it('reports the parser mode actually used by the V2 pipeline', async () => {
+    const project = await analyzeRepositoryV2(
+      {
+        name: 'legacy-parser-fixture',
+        source: 'test:legacy-parser-fixture',
+        skipped: [],
+        files: [discovered('src/main.py', 'def main():\n    return 1')],
+      },
+      { parserMode: 'legacy' }
+    );
+
+    expect(project.parsers.mode).toBe('legacy');
+  });
 });

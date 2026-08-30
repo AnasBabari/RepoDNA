@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createApiErrorResponse } from '../../../lib/api-error';
+import { isJsonBodyTooLarge, readBoundedJson } from '../../../lib/bounded-json';
 import { readCachedPublicArtifact } from '../../../lib/analyzer/v2/artifact-cache';
 import { auth } from '../../../lib/auth';
 import { normalizeArtifactForExport } from '../../../lib/export/graph/normalize';
@@ -20,6 +21,11 @@ import {
 } from '../../../lib/export/public-export-cache';
 
 export const dynamic = 'force-dynamic';
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, private, max-age=0',
+  'X-Content-Type-Options': 'nosniff',
+};
 
 const COMMIT_SHA_RE = /^[0-9a-f]{40}$/;
 const OWNER_RE = /^[a-z0-9._-]+$/i;
@@ -76,8 +82,11 @@ export async function POST(request: NextRequest) {
 
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await readBoundedJson(request);
+  } catch (error) {
+    if (isJsonBodyTooLarge(error)) {
+      return createApiErrorResponse('PAYLOAD_TOO_LARGE', 'Request body exceeds the 16 KB limit.', 413);
+    }
     return createApiErrorResponse('INVALID_EXPORT_REQUEST', 'Body must be valid JSON.', 400);
   }
 
@@ -122,7 +131,14 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const cached = await readCachedPublicArtifact({ owner, repo, commitSha });
+  let cached;
+  try {
+    cached = await readCachedPublicArtifact({ owner, repo, commitSha });
+  } catch {
+    return createApiErrorResponse('ANALYSIS_CACHE_UNAVAILABLE', 'The analysis cache is temporarily unavailable.', 503, {
+      fallbackAvailable: true,
+    });
+  }
   if (!cached) {
     return createApiErrorResponse('ANALYSIS_ARTIFACT_NOT_FOUND', 'Canonical analysis artifact not found.', 404);
   }
@@ -134,9 +150,8 @@ export async function POST(request: NextRequest) {
   let normalized;
   try {
     normalized = await normalizeArtifactForExport(cached.project);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Graph validation failed.';
-    return createApiErrorResponse('EXPORT_GRAPH_INVALID', message, 422);
+  } catch {
+    return createApiErrorResponse('EXPORT_GRAPH_INVALID', 'Canonical graph failed export validation.', 422);
   }
 
   const sourceDigest = normalized.sourceDigest;
@@ -175,7 +190,7 @@ export async function POST(request: NextRequest) {
       sha256: existing.metadata.sha256,
       cache: { layer: 'vercel-blob', hit: true, expiresAt: cached.pointer.expiresAt },
       download: { url: signed.url, expiresAt: signed.expiresAt },
-    });
+    }, { headers: NO_STORE_HEADERS });
   }
 
   let file;
@@ -195,13 +210,19 @@ export async function POST(request: NextRequest) {
   }
 
   const remainingTtlSeconds = Math.max(60, Math.floor((expiresEpoch - Date.now()) / 1000));
-  await storePublicExport({
-    pathname,
-    bytes: file.bytes,
-    contentType: file.mediaType,
-    cacheControlMaxAge: remainingTtlSeconds,
-    sha256: file.sha256,
-  });
+  try {
+    await storePublicExport({
+      pathname,
+      bytes: file.bytes,
+      contentType: file.mediaType,
+      cacheControlMaxAge: remainingTtlSeconds,
+      sha256: file.sha256,
+    });
+  } catch {
+    return createApiErrorResponse('EXPORT_CACHE_WRITE_FAILED', 'The export could not be stored securely.', 503, {
+      fallbackAvailable: true,
+    });
+  }
 
   let signed;
   try {
@@ -222,7 +243,7 @@ export async function POST(request: NextRequest) {
     sha256: file.sha256,
     cache: { layer: 'vercel-blob', hit: false, expiresAt: cached.pointer.expiresAt },
     download: { url: signed.url, expiresAt: signed.expiresAt },
-  });
+  }, { headers: NO_STORE_HEADERS });
 }
 
 function filenameForFormat(

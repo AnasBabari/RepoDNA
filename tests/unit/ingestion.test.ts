@@ -2,12 +2,33 @@ import * as fflate from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
 import {
   extractFromZip,
+  extractFromFileList,
   fetchGitHubRepo,
   parseGitHubUrl,
 } from '../../app/lib/analyzer/ingestion';
 import { IngestionError } from '../../app/lib/analyzer/types';
 
 describe('Ingestion & Resource Limits', () => {
+  it('uses File.size for local upload byte limits before decoding non-ASCII text', async () => {
+    const text = vi.fn(async () => 'ééé');
+    const file = {
+      name: 'unicode.py',
+      webkitRelativePath: 'repo/unicode.py',
+      size: 6,
+      text,
+    } as unknown as File;
+
+    await expect(extractFromFileList([file], {
+      maxFiles: 10,
+      maxArchiveEntries: 10,
+      maxFileBytes: 100,
+      maxArchiveBytes: 100,
+      maxTotalExtractedBytes: 5,
+      fetchTimeoutMs: 1000,
+    })).rejects.toMatchObject({ code: 'EXTRACTED_TOO_LARGE', status: 413 });
+    expect(text).not.toHaveBeenCalled();
+  });
+
   it('validates public GitHub URLs and handles all real-world URL formats with canonical resolution', () => {
     // Standard formats
     expect(parseGitHubUrl('https://github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });

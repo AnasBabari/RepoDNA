@@ -1,4 +1,5 @@
 import { PUBLIC_REPOSITORY_INGESTION_LIMITS, type DiscoveredFile, type IngestionInventory, type IngestionLimits } from './analyzer/types';
+import { getUserFacingErrorMessage } from './user-facing-errors';
 
 /**
  * Browser deep-scan client for private repositories.
@@ -144,11 +145,18 @@ async function runInlineDiscoveryScan(discovery: DiscoveryPayload, ingestionLimi
   return analyzeRepositoryV2(discovery, { ingestionLimits });
 }
 
-function mapBrowserAnalysisFailure(error: unknown): DeepScanFailure {
+function errorCode(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'ANALYSIS_FAILED';
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && code ? code : 'ANALYSIS_FAILED';
+}
+
+function mapBrowserAnalysisFailure(error: unknown, fallback = 'Repository analysis failed in the browser.'): DeepScanFailure {
+  const code = errorCode(error);
   return {
     authState: 'unavailable',
-    code: error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : 'ANALYSIS_FAILED',
-    message: error instanceof Error ? error.message : 'Repository analysis failed in the browser.',
+    code,
+    message: getUserFacingErrorMessage(error, fallback, code),
   };
 }
 
@@ -202,31 +210,39 @@ export async function analyzePublicRepositoryInBrowser(options: {
 
 function mapArchiveFailure(status: number, body: { code?: string; message?: string }): DeepScanFailure {
   switch (status) {
-    case 401:
+    case 401: {
+      const code = body.code ?? 'GITHUB_AUTH_REQUIRED';
       return {
         authState: body.code === 'GITHUB_TOKEN_EXPIRED' ? 'expired' : 'unauthenticated',
-        code: body.code ?? 'GITHUB_AUTH_REQUIRED',
-        message: body.message ?? 'GitHub authentication required.',
+        code,
+        message: getUserFacingErrorMessage(body, 'GitHub authentication is required.', code),
       };
-    case 403:
+    }
+    case 403: {
+      const code = body.code ?? 'GITHUB_FORBIDDEN';
       return {
         authState: 'forbidden',
-        code: body.code ?? 'GITHUB_FORBIDDEN',
-        message: body.message ?? 'RepoDNA does not have access to this repository.',
+        code,
+        message: getUserFacingErrorMessage(body, 'RepoDNA does not have access to this repository.', code),
         installSettingsUrl: (body as { installSettingsUrl?: string }).installSettingsUrl,
       };
-    case 429:
+    }
+    case 429: {
+      const code = body.code ?? 'RATE_LIMITED';
       return {
         authState: 'rate_limited',
-        code: body.code ?? 'RATE_LIMITED',
-        message: body.message ?? 'Rate limit reached. Please retry shortly.',
+        code,
+        message: getUserFacingErrorMessage(body, 'Rate limit reached. Please retry shortly.', code),
       };
-    default:
+    }
+    default: {
+      const code = body.code ?? 'ARCHIVE_FETCH_FAILED';
       return {
         authState: 'unavailable',
-        code: body.code ?? 'ARCHIVE_FETCH_FAILED',
-        message: body.message ?? 'Repository archive could not be fetched.',
+        code,
+        message: getUserFacingErrorMessage(body, 'Repository archive could not be fetched.', code),
       };
+    }
   }
 }
 
@@ -285,18 +301,10 @@ export async function analyzePrivateRepositoryInBrowser(options: {
         const project = await runInlineScan(rawBuffer, url.split('/').pop() ?? 'repository');
         return { project, authState: 'ok' };
       } catch (inlineErr) {
-        return {
-          authState: 'unavailable',
-          code: (inlineErr as { code?: string }).code ?? 'ANALYSIS_FAILED',
-          message: inlineErr instanceof Error ? inlineErr.message : 'Private analysis failed.',
-        };
+        return mapBrowserAnalysisFailure(inlineErr, 'Private analysis failed.');
       }
     }
-    return {
-      authState: 'unavailable',
-      code,
-      message: err instanceof Error ? err.message : 'Private analysis failed.',
-    };
+    return mapBrowserAnalysisFailure(err, 'Private analysis failed.');
   }
 }
 
@@ -370,17 +378,9 @@ async function analyzePrivateRepositoryViaTree(options: {
         const project = await runInlineDiscoveryScan(discovery);
         return { project, authState: 'ok' };
       } catch (inlineErr) {
-        return {
-          authState: 'unavailable',
-          code: (inlineErr as { code?: string }).code ?? 'ANALYSIS_FAILED',
-          message: inlineErr instanceof Error ? inlineErr.message : 'Private tree analysis failed.',
-        };
+        return mapBrowserAnalysisFailure(inlineErr, 'Private tree analysis failed.');
       }
     }
-    return {
-      authState: 'unavailable',
-      code,
-      message: err instanceof Error ? err.message : 'Private tree analysis failed.',
-    };
+    return mapBrowserAnalysisFailure(err, 'Private tree analysis failed.');
   }
 }

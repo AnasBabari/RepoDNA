@@ -5,11 +5,17 @@ import { IngestionError, PUBLIC_REPOSITORY_INGESTION_LIMITS } from '../../lib/an
 import { auth } from '../../lib/auth';
 import { checkAnalysisRateLimit } from '../../lib/ratelimit';
 import { createApiErrorResponse } from '../../lib/api-error';
+import { isJsonBodyTooLarge, readBoundedJson } from '../../lib/bounded-json';
 import { validateRepoDNAProject } from '../../lib/schema/validator';
 import { getGitHubAccessToken } from '../../lib/github-session';
 import { recordScannedPublicRepository } from '../../lib/stats/scanned-repositories';
 
 export const dynamic = 'force-dynamic';
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, private, max-age=0',
+  'X-Content-Type-Options': 'nosniff',
+};
 
 interface StructuredLog {
   requestId: string;
@@ -235,7 +241,7 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
       failureCategory: null,
     });
 
-    return NextResponse.json({ success: true, project }, { status: 200 });
+    return NextResponse.json({ success: true, project }, { status: 200, headers: NO_STORE_HEADERS });
   } catch (error: unknown) {
     const durationMs = Date.now() - startTime;
 
@@ -286,13 +292,16 @@ async function handleAnalyze(url: string | null, method: string, request: NextRe
 export async function POST(request: NextRequest) {
   let url: string | null = null;
   try {
-    const body = (await request.json()) as { url?: unknown; repo?: unknown };
+    const body = await readBoundedJson<{ url?: unknown; repo?: unknown }>(request);
     if (typeof body?.url === 'string') {
       url = body.url;
     } else if (typeof body?.repo === 'string') {
       url = body.repo;
     }
-  } catch {
+  } catch (error) {
+    if (isJsonBodyTooLarge(error)) {
+      return createApiErrorResponse('PAYLOAD_TOO_LARGE', 'Request body exceeds the 16 KB limit.', 413);
+    }
     return createApiErrorResponse(
       'MALFORMED_JSON',
       'Invalid JSON request body. Expected {"url": "https://github.com/owner/repo"}.',

@@ -46,5 +46,9 @@ RepoDNA performs **purely static syntax and structural analysis** without execut
 
 Running untrusted repository code inside dynamic runtimes poses severe security and denial-of-service risks. By relying exclusively on deterministic static analysis, RepoDNA ensures:
 1. **Safety**: Zero risk of executing malicious payload scripts or crypto miners.
-2. **Speed**: Instantaneous sub-second analysis times across thousands of files.
-3. **Portability**: 100% client-side execution in standard web browsers with zero backend dependencies.
+2. **Predictable work**: Analysis is bounded by explicit file, byte, syntax-tree,
+   and graph budgets. Small repositories often finish quickly; large or dense
+   repositories can take longer and may produce a clearly marked partial graph.
+3. **Portability**: Local folders, ZIP files, and fallback analysis can run
+   entirely in a standard browser. Public deep scans can also use the durable
+   server workflow for larger repositories and cached, commit-addressed results.

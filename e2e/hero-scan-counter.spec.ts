@@ -30,10 +30,14 @@ test.describe('hero scan counter', () => {
     await expect(counter).toBeVisible();
     await expect(page.getByTestId('scan-counter-count')).toHaveText('1,234');
     await expect(counter).toContainText('RepoDNA has scanned');
-    await expect(counter).toContainText('unique public repositories');
+    await expect(counter).toContainText('public repositories');
+    // Regression: JSX whitespace between flex children is stripped; the count
+    // must read as a proper sentence for screen readers ("scanned 1,234 public"),
+    // never "scanned1,234public".
+    await expect(counter).toHaveText(/RepoDNA has scanned 1,234 public repositories/);
     await expect(page.locator('.browser-retention-toggle')).toHaveCount(0);
     await expect(counter).toHaveAttribute('aria-live', 'polite');
-    await expect(counter).toHaveAttribute('title', "Unique public repositories successfully analyzed by RepoDNA's server-side analyzers.");
+    await expect(counter).toHaveAttribute('title', 'Unique public repositories successfully analyzed by RepoDNA.');
   });
 
   test('renders unavailable state when store not configured', async ({ page }) => {

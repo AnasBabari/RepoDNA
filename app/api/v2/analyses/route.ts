@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 
 import { createApiErrorResponse } from '../../../lib/api-error';
+import { isJsonBodyTooLarge, readBoundedJson } from '../../../lib/bounded-json';
 import { parseGitHubUrl } from '../../../lib/analyzer';
 import { isPublicArtifactCacheConfigured } from '../../../lib/analyzer/v2/artifact-cache';
 import { auth } from '../../../lib/auth';
@@ -12,6 +13,11 @@ import {
 } from '../../../workflows/analyze-public-repository';
 
 export const dynamic = 'force-dynamic';
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, private, max-age=0',
+  'X-Content-Type-Options': 'nosniff',
+};
 
 async function resolveCommitSha(owner: string, name: string): Promise<string | null> {
   try {
@@ -103,8 +109,11 @@ export async function POST(request: NextRequest) {
 
   let bodyUrl: unknown;
   try {
-    bodyUrl = ((await request.json()) as { url?: unknown })?.url;
-  } catch {
+    bodyUrl = (await readBoundedJson<{ url?: unknown }>(request))?.url;
+  } catch (error) {
+    if (isJsonBodyTooLarge(error)) {
+      return createApiErrorResponse('PAYLOAD_TOO_LARGE', 'Request body exceeds the 16 KB limit.', 413);
+    }
     return createApiErrorResponse('INVALID_REQUEST', 'Body must be JSON with a "url" field.', 400);
   }
   if (typeof bodyUrl !== 'string' || !bodyUrl.trim()) {
@@ -157,7 +166,7 @@ export async function POST(request: NextRequest) {
         commitSha,
         ...runEndpoints(run.runId),
       },
-      { status: 202 }
+      { status: 202, headers: NO_STORE_HEADERS }
     );
   } catch (error) {
     console.error('[RepoDNA:WorkflowStartFailed]', error);
@@ -178,7 +187,7 @@ export async function GET(request: NextRequest) {
   try {
     const status = await runStatus(runId);
     return status
-      ? NextResponse.json(status)
+      ? NextResponse.json(status, { headers: NO_STORE_HEADERS })
       : createApiErrorResponse('RUN_NOT_FOUND', 'Unknown or expired analysis run.', 404);
   } catch {
     return createApiErrorResponse('RUN_NOT_FOUND', 'Unknown or expired analysis run.', 404);

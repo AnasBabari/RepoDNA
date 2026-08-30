@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import Link from 'next/link';
+import packageMetadata from '../../package.json';
 
 import { ArchitectureGraph } from './ArchitectureGraph';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
@@ -26,7 +27,7 @@ import {
 } from '../lib/durable-analysis-client';
 import { generateTextReport as generateTextReportImpl } from '../lib/export/text-report';
 import { analyzePrivateRepositoryInBrowser, analyzePublicRepositoryInBrowser, isDeepScanFailure } from '../lib/deep-scan-client';
-import { adaptV1ToV2Viewer } from '../lib/schema/artifact-loader';
+import { adaptV1ToV2Viewer, assertImportedArtifactSize, loadRepoDNAArtifact } from '../lib/schema/artifact-loader';
 import { projectV2ForWorkspace } from '../lib/schema/v2-viewer-projection';
 import {
   ANALYSIS_COMPLETE_STEP,
@@ -59,6 +60,7 @@ import {
   type BrowserCacheSourceType,
 } from '../lib/export/browser-export-cache';
 import { computeSourceArtifactDigest } from '../lib/export/graph/normalize';
+import { getUserFacingErrorMessage } from '../lib/user-facing-errors';
 import type {
   ArchitectureComponent,
   FileRecord,
@@ -70,6 +72,7 @@ import type {
 type View = 'overview' | 'architecture' | 'graph' | 'routes' | 'dependencies' | 'files';
 type AnalysisOrigin = BrowserCacheSourceType;
 type OverviewAudience = 'plain' | 'technical';
+const APP_VERSION = packageMetadata.version;
 
 const navigation: { id: View; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -114,41 +117,6 @@ function sourceTypeLabel(sourceType: BrowserCacheSourceType): string {
     sample: 'Sample',
   };
   return labels[sourceType];
-}
-
-function matchesProject(value: unknown): value is RepoDNAProject {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<RepoDNAProject>;
-  return (
-    typeof candidate.schemaVersion === 'string' &&
-    !!candidate.repository?.name &&
-    Array.isArray(candidate.files) &&
-    Array.isArray(candidate.symbols) &&
-    Array.isArray(candidate.imports) &&
-    Array.isArray(candidate.calls) &&
-    Array.isArray(candidate.routes) &&
-    Array.isArray(candidate.entrypoints) &&
-    Array.isArray(candidate.flows) &&
-    Array.isArray(candidate.architecture?.components) &&
-    Array.isArray(candidate.architecture?.connections) &&
-    !!candidate.metrics &&
-    Array.isArray(candidate.diagnostics) &&
-    !!candidate.metadata?.fileComponents
-  );
-}
-
-function matchesProjectV2(value: unknown): value is RepoDNAProjectV2 {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<RepoDNAProjectV2>;
-  return (
-    candidate.schemaVersion === '2.0.0' &&
-    !!candidate.repository?.name &&
-    !!candidate.inventory &&
-    Array.isArray(candidate.nodes) &&
-    Array.isArray(candidate.edges) &&
-    Array.isArray(candidate.diagnostics) &&
-    !!candidate.security
-  );
 }
 
 function generateTextReport(project: RepoDNAProject | RepoDNAProjectV2): string {
@@ -279,7 +247,7 @@ function LandingView({
         <Link className="brand" href="/" aria-label="RepoDNA">
           <span className="brand-mark">R</span>
           <span className="brand-title">RepoDNA</span>
-          <span className="version">v1.1 BETA</span>
+          <span className="version">v{APP_VERSION} BETA</span>
         </Link>
         <div className="landing-nav-center">
           <button className="chip-button" onClick={onLoadDemo} type="button">
@@ -510,7 +478,7 @@ function LandingView({
   );
 }
 
-const APP_BUILD_VERSION = 'v1.1.0-a91b35f';
+const APP_BUILD_VERSION = `v${APP_VERSION}`;
 
 // Analyzing Progress Screen
 function AnalyzingView({
@@ -569,8 +537,8 @@ function AnalyzingView({
         {error ? (
           <div>
             <div className="dialog-error" style={{ marginBottom: '20px', textAlign: 'left' }}>
-              <strong>{errorCode ? `Error [${errorCode}]: ` : ''}</strong>
-              {error}
+              <strong>We couldn’t complete this analysis.</strong>
+              <div>{getUserFacingErrorMessage(error, 'Try again shortly.', errorCode)}</div>
               {retryAfter ? <div style={{ marginTop: '6px', opacity: 0.85 }}>Retry available in {retryAfter}s.</div> : null}
             </div>
 
@@ -1841,7 +1809,7 @@ function WorkspaceContent() {
 
   function showAnalysisError(controller: AbortController, error: unknown, fallbackMessage: string) {
     if (!isActiveAnalysis(controller) || error instanceof AnalysisCancelledError) return;
-    setAnalyzingError(error instanceof Error ? error.message : fallbackMessage);
+    setAnalyzingError(getUserFacingErrorMessage(error, fallbackMessage));
   }
 
   // Check URL query parameters (e.g. ?repo=https://github.com/owner/repo)
@@ -1971,11 +1939,11 @@ function WorkspaceContent() {
       });
       if (isDeepScanFailure(outcome)) {
         failureCode = outcome.code;
-        throw new Error(outcome.message);
+        throw Object.assign(new Error(outcome.message), { code: outcome.code });
       }
       if (!isRepoDNAProjectV2(outcome.project)) {
         failureCode = 'INVALID_ANALYSIS_ARTIFACT';
-        throw new Error('Browser analysis returned an invalid RepoDNA v2 artifact.');
+        throw Object.assign(new Error('Browser analysis returned an invalid RepoDNA v2 artifact.'), { code: failureCode });
       }
       canonicalProject = outcome.project;
       resolvedOrigin = 'public-browser';
@@ -2004,11 +1972,11 @@ function WorkspaceContent() {
       if (isDeepScanFailure(outcome)) {
         failureCode = outcome.code;
         setAnalyzingErrorCode(outcome.code);
-        throw new Error(outcome.message);
+        throw Object.assign(new Error(outcome.message), { code: outcome.code });
       }
       if (!isRepoDNAProjectV2(outcome.project)) {
         failureCode = 'INVALID_ANALYSIS_ARTIFACT';
-        throw new Error('Private deep scan returned an invalid RepoDNA v2 artifact.');
+        throw Object.assign(new Error('Private deep scan returned an invalid RepoDNA v2 artifact.'), { code: failureCode });
       }
       canonicalProject = outcome.project;
       resolvedOrigin = 'github-private';
@@ -2032,18 +2000,16 @@ function WorkspaceContent() {
             try {
               const sampleRes = await fetch(samplePath, { signal: controller.signal });
               if (sampleRes.ok) {
-                const parsedSample = (await sampleRes.json()) as unknown;
-                if (matchesProjectV2(parsedSample)) {
+                const loadedArtifact = loadRepoDNAArtifact((await sampleRes.json()) as unknown);
+                if (loadedArtifact.isV2) {
                   loadedSample = true;
                   resolvedOrigin = 'sample';
-                  canonicalProject = parsedSample;
-                  return projectV2ForWorkspace(parsedSample);
+                  canonicalProject = loadedArtifact.project as RepoDNAProjectV2;
+                  return projectV2ForWorkspace(canonicalProject);
                 }
-                if (matchesProject(parsedSample)) {
-                  loadedSample = true;
-                  resolvedOrigin = 'sample';
-                  return parsedSample;
-                }
+                loadedSample = true;
+                resolvedOrigin = 'sample';
+                return loadedArtifact.project as RepoDNAProject;
               }
             } catch {
               if (controller.signal.aborted) throw new AnalysisCancelledError();
@@ -2106,7 +2072,19 @@ function WorkspaceContent() {
           });
 
           apiData = (await res.json().catch(() => null)) as ApiResponse | null;
-          if (res.ok && apiData?.success && matchesProject(apiData.project)) return apiData.project;
+          if (res.ok && apiData?.success) {
+            try {
+              const loadedArtifact = loadRepoDNAArtifact(apiData.project);
+              if (loadedArtifact.isV2) {
+                canonicalProject = loadedArtifact.project as RepoDNAProjectV2;
+                return projectV2ForWorkspace(canonicalProject);
+              }
+              return loadedArtifact.project as RepoDNAProject;
+            } catch {
+              // Treat an invalid server artifact as a controlled server failure
+              // and continue into the existing browser fallback path.
+            }
+          }
           isServerError = true;
         } catch {
           if (controller.signal.aborted) throw new AnalysisCancelledError();
@@ -2140,7 +2118,7 @@ function WorkspaceContent() {
           setAnalyzingErrorCode(errObj?.code ?? null);
           setAnalyzingRetryAfter(errObj?.retryAfter ?? null);
           trackAnalysisFailed('github_public', failureCode, 'server_error');
-          throw new Error(errObj?.message || 'Analysis failed on server.');
+          throw Object.assign(new Error(errObj?.message || 'Analysis failed on server.'), { code: failureCode });
         }
 
         const fallbackReason =
@@ -2155,13 +2133,17 @@ function WorkspaceContent() {
 
         try {
           return await runPublicBrowserFallback();
-        } catch (clientError) {
+        } catch {
+          // The fallback failure is recorded via trackAnalysisFailed above the
+          // throw path; the user-facing code intentionally reports the primary
+          // server failure, and the fallback error may contain local file paths
+          // that should not be surfaced or tracked.
           failureCode = errObj?.code || 'FALLBACK_FAILED';
           const message = errObj?.message || 'Server analysis failed and browser analysis could not complete.';
           setAnalyzingErrorCode(failureCode);
           setAnalyzingRetryAfter(errObj?.retryAfter ?? null);
           trackAnalysisFailed('github_public', failureCode, 'client_fallback');
-          throw new Error(`${message} (In-browser error: ${clientError instanceof Error ? clientError.message : 'failed'})`);
+          throw Object.assign(new Error(message), { code: failureCode });
         }
       });
 
@@ -2216,14 +2198,15 @@ function WorkspaceContent() {
     try {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
         if (importedJson) {
+          assertImportedArtifactSize(file.size);
           const text = await file.text();
           const parsed = JSON.parse(text) as unknown;
-          if (matchesProjectV2(parsed)) {
-            canonicalProject = parsed;
-            return projectV2ForWorkspace(parsed);
+          const loadedArtifact = loadRepoDNAArtifact(parsed);
+          if (loadedArtifact.isV2) {
+            canonicalProject = loadedArtifact.project as RepoDNAProjectV2;
+            return projectV2ForWorkspace(canonicalProject);
           }
-          if (!matchesProject(parsed)) throw new Error('Incompatible RepoDNA project schema.');
-          return parsed;
+          return loadedArtifact.project as RepoDNAProject;
         }
 
         const buffer = await file.arrayBuffer();
@@ -2249,9 +2232,10 @@ function WorkspaceContent() {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
         const res = await fetch('/demo-project.json', { signal: controller.signal });
         if (!res.ok) throw new Error('Could not fetch demo artifact.');
-        const parsed = (await res.json()) as unknown;
-        if (!matchesProject(parsed)) throw new Error('Incompatible demo project schema.');
-        return parsed;
+        const loadedArtifact = loadRepoDNAArtifact((await res.json()) as unknown);
+        return loadedArtifact.isV2
+          ? projectV2ForWorkspace(loadedArtifact.project as RepoDNAProjectV2)
+          : loadedArtifact.project as RepoDNAProject;
       });
       if (!isActiveAnalysis(controller)) return;
       revealProject(controller, analyzedProject, null, 'sample');
@@ -2445,7 +2429,7 @@ function WorkspaceContent() {
           <Link className="brand" href="/" onClick={(e) => { e.preventDefault(); returnToLanding(); }} aria-label="RepoDNA overview">
             <span className="brand-mark">R</span>
             <span className="brand-title">RepoDNA</span>
-            <span className="version">v1.1</span>
+            <span className="version">v{APP_VERSION}</span>
           </Link>
           <div className="repo-pill" title={project.repository.source}>
             <span className="status-dot" /> {project.repository.name}

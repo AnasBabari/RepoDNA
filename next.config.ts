@@ -4,6 +4,7 @@ import { withWorkflow } from 'workflow/next';
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
   {
@@ -15,6 +16,7 @@ const securityHeaders = [
       "img-src 'self' data: https://avatars.githubusercontent.com",
       "connect-src 'self' https://api.github.com https://codeload.github.com https://eu.i.posthog.com https://us.i.posthog.com https://eu-assets.i.posthog.com https://us-assets.i.posthog.com",
       "frame-ancestors 'none'",
+      "form-action 'self'",
       "object-src 'none'",
       "base-uri 'self'",
     ].join('; '),

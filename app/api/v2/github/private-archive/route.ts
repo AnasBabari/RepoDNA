@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createApiErrorResponse } from '../../../../lib/api-error';
+import { isJsonBodyTooLarge, readBoundedJson } from '../../../../lib/bounded-json';
 import { parseGitHubUrl } from '../../../../lib/analyzer';
 import { auth } from '../../../../lib/auth';
 import { getGitHubAccessToken } from '../../../../lib/github-session';
@@ -22,6 +23,11 @@ export const dynamic = 'force-dynamic';
  */
 
 const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
+const PRIVATE_NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, private, max-age=0',
+  'X-Content-Type-Options': 'nosniff',
+  Pragma: 'no-cache',
+};
 
 export async function POST(request: NextRequest) {
   let accessToken: string | undefined;
@@ -38,14 +44,17 @@ export async function POST(request: NextRequest) {
         code: 'GITHUB_AUTH_REQUIRED',
         message: 'Connect GitHub to analyze private repositories.',
       },
-      { status: 401 }
+      { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 
   let bodyUrl: unknown;
   try {
-    bodyUrl = ((await request.json()) as { url?: unknown })?.url;
-  } catch {
+    bodyUrl = (await readBoundedJson<{ url?: unknown }>(request))?.url;
+  } catch (error) {
+    if (isJsonBodyTooLarge(error)) {
+      return createApiErrorResponse('PAYLOAD_TOO_LARGE', 'Request body exceeds the 16 KB limit.', 413);
+    }
     return createApiErrorResponse('INVALID_REQUEST', 'Body must be JSON with a "url" field.', 400);
   }
   if (typeof bodyUrl !== 'string') {
@@ -76,7 +85,7 @@ export async function POST(request: NextRequest) {
           message: 'Your GitHub session is no longer valid. Reconnect GitHub to continue.',
           reconnectRequired: true,
         },
-        { status: 401 }
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
     if (metaRes.status === 403 || metaRes.status === 404) {
@@ -91,7 +100,7 @@ export async function POST(request: NextRequest) {
                 'RepoDNA does not have access to this repository. Select it in the GitHub App installation settings.',
               installSettingsUrl: `https://github.com/apps/${process.env.GITHUB_APP_SLUG ?? 'repodna'}/installations/select_target`,
             },
-        { status: isRateLimited ? 429 : 403 }
+        { status: isRateLimited ? 429 : 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
     if (!metaRes.ok) {
@@ -138,9 +147,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Length': String(total),
-        'Cache-Control': 'no-store, private, max-age=0',
-        'X-Content-Type-Options': 'nosniff',
-        Pragma: 'no-cache',
+        ...PRIVATE_NO_STORE_HEADERS,
       },
     });
   } catch {

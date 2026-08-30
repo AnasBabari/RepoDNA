@@ -104,6 +104,8 @@ describe('POST /api/v2/exports', () => {
     const data = await response.json();
     expect(response.status).toBe(429);
     expect(data.error).toMatchObject({ code: 'RATE_LIMITED', retryAfter: 60 });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
   });
 
   it('fails closed when Blob or rate-limit infrastructure is unavailable', async () => {
@@ -161,6 +163,20 @@ describe('POST /api/v2/exports', () => {
         sha256: data.sha256,
       })
     );
+  });
+
+  it('returns a controlled response when the private export cache write fails', async () => {
+    mocks.storePublicExport.mockRejectedValueOnce(new Error('blob credential details'));
+
+    const response = await POST(request(validBody('graph-json')));
+    const data = await response.json();
+    expect(response.status).toBe(503);
+    expect(data.error).toMatchObject({
+      code: 'EXPORT_CACHE_WRITE_FAILED',
+      message: 'The export could not be stored securely.',
+      fallbackAvailable: true,
+    });
+    expect(JSON.stringify(data)).not.toContain('credential details');
   });
 
   it('returns metadata from a Blob hit without regenerating the export', async () => {

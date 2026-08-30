@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createApiErrorResponse } from '../../../../lib/api-error';
+import { isJsonBodyTooLarge, readBoundedJson } from '../../../../lib/bounded-json';
 import { parseGitHubUrl } from '../../../../lib/analyzer';
 import { fetchGitHubRepo } from '../../../../lib/analyzer/ingestion';
 import { DEFAULT_INGESTION_LIMITS, IngestionError } from '../../../../lib/analyzer/types';
@@ -35,8 +36,11 @@ export async function POST(request: NextRequest) {
 
   let bodyUrl: unknown;
   try {
-    bodyUrl = ((await request.json()) as { url?: unknown })?.url;
-  } catch {
+    bodyUrl = (await readBoundedJson<{ url?: unknown }>(request))?.url;
+  } catch (error) {
+    if (isJsonBodyTooLarge(error)) {
+      return createApiErrorResponse('PAYLOAD_TOO_LARGE', 'Request body exceeds the 16 KB limit.', 413);
+    }
     return createApiErrorResponse('INVALID_REQUEST', 'Body must be JSON with a "url" field.', 400);
   }
   if (typeof bodyUrl !== 'string') {

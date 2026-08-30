@@ -1,4 +1,4 @@
-import { analyzeRepositoryFiles, type AnalyzeOptions, type AnalyzeProgress } from '../index';
+import { analyzeRepositoryFiles, resolveParserMode, type AnalyzeOptions, type AnalyzeProgress } from '../index';
 import { DEFAULT_INGESTION_LIMITS } from '../types';
 import type { DiscoveredFile } from '../types';
 import type { IngestionInventory } from '../types';
@@ -335,7 +335,7 @@ export async function analyzeRepositoryV2(
       'tree-sitter-tsx': '0.23.2',
       'tree-sitter-go': '0.25.0',
     },
-    mode: 'tree-sitter',
+    mode: resolveParserMode(options),
   };
 
   v2.metadata = {

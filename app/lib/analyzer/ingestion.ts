@@ -19,6 +19,8 @@ export const SUPPORTED_SOURCE_EXTENSIONS = new Set([
   '.py', '.pyi', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.go',
 ]);
 
+const MAX_INGESTION_PATH_LENGTH = 4096;
+
 function isSupportedSource(path: string): boolean {
   const filename = path.split('/').pop()!;
   const dotIndex = filename.lastIndexOf('.');
@@ -277,6 +279,7 @@ export async function extractFromZip(
     const files: DiscoveredFile[] = [];
     const skipped: { path: string; reason: string }[] = [];
     const discoveredPaths: string[] = [];
+    const seenFilePaths = new Set<string>();
     const activeStreams = new Set<{ terminate?: () => void }>();
 
     function abortArchive(code: IngestionErrorCode, message: string, status = 413) {
@@ -385,10 +388,21 @@ export async function extractFromZip(
         return;
       }
 
+      if (seenFilePaths.has(normalizedPath)) {
+        abortArchive('INVALID_ARCHIVE', 'Archive contains duplicate normalized file paths', 400);
+        return;
+      }
+      seenFilePaths.add(normalizedPath);
+
       totalFileCount++;
       // Track total bytes where declared size is available (compressed hint)
       const declaredSize = (file as unknown as { size?: number; originalSize?: number }).size ?? (file as unknown as { originalSize?: number }).originalSize;
       if (typeof declaredSize === 'number' && Number.isFinite(declaredSize)) totalBytes += declaredSize;
+
+      if (normalizedPath.length > MAX_INGESTION_PATH_LENGTH) {
+        skipped.push({ path: normalizedPath.slice(0, MAX_INGESTION_PATH_LENGTH), reason: 'path_too_long' });
+        return;
+      }
 
       // Check path depth
       if (normalizedPath.split('/').length > 32) {
@@ -561,10 +575,10 @@ export async function extractFromZip(
       }
       zipInputComplete = true;
       checkCompletion();
-    } catch (err) {
+    } catch {
       abortArchive(
         'INVALID_ARCHIVE',
-        `Failed to decompress ZIP archive: ${err instanceof Error ? err.message : 'Corrupt format'}`,
+        'The ZIP archive could not be decompressed. Check the file and try again.',
         400
       );
     }
@@ -1106,7 +1120,7 @@ async function fetchGitHubTreeRepo(
     }
     throw new IngestionError(
       'UPSTREAM_GITHUB_ERROR',
-      `Failed to fetch GitHub repository tree: ${error instanceof Error ? error.message : 'Network error'}`,
+      'GitHub repository tree could not be fetched. Try again shortly.',
       502
     );
   } finally {
@@ -1303,7 +1317,7 @@ export async function fetchGitHubRepo(
     }
     throw new IngestionError(
       'UPSTREAM_GITHUB_ERROR',
-      `Failed to connect to GitHub: ${err instanceof Error ? err.message : 'Network error'}`,
+      'GitHub repository source could not be fetched. Try again shortly.',
       502
     );
   } finally {
@@ -1396,6 +1410,11 @@ export async function extractFromFileList(
     }
     const relPath = parts.length > 1 ? parts.slice(1).join('/') : rawPath;
 
+    if (relPath.length > MAX_INGESTION_PATH_LENGTH) {
+      skipped.push({ path: relPath.slice(0, MAX_INGESTION_PATH_LENGTH), reason: 'path_too_long' });
+      continue;
+    }
+
     if (isIgnored(relPath)) continue;
     if (!isCandidate(relPath)) continue;
 
@@ -1412,20 +1431,23 @@ export async function extractFromFileList(
       continue;
     }
 
+    // Count bytes before decoding. JavaScript string length is UTF-16 code
+    // units and can under-count non-ASCII input; File.size is the authoritative
+    // byte count and lets us reject before allocating the decoded string.
+    totalExtractedBytes += file.size;
+    if (totalExtractedBytes > limits.maxTotalExtractedBytes) {
+      throw new IngestionError(
+        'EXTRACTED_TOO_LARGE',
+        `Selected files exceed the ${(limits.maxTotalExtractedBytes / (1024 * 1024)).toFixed(0)} MB extracted-content limit`,
+        413
+      );
+    }
+
     try {
       const text = await file.text();
       if (text.includes('\0')) {
         skipped.push({ path: relPath, reason: 'binary' });
         continue;
-      }
-
-      totalExtractedBytes += text.length;
-      if (totalExtractedBytes > limits.maxTotalExtractedBytes) {
-        throw new IngestionError(
-          'EXTRACTED_TOO_LARGE',
-          `Extracted files (${(totalExtractedBytes / (1024 * 1024)).toFixed(1)} MB) exceed limit of ${(limits.maxTotalExtractedBytes / (1024 * 1024)).toFixed(0)} MB`,
-          413
-        );
       }
 
       const hash = await sha256(text);

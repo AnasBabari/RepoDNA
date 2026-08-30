@@ -42,6 +42,10 @@ export function createApiErrorResponse(
 
   return NextResponse.json(payload, {
     status,
-    headers: options?.headers,
+    headers: {
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      ...options?.headers,
+    },
   });
 }

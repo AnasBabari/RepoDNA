@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { SafeRepositoryItem } from '../api/github/repositories/route';
 import { trackAuthFlow } from '../lib/analytics';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
+import { getUserFacingErrorMessage } from '../lib/user-facing-errors';
 
 export function PrivateRepoPicker({
   isOpen,
@@ -62,7 +63,7 @@ export function PrivateRepoPicker({
     } catch (err) {
       const code = (err as Error & { code?: string }).code || null;
       setErrorCode(code);
-      setError(err instanceof Error ? err.message : 'Could not load repositories');
+      setError(getUserFacingErrorMessage(err, 'Could not load repositories.', code));
     } finally {
       setLoading(false);
     }
@@ -99,7 +100,7 @@ export function PrivateRepoPicker({
       onSignOut();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not revoke GitHub access.');
+      setError(getUserFacingErrorMessage(err, 'Could not revoke GitHub access.'));
     } finally {
       setRevoking(false);
       setConfirmingRevoke(false);

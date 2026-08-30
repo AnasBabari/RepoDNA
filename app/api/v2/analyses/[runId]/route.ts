@@ -6,6 +6,11 @@ import type { PublicAnalysisWorkflowResult } from '../../../../workflows/analyze
 
 export const dynamic = 'force-dynamic';
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, private, max-age=0',
+  'X-Content-Type-Options': 'nosniff',
+};
+
 export async function GET(_request: Request, context: { params: Promise<{ runId: string }> }) {
   const { runId } = await context.params;
 
@@ -46,7 +51,7 @@ export async function GET(_request: Request, context: { params: Promise<{ runId:
           : status === 'cancelled'
             ? { code: 'WORKFLOW_CANCELLED', message: 'The durable analysis was cancelled.' }
             : null,
-    });
+    }, { headers: NO_STORE_HEADERS });
   } catch {
     return createApiErrorResponse('RUN_NOT_FOUND', 'Unknown or expired analysis run.', 404);
   }

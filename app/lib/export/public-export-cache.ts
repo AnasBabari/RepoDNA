@@ -5,6 +5,8 @@ import { GRAPH_EXPORT_EXTENSIONS, type GraphExportFormat } from './graph/types';
 import { sha256Hex } from './graph/stable-json';
 
 const SIGNED_URL_TTL_MS = 5 * 60 * 1000;
+export const MAX_PUBLIC_EXPORT_BYTES = 128 * 1024 * 1024;
+const MAX_EXPORT_METADATA_BYTES = 16 * 1024;
 
 function safeSegment(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '') || 'unknown';
@@ -77,6 +79,13 @@ export async function readCachedPublicExport(
   if (!isPublicExportCacheConfigured()) return null;
   const result = await get(pathname, { access: 'private' }).catch(() => null);
   if (!result || result.statusCode !== 200) return null;
+  if (result.blob.size > MAX_PUBLIC_EXPORT_BYTES) {
+    await Promise.all([
+      del(pathname).catch(() => undefined),
+      del(publicExportMetadataPath(pathname)).catch(() => undefined),
+    ]);
+    return null;
+  }
   const expiresSegment = pathname.split('/').find((segment) => segment.startsWith('expires-'));
   if (expiresSegment) {
     const epoch = Number(expiresSegment.replace('expires-', ''));
@@ -88,7 +97,7 @@ export async function readCachedPublicExport(
   const metadataPath = publicExportMetadataPath(pathname);
   const metadataResult = await get(metadataPath, { access: 'private' }).catch(() => null);
   let metadata: PublicExportMetadata | null = null;
-  if (metadataResult?.statusCode === 200) {
+  if (metadataResult?.statusCode === 200 && metadataResult.blob.size <= MAX_EXPORT_METADATA_BYTES) {
     try {
       metadata = (await new Response(metadataResult.stream).json()) as PublicExportMetadata;
     } catch {
@@ -123,6 +132,9 @@ export async function storePublicExport(input: {
   cacheControlMaxAge: number;
   sha256: string;
 }): Promise<{ url: string; pathname: string }> {
+  if (input.bytes.byteLength > MAX_PUBLIC_EXPORT_BYTES) {
+    throw new Error('PUBLIC_EXPORT_TOO_LARGE');
+  }
   const result = await put(input.pathname, input.bytes, {
     access: 'private',
     addRandomSuffix: false,

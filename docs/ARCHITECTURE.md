@@ -31,13 +31,23 @@ An adapter returns `PartialAnalysis`; it does not know about architecture layout
 
 `core/repodna/graph.py` resolves local imports and calls, groups files into conceptual components, calculates component connections and graph metrics, ranks important files and entry points, creates traceable request flows, and builds deterministic onboarding and impact views.
 
-### Cache
+### Cache and retention
 
-`core/repodna/cache.py` stores per-file analyzer output keyed by SHA-256. A later run reuses the prior structural result when a file hash is unchanged.
+The Python engine can reuse per-file analyzer output keyed by SHA-256. Public
+web analyses additionally use a private, commit-addressed Vercel Blob artifact
+cache with a seven-day TTL. Derived public exports use the same private storage
+boundary and short-lived signed download URLs. Browser-local derived artifacts
+are retained in IndexedDB only after explicit consent and are quota bounded.
+Private source files are processed transiently and are never written to these
+server caches.
 
 ### Portable artifact
 
-`AnalysisResult` serializes to schema version `1.0.0`. The artifact contains no source text or secrets. It records paths, structural facts, evidence, diagnostics, and aggregate metadata.
+The legacy analyzer emits schema `1.1.0`; the canonical web analyzer emits schema
+`2.0.0`. Both artifacts contain structural facts, paths, evidence, diagnostics,
+coverage, and aggregate metadata, but no source text or credentials. The v2
+artifact is authoritative for graph views and deterministic JSON, CSV, Cypher,
+Parquet, and architecture-text exports.
 
 ### Visualizer
 
@@ -54,4 +64,3 @@ RepoDNA avoids presenting heuristics as certainty. Framework routes parsed from 
 3. Add focused unit fixtures.
 4. Register the adapter in `core/repodna/engine.py`.
 5. Extend the quality benchmark before enabling the adapter by default.
-

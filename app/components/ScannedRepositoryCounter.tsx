@@ -123,10 +123,10 @@ export function ScannedRepositoryCounter() {
   if (state.status === 'loading') {
     return (
       <div className="hero-scan-counter" aria-live="polite" aria-busy="true" data-testid="scan-counter-loading">
-        <span className="hero-scan-counter-label">RepoDNA has scanned</span>
+        <span className="hero-scan-counter-label">RepoDNA has scanned</span>{' '}
         <span className="hero-scan-counter-skeleton" aria-hidden="true">
           —
-        </span>
+        </span>{' '}
         <span className="hero-scan-counter-label">public repositories</span>
       </div>
     );
@@ -140,9 +140,9 @@ export function ScannedRepositoryCounter() {
         data-testid="scan-counter-unavailable"
         title="Unique public repositories successfully analyzed by RepoDNA."
       >
-        <span className="hero-scan-counter-label">RepoDNA has scanned</span>
-        <span className="hero-scan-counter-unavailable-text">—</span>
-        <span className="hero-scan-counter-label">public repositories</span>
+        <span className="hero-scan-counter-label">RepoDNA has scanned</span>{' '}
+        <span className="hero-scan-counter-unavailable-text">—</span>{' '}
+        <span className="hero-scan-counter-label">public repositories</span>{' '}
         <span className="hero-scan-counter-hint" aria-hidden="true">
           · live count unavailable
         </span>
@@ -157,10 +157,10 @@ export function ScannedRepositoryCounter() {
       data-testid="scan-counter"
       title="Unique public repositories successfully analyzed by RepoDNA."
     >
-      <span className="hero-scan-counter-label">RepoDNA has scanned</span>
+      <span className="hero-scan-counter-label">RepoDNA has scanned</span>{' '}
       <strong className="hero-scan-counter-count" data-testid="scan-counter-count">
         {formatCount(state.count)}
-      </strong>
+      </strong>{' '}
       <span className="hero-scan-counter-label">public repositories</span>
     </div>
   );

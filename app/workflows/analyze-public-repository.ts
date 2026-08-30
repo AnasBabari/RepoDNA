@@ -175,7 +175,11 @@ export async function analyzePublicRepositoryWorkflow(
   try {
     return await analyzeAndCachePublicRepository(input);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'ANALYSIS_FAILED: Public analysis failed.';
+    // Only expose messages created by our bounded, typed failures. Workflow,
+    // SDK, and upstream exceptions can contain internal paths or credentials.
+    const message = error instanceof FatalError || error instanceof IngestionError
+      ? error.message
+      : 'ANALYSIS_FAILED: Public analysis failed.';
     const code = message.includes(':') ? message.slice(0, message.indexOf(':')) : 'ANALYSIS_FAILED';
     await writeProgress({
       seq: 999,

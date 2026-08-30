@@ -23,6 +23,7 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
+      "const": "1.1.0",
       "description": "Semantic version of the RepoDNA output contract."
     },
     "generatedAt": {

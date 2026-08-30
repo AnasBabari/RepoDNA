@@ -145,7 +145,7 @@ UPSTASH_REDIS_REST_TOKEN="your-upstash-token"
 # Run the Vitest unit, security invariant, analyzer, and export-contract tests
 npm run test:unit
 
-# Run Python core test suite (28 unit, parity, and conformance tests)
+# Run Python core test suite (30 unit, parity, and conformance tests)
 npm run test:python
 
 # Run Playwright browser contracts (use REPODNA_E2E_PORT if port 3000 is busy)

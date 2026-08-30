@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.0.0",
-  "generatedAt": "2026-08-26T10:17:18.570Z",
+  "generatedAt": "2026-08-30T00:43:39.356Z",
   "repository": {
     "name": "nanoGPT",
     "source": "https://github.com/karpathy/nanoGPT",
@@ -42,6 +42,12 @@
     "skippedByReason": {},
     "languageCoverage": {
       "Python": 15
+    },
+    "acquisitionMode": "archive",
+    "truncation": {
+      "hitLimits": [],
+      "maxFilesReached": false,
+      "maxBytesReached": false
     }
   },
   "coverage": {
@@ -3942,33 +3948,6 @@
       "unresolvedExpression": "globals",
       "metadata": {
         "callee": "globals"
-      }
-    },
-    {
-      "id": "configurator.py:call:42:type",
-      "source": "configurator.py",
-      "target": null,
-      "type": "CALLS",
-      "status": "unresolved",
-      "confidence": 0.55,
-      "evidence": {
-        "file": "configurator.py",
-        "range": {
-          "startLine": 42,
-          "startCol": 0,
-          "endLine": 42,
-          "endCol": 0
-        }
-      },
-      "explanation": "configurator.py calls unresolved expression type",
-      "resolver": {
-        "name": "call-resolver",
-        "version": "1.2.0"
-      },
-      "alternativeCandidates": [],
-      "unresolvedExpression": "type",
-      "metadata": {
-        "callee": "type"
       }
     },
     {
@@ -10179,33 +10158,6 @@
       }
     },
     {
-      "id": "model.py::GPT::configure_optimizers:call:283:dict",
-      "source": "model.py::GPT::configure_optimizers",
-      "target": null,
-      "type": "CALLS",
-      "status": "unresolved",
-      "confidence": 0.55,
-      "evidence": {
-        "file": "model.py",
-        "range": {
-          "startLine": 283,
-          "startCol": 0,
-          "endLine": 283,
-          "endCol": 0
-        }
-      },
-      "explanation": "model.py::GPT::configure_optimizers calls unresolved expression dict",
-      "resolver": {
-        "name": "call-resolver",
-        "version": "1.2.0"
-      },
-      "alternativeCandidates": [],
-      "unresolvedExpression": "dict",
-      "metadata": {
-        "callee": "dict"
-      }
-    },
-    {
       "id": "model.py::GPT::configure_optimizers:call:284:torch.optim.AdamW",
       "source": "model.py::GPT::configure_optimizers",
       "target": null,
@@ -11175,87 +11127,6 @@
       "unresolvedExpression": "k.endswith",
       "metadata": {
         "callee": "k.endswith"
-      }
-    },
-    {
-      "id": "model.py::GPT::from_pretrained:call:248:len",
-      "source": "model.py::GPT::from_pretrained",
-      "target": null,
-      "type": "CALLS",
-      "status": "unresolved",
-      "confidence": 0.55,
-      "evidence": {
-        "file": "model.py",
-        "range": {
-          "startLine": 248,
-          "startCol": 0,
-          "endLine": 248,
-          "endCol": 0
-        }
-      },
-      "explanation": "model.py::GPT::from_pretrained calls unresolved expression len",
-      "resolver": {
-        "name": "call-resolver",
-        "version": "1.2.0"
-      },
-      "alternativeCandidates": [],
-      "unresolvedExpression": "len",
-      "metadata": {
-        "callee": "len"
-      }
-    },
-    {
-      "id": "model.py::GPT::from_pretrained:call:248:len",
-      "source": "model.py::GPT::from_pretrained",
-      "target": null,
-      "type": "CALLS",
-      "status": "unresolved",
-      "confidence": 0.55,
-      "evidence": {
-        "file": "model.py",
-        "range": {
-          "startLine": 248,
-          "startCol": 0,
-          "endLine": 248,
-          "endCol": 0
-        }
-      },
-      "explanation": "model.py::GPT::from_pretrained calls unresolved expression len",
-      "resolver": {
-        "name": "call-resolver",
-        "version": "1.2.0"
-      },
-      "alternativeCandidates": [],
-      "unresolvedExpression": "len",
-      "metadata": {
-        "callee": "len"
-      }
-    },
-    {
-      "id": "model.py::GPT::from_pretrained:call:248:len",
-      "source": "model.py::GPT::from_pretrained",
-      "target": null,
-      "type": "CALLS",
-      "status": "unresolved",
-      "confidence": 0.55,
-      "evidence": {
-        "file": "model.py",
-        "range": {
-          "startLine": 248,
-          "startCol": 0,
-          "endLine": 248,
-          "endCol": 0
-        }
-      },
-      "explanation": "model.py::GPT::from_pretrained calls unresolved expression len",
-      "resolver": {
-        "name": "call-resolver",
-        "version": "1.2.0"
-      },
-      "alternativeCandidates": [],
-      "unresolvedExpression": "len",
-      "metadata": {
-        "callee": "len"
       }
     },
     {
@@ -17555,11 +17426,7 @@
       "cohesion": 0
     }
   ],
-  "dependencyCycles": [
-    [
-      "model.py::GPT::from_pretrained"
-    ]
-  ],
+  "dependencyCycles": [],
   "centrality": {
     "mostConnected": [
       {
@@ -17969,11 +17836,6 @@
     },
     {
       "edgeId": "configurator.py:call:37:literal_eval",
-      "reason": "unresolved call",
-      "candidates": []
-    },
-    {
-      "edgeId": "configurator.py:call:42:type",
       "reason": "unresolved call",
       "candidates": []
     },
@@ -18998,21 +18860,6 @@
       "candidates": []
     },
     {
-      "edgeId": "model.py::GPT::from_pretrained:call:248:len",
-      "reason": "unresolved call",
-      "candidates": []
-    },
-    {
-      "edgeId": "model.py::GPT::from_pretrained:call:248:len",
-      "reason": "unresolved call",
-      "candidates": []
-    },
-    {
-      "edgeId": "model.py::GPT::from_pretrained:call:248:len",
-      "reason": "unresolved call",
-      "candidates": []
-    },
-    {
       "edgeId": "model.py::GPT::from_pretrained:call:250:any",
       "reason": "unresolved call",
       "candidates": []
@@ -19119,11 +18966,6 @@
     },
     {
       "edgeId": "model.py::GPT::configure_optimizers:call:281:inspect.signature",
-      "reason": "unresolved call",
-      "candidates": []
-    },
-    {
-      "edgeId": "model.py::GPT::configure_optimizers:call:283:dict",
       "reason": "unresolved call",
       "candidates": []
     },
@@ -19886,12 +19728,12 @@
   "diagnostics": [],
   "timings": {
     "stages": {
-      "parse": 26,
-      "adapt": 1,
+      "parse": 123,
+      "adapt": 3,
       "compact": 0,
-      "analytics": 0
+      "analytics": 1
     },
-    "totalMs": 28
+    "totalMs": 127
   },
   "parsers": {
     "versions": {
@@ -19906,11 +19748,11 @@
   },
   "security": {
     "limits": {
-      "maxArchiveEntries": 50000,
-      "maxFiles": 10000,
+      "maxArchiveEntries": 100000,
+      "maxFiles": 20000,
       "maxFileBytes": 1000000,
       "maxArchiveBytes": 134217728,
-      "maxTotalExtractedBytes": 134217728,
+      "maxTotalExtractedBytes": 201326592,
       "maxAstNodes": 25000,
       "maxAstDepth": 128,
       "maxGraphNodes": 8000,
@@ -19952,10 +19794,10 @@
     "executedRepositoryCode": false,
     "analyzerVersion": "2.0.0",
     "limits": {
-      "maxFiles": 10000,
+      "maxFiles": 20000,
       "maxFileBytes": 1000000,
       "maxArchiveBytes": 134217728,
-      "maxTotalExtractedBytes": 134217728,
+      "maxTotalExtractedBytes": 201326592,
       "fetchTimeoutMs": 60000
     },
     "fileComponents": {

@@ -36,11 +36,12 @@ export function detectCommunities(nodes: GraphNode[], edges: GraphEdge[]): Commu
   for (const start of sortedNodeIds) {
     if (visited.has(start)) continue;
     const queue: string[] = [start];
+    let queueIndex = 0;
     const members: string[] = [];
     visited.add(start);
     // BFS deterministic: sort neighbors
-    while (queue.length) {
-      const cur = queue.shift()!;
+    while (queueIndex < queue.length) {
+      const cur = queue[queueIndex++];
       members.push(cur);
       const neighbors = Array.from(adj.get(cur) ?? []).sort();
       for (const nb of neighbors) {
@@ -170,9 +171,10 @@ export function traceBlastRadius(startNodeId: string, edges: GraphEdge[], direct
 
   const visited = new Set<string>([startNodeId]);
   const queue: { id: string; depth: number }[] = [{ id: startNodeId, depth: 0 }];
+  let queueIndex = 0;
 
-  while (queue.length && visited.size < maxNodes) {
-    const { id, depth } = queue.shift()!;
+  while (queueIndex < queue.length && visited.size < maxNodes) {
+    const { id, depth } = queue[queueIndex++];
     if (depth >= maxDepth) continue;
     const neighbors: string[] = [];
     if (direction === 'downstream' || direction === 'both') neighbors.push(...Array.from(adjOut.get(id) ?? []));
@@ -199,9 +201,10 @@ export function shortestPath(source: string, target: string, edges: GraphEdge[])
   // Deterministic BFS
   for (const list of adj.values()) list.sort();
   const queue: string[][] = [[source]];
+  let queueIndex = 0;
   const visited = new Set<string>([source]);
-  while (queue.length) {
-    const path = queue.shift()!;
+  while (queueIndex < queue.length) {
+    const path = queue[queueIndex++];
     const last = path[path.length - 1];
     if (last === target) return path;
     for (const nb of adj.get(last) ?? []) {

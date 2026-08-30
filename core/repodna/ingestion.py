@@ -3,9 +3,9 @@ from __future__ import annotations
 import fnmatch
 import io
 import re
-import shutil
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from contextlib import contextmanager
@@ -46,6 +46,11 @@ class IngestionLimits:
     max_files: int = 10_000
     max_file_bytes: int = 1_000_000
     max_archive_bytes: int = 100_000_000
+    max_archive_entries: int = 20_000
+    max_total_extracted_bytes: int = 100_000_000
+    # Local folders have no compressed archive boundary, so cap the total
+    # candidate bytes that the analyzer may later read into memory as well.
+    max_total_source_bytes: int = 100_000_000
 
 
 @dataclass(slots=True)
@@ -157,6 +162,7 @@ def discover_local(root: Path, limits: IngestionLimits | None = None) -> Discove
 
     matcher = IgnoreMatcher(root)
     result = DiscoveryResult(root=root, name=root.name, files=[])
+    total_source_bytes = 0
 
     # First pass: load any nested .gitignores in subdirectories
     for gitignore_path in root.rglob(".gitignore"):
@@ -189,6 +195,10 @@ def discover_local(root: Path, limits: IngestionLimits | None = None) -> Discove
         if size > limits.max_file_bytes:
             result.skipped.append({"path": relative, "reason": "file_size_limit"})
             continue
+        if total_source_bytes + size > limits.max_total_source_bytes:
+            result.skipped.append({"path": relative, "reason": "total_size_limit"})
+            continue
+        total_source_bytes += size
         if _is_binary(path):
             result.skipped.append({"path": relative, "reason": "binary"})
             continue
@@ -291,7 +301,7 @@ def parse_github_url(url: str) -> tuple[str, str]:
 
 def _download_archive(owner: str, repo: str, limits: IngestionLimits) -> bytes:
     url = f"https://codeload.github.com/{owner}/{repo}/zip/HEAD"
-    request = urllib.request.Request(url, headers={"User-Agent": "RepoDNA/0.1"})
+    request = urllib.request.Request(url, headers={"User-Agent": "RepoDNA/1.1"})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             content_length = int(response.headers.get("Content-Length", "0") or 0)
@@ -308,18 +318,47 @@ def _download_archive(owner: str, repo: str, limits: IngestionLimits) -> bytes:
 def _safe_extract_zip(payload: bytes, destination: Path, limits: IngestionLimits) -> Path:
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
         members = archive.infolist()
-        if sum(member.file_size for member in members) > limits.max_archive_bytes:
+        if len(members) > limits.max_archive_entries:
+            raise IngestionError("GitHub archive exceeds the configured entry-count limit")
+        if sum(member.file_size for member in members) > limits.max_total_extracted_bytes:
             raise IngestionError("GitHub archive exceeds the configured extracted-size limit")
-        roots = {PurePosixPath(member.filename).parts[0] for member in members if member.filename}
+        roots = {
+            PurePosixPath(member.filename.replace("\\", "/")).parts[0]
+            for member in members
+            if member.filename
+        }
         if len(roots) != 1:
             raise IngestionError("GitHub archive has an unexpected directory structure")
         root_name = next(iter(roots))
         destination_resolved = destination.resolve()
+        seen_paths: set[str] = set()
+        total_extracted = 0
         for member in members:
-            member_parts = PurePosixPath(member.filename).parts
-            if ".." in member_parts or PurePosixPath(member.filename).is_absolute():
+            normalized_name = member.filename.replace("\\", "/")
+            member_path_value = PurePosixPath(normalized_name)
+            member_parts = member_path_value.parts
+            if (
+                not normalized_name
+                or len(normalized_name) > 4096
+                or len(member_parts) > 32
+                or "\0" in normalized_name
+                or ".." in member_parts
+                or member_path_value.is_absolute()
+                or re.match(r"^[A-Za-z]:", normalized_name)
+            ):
                 raise IngestionError("GitHub archive contains an unsafe path")
-            member_path = destination / member.filename
+            if not member.is_dir():
+                if normalized_name in seen_paths:
+                    raise IngestionError("GitHub archive contains duplicate normalized file paths")
+                seen_paths.add(normalized_name)
+            if (
+                member.file_size > 256 * 1024
+                and member.compress_size > 0
+                and member.file_size / member.compress_size > 200
+            ):
+                raise IngestionError("GitHub archive contains a suspicious compression ratio")
+
+            member_path = destination.joinpath(*member_parts)
             resolved = member_path.resolve()
             if destination_resolved not in resolved.parents and resolved != destination_resolved:
                 raise IngestionError("GitHub archive contains an unsafe path")
@@ -328,7 +367,16 @@ def _safe_extract_zip(payload: bytes, destination: Path, limits: IngestionLimits
                 continue
             resolved.parent.mkdir(parents=True, exist_ok=True)
             with archive.open(member) as source, resolved.open("wb") as target:
-                shutil.copyfileobj(source, target)
+                member_extracted = 0
+                while chunk := source.read(64 * 1024):
+                    member_extracted += len(chunk)
+                    total_extracted += len(chunk)
+                    if (
+                        member_extracted > limits.max_total_extracted_bytes
+                        or total_extracted > limits.max_total_extracted_bytes
+                    ):
+                        raise IngestionError("GitHub archive exceeds the configured extracted-size limit")
+                    target.write(chunk)
     return destination / root_name
 
 

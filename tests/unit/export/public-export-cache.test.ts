@@ -14,6 +14,7 @@ vi.mock('@vercel/blob', () => blobMocks);
 
 import {
   createSignedDownloadUrl,
+  MAX_PUBLIC_EXPORT_BYTES,
   publicExportBlobPath,
   publicExportMetadataPath,
   readCachedPublicExport,
@@ -131,5 +132,23 @@ describe('public export Blob cache', () => {
     expect(result?.metadata.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(result?.metadata.mediaType).toBe('application/json');
     expect(blobMocks.put).toHaveBeenCalledTimes(1);
+  });
+
+  it('evicts an oversized cached export before buffering it', async () => {
+    const pathname = `repodna/public/o/r/c/2.0.0/exports/1.0.0/d/expires-${Date.now() + 60_000}/graph-json.graph.json`;
+    blobMocks.get.mockResolvedValueOnce({
+      statusCode: 200,
+      stream: new Blob(['small placeholder']).stream(),
+      blob: {
+        url: 'private-url',
+        uploadedAt: new Date(),
+        size: MAX_PUBLIC_EXPORT_BYTES + 1,
+        contentType: 'application/json',
+      },
+    });
+
+    await expect(readCachedPublicExport(pathname)).resolves.toBeNull();
+    expect(blobMocks.del).toHaveBeenCalledWith(pathname);
+    expect(blobMocks.put).not.toHaveBeenCalled();
   });
 });

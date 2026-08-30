@@ -1,6 +1,11 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { validateRepoDNAProject } from '../../app/lib/schema/safe-validator';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { validateRepoDNAProject, validateRepoDNAProjectV2 } from '../../app/lib/schema/safe-validator';
+import { assertImportedArtifactSize, MAX_IMPORTED_ARTIFACT_BYTES } from '../../app/lib/schema/artifact-loader';
 import type { RepoDNAProject } from '../../app/lib/types';
+import { makeV2Fixture } from './export/fixtures';
 
 /**
  * Regression tests for the CSP hydration bug:
@@ -94,6 +99,72 @@ describe('CSP-safe schema fallback', () => {
     expect(() => validateRepoDNAProject({})).not.toThrow();
     const empty = validateRepoDNAProject({});
     expect(empty.valid).toBe(false);
+  });
+
+  it('validates every v2 node instead of trusting records after the first 50', () => {
+    globalAny.__repodnaAjvV2 = null;
+    const project = makeV2Fixture();
+    const template = project.nodes[0];
+    project.nodes = Array.from({ length: 52 }, (_, index) => ({
+      ...template,
+      id: `node-${index}`,
+      qualifiedName: `node-${index}`,
+      kind: index === 51 ? 'not-a-real-kind' as never : template.kind,
+    }));
+
+    const result = validateRepoDNAProjectV2(project);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('nodes[51].kind is invalid');
+  });
+
+  it('rejects malformed edge evidence and out-of-range confidence in the CSP path', () => {
+    globalAny.__repodnaAjvV2 = null;
+    const project = makeV2Fixture();
+    project.edges[0] = {
+      ...project.edges[0],
+      confidence: 4,
+      evidence: { file: 'src/index.ts', range: { startLine: 0, startCol: -1, endLine: 0, endCol: -1 } },
+    };
+
+    const result = validateRepoDNAProjectV2(project);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes('confidence'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('startLine'))).toBe(true);
+  });
+
+  it('rejects v2 relationships that point at missing graph nodes', () => {
+    globalAny.__repodnaAjvV2 = null;
+    const project = makeV2Fixture();
+    project.edges[0] = { ...project.edges[0], target: 'missing-node' };
+
+    const result = validateRepoDNAProjectV2(project);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('edges[0].target must reference an existing node');
+  });
+
+  it('bounds imported JSON before reading or parsing it', () => {
+    expect(() => assertImportedArtifactSize(MAX_IMPORTED_ARTIFACT_BYTES)).not.toThrow();
+    expect(() => assertImportedArtifactSize(MAX_IMPORTED_ARTIFACT_BYTES + 1)).toThrow(/128 MB/);
+  });
+
+  it('accepts every checked-in sample through the browser structural validator', () => {
+    globalAny.__repodnaAjvV1 = null;
+    globalAny.__repodnaAjvV2 = null;
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+    const paths = [
+      join(root, 'public', 'demo-project.json'),
+      ...readdirSync(join(root, 'public', 'samples'))
+        .filter((name) => name.endsWith('.json'))
+        .map((name) => join(root, 'public', 'samples', name)),
+    ];
+
+    for (const path of paths) {
+      const artifact = JSON.parse(readFileSync(path, 'utf8')) as { schemaVersion?: string };
+      const result = artifact.schemaVersion === '2.0.0'
+        ? validateRepoDNAProjectV2(artifact)
+        : validateRepoDNAProject(artifact);
+      expect(result.errors, path).toEqual([]);
+    }
   });
 });
 

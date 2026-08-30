@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import tempfile
 import unittest
+import warnings
 import zipfile
 from pathlib import Path
 
@@ -37,6 +38,17 @@ class IngestionTests(unittest.TestCase):
             self.assertIn("packages/ui/src/index.ts", paths)
             self.assertNotIn("packages/ui/dist/index.js", paths)
             self.assertNotIn("packages/ui/temp.cache", paths)
+
+    def test_honours_total_local_source_size_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "a.py").write_text("a" * 12, encoding="utf-8")
+            (root / "b.py").write_text("b" * 12, encoding="utf-8")
+
+            result = discover_local(root, IngestionLimits(max_total_source_bytes=20))
+
+            self.assertEqual([file.relative_path for file in result.files], ["a.py"])
+            self.assertIn("total_size_limit", {item["reason"] for item in result.skipped})
 
     def test_validates_public_github_urls(self) -> None:
         self.assertEqual(parse_github_url("https://github.com/openai/openai-python"), ("openai", "openai-python"))
@@ -81,7 +93,35 @@ class IngestionTests(unittest.TestCase):
             archive.writestr("repo/large.py", "x" * 50)
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(IngestionError):
-                _safe_extract_zip(payload.getvalue(), Path(directory), IngestionLimits(max_archive_bytes=20))
+                _safe_extract_zip(
+                    payload.getvalue(),
+                    Path(directory),
+                    IngestionLimits(max_total_extracted_bytes=20),
+                )
+
+    def test_rejects_archive_entry_count_bombs(self) -> None:
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as archive:
+            archive.writestr("repo/one.py", "print(1)")
+            archive.writestr("repo/two.py", "print(2)")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(IngestionError, "entry-count"):
+                _safe_extract_zip(
+                    payload.getvalue(),
+                    Path(directory),
+                    IngestionLimits(max_archive_entries=1),
+                )
+
+    def test_rejects_duplicate_normalized_archive_paths(self) -> None:
+        payload = io.BytesIO()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            with zipfile.ZipFile(payload, "w") as archive:
+                archive.writestr("repo/index.py", "print(1)")
+                archive.writestr("repo/index.py", "print(2)")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(IngestionError, "duplicate"):
+                _safe_extract_zip(payload.getvalue(), Path(directory), IngestionLimits())
 
 
 if __name__ == "__main__":

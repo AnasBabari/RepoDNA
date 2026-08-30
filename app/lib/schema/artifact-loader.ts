@@ -5,12 +5,19 @@ import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 
 export type AnyRepoDNAArtifact = RepoDNAProject | RepoDNAProjectV2;
 export type ArtifactVersion = '1.1.0' | '2.0.0' | 'unknown';
+export const MAX_IMPORTED_ARTIFACT_BYTES = 128 * 1024 * 1024;
 
 export interface LoadedArtifact {
   version: ArtifactVersion;
   project: AnyRepoDNAArtifact;
   isV2: boolean;
   isV1: boolean;
+}
+
+export function assertImportedArtifactSize(byteSize: number): void {
+  if (!Number.isFinite(byteSize) || byteSize < 0 || byteSize > MAX_IMPORTED_ARTIFACT_BYTES) {
+    throw new Error('Imported RepoDNA JSON exceeds the 128 MB safety limit.');
+  }
 }
 
 /**
@@ -65,6 +72,44 @@ export function loadRepoDNAArtifact(data: unknown): LoadedArtifact {
 }
 
 /**
+ * Deduplicate graph edges by id: exact duplicates are dropped, and colliding
+ * ids with different content get a deterministic `#n` suffix. Keeps every edge
+ * id unique without losing any distinct relationship.
+ */
+function normalizeEdgeIds(edges: GraphEdge[]): GraphEdge[] {
+  const seenIds = new Map<string, string>();
+  const result: GraphEdge[] = [];
+  for (const edge of edges) {
+    let candidate = edge;
+    let candidateJson = JSON.stringify(candidate);
+    const existing = seenIds.get(candidate.id);
+    if (existing !== undefined) {
+      if (existing === candidateJson) continue;
+      let n = 2;
+      while (seenIds.has(`${candidate.id}#${n}`)) n += 1;
+      candidate = { ...candidate, id: `${candidate.id}#${n}` };
+      candidateJson = JSON.stringify(candidate);
+    }
+    seenIds.set(candidate.id, candidateJson);
+    result.push(candidate);
+  }
+  return result;
+}
+
+function externalDependencyName(moduleSpecifier: string): string | null {
+  const specifier = moduleSpecifier.trim();
+  // Absolute assets and common tsconfig aliases are not package names. Keep
+  // those imports as explicit unresolved relationships instead of fabricating
+  // nodes such as `dependency:` or `dependency:@`.
+  if (!specifier || specifier.startsWith('/') || specifier.startsWith('@/')) return null;
+  if (specifier.startsWith('@')) {
+    const [scope, packageName] = specifier.split('/');
+    return scope && packageName ? `${scope}/${packageName}` : null;
+  }
+  return specifier.split(/[/.]/)[0] || null;
+}
+
+/**
  * Adapt a v1 project into the v2 viewer shape without fabricating evidence.
  * Relationship views remain projections of the canonical graph for v2; for v1
  * the adapter simply exposes the existing architecture/flows as-is.
@@ -79,8 +124,29 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
   const parsed = project.files.filter((f) => f.parsed).length;
   const coveragePct = project.metrics.parseSuccessRate ?? (totalFiles ? Math.round((parsed / totalFiles) * 1000) / 10 : 100);
 
+  // Allocate every node through one deterministic namespace. File ids are the
+  // primary references used by imports, routes, and definitions, so they must
+  // be included before synthetic and symbol nodes are assigned.
+  const seenNodeIds = new Set<string>();
+  const assignNodeId = (base: string, line: number): string => {
+    if (!seenNodeIds.has(base)) {
+      seenNodeIds.add(base);
+      return base;
+    }
+    const withLine = `${base}:${line}`;
+    if (!seenNodeIds.has(withLine)) {
+      seenNodeIds.add(withLine);
+      return withLine;
+    }
+    let n = 2;
+    while (seenNodeIds.has(`${withLine}#${n}`)) n += 1;
+    const id = `${withLine}#${n}`;
+    seenNodeIds.add(id);
+    return id;
+  };
+
   const fileNodes: GraphNode[] = project.files.map((file) => ({
-    id: file.id,
+    id: assignNodeId(file.id, 1),
     kind: 'file',
     name: file.path.split('/').pop() || file.path,
     qualifiedName: file.path,
@@ -97,6 +163,11 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     },
   }));
   const fileNodeIds = new Set(fileNodes.map((node) => node.id));
+  const fileNodeIdsByPath = new Map(fileNodes.map((node, index) => [project.files[index].path, node.id]));
+  const normalizeFileNodeId = (reference: string): string => {
+    if (fileNodeIds.has(reference)) return reference;
+    return fileNodeIdsByPath.get(reference) ?? (reference.startsWith('file:') ? reference : `file:${reference}`);
+  };
   const fileLanguages = new Map(project.files.map((file) => [file.path, file.language]));
 
   const symbolKind = (type: string): GraphNodeKind => {
@@ -109,31 +180,13 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     if (type === 'module') return 'module';
     return 'function';
   };
-  const symbolNodes: GraphNode[] = project.symbols.map((symbol) => ({
-    id: symbol.id,
-    kind: symbolKind(symbol.type),
-    name: symbol.name,
-    qualifiedName: symbol.id,
-    path: symbol.file,
-    language: fileLanguages.get(symbol.file) ?? 'Unknown',
-    range: {
-      startLine: symbol.line,
-      startCol: 0,
-      endLine: symbol.endLine ?? symbol.end_line ?? symbol.line,
-      endCol: 0,
-    },
-    evidence: symbol.evidence,
-    confidence: 1,
-    metadata: {
-      originalType: symbol.type,
-      parent: symbol.parent,
-      exported: symbol.exported,
-    },
-  }));
-  const symbolNodeIds = new Set(symbolNodes.map((node) => node.id));
+  // Distinct symbols in one file can share a qualified name (e.g. callback
+  // parameters named `args` in different closures), and identical route
+  // records can repeat. The allocator keeps the first occurrence canonical
+  // and deterministically disambiguates later occurrences.
 
   const routeNodes: GraphNode[] = project.routes.map((route) => ({
-    id: route.id,
+    id: assignNodeId(route.id, route.line),
     kind: 'route',
     name: `${route.method} ${route.path}`,
     qualifiedName: route.id,
@@ -148,15 +201,17 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
       framework: route.framework,
     },
   }));
+  const routeFinalIds = routeNodes.map((node) => node.id);
 
   const dependencyNames = [...new Set(
     project.imports
       .filter((record) => record.external)
-      .map((record) => record.module.split(/[/.]/)[0])
+      .map((record) => externalDependencyName(record.module))
       .filter(Boolean)
-  )].sort();
+  )] as string[];
+  dependencyNames.sort();
   const dependencyNodes: GraphNode[] = dependencyNames.map((name) => ({
-    id: `dependency:${name}`,
+    id: assignNodeId(`dependency:${name}`, 1),
     kind: 'dependency',
     name,
     qualifiedName: name,
@@ -169,10 +224,38 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     confidence: 1,
   }));
 
-  const defineEdges: GraphEdge[] = project.symbols.map((symbol) => ({
-    id: `defines:${symbol.id}`,
-    source: `file:${symbol.file}`,
-    target: symbol.id,
+  const symbolFinalIds: string[] = [];
+  const symbolNodes: GraphNode[] = project.symbols.map((symbol) => {
+    const id = assignNodeId(symbol.id, symbol.line);
+    symbolFinalIds.push(id);
+    return {
+      id,
+      kind: symbolKind(symbol.type),
+      name: symbol.name,
+      qualifiedName: symbol.id,
+      path: symbol.file,
+      language: fileLanguages.get(symbol.file) ?? 'Unknown',
+      range: {
+        startLine: symbol.line,
+        startCol: 0,
+        endLine: symbol.endLine ?? symbol.end_line ?? symbol.line,
+        endCol: 0,
+      },
+      evidence: symbol.evidence,
+      confidence: 1,
+      metadata: {
+        originalType: symbol.type,
+        parent: symbol.parent,
+        exported: symbol.exported,
+      },
+    };
+  });
+  const symbolNodeIds = new Set(symbolFinalIds);
+
+  const defineEdges: GraphEdge[] = project.symbols.map((symbol, index) => ({
+    id: `defines:${symbolFinalIds[index]}`,
+    source: normalizeFileNodeId(symbol.file),
+    target: symbolFinalIds[index],
     type: 'DEFINES',
     status: 'extracted',
     confidence: 1,
@@ -190,15 +273,15 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
   }));
 
   const importEdges: GraphEdge[] = project.imports.map((record) => {
-    const externalName = record.module.split(/[/.]/)[0];
-    const target = record.external
+    const externalName = externalDependencyName(record.module);
+    const target = record.external && externalName
       ? `dependency:${externalName}`
       : record.target
-        ? record.target.startsWith('file:') ? record.target : `file:${record.target}`
+        ? normalizeFileNodeId(record.target)
         : null;
     return {
       id: record.id,
-      source: record.source.startsWith('file:') ? record.source : `file:${record.source}`,
+      source: normalizeFileNodeId(record.source),
       target,
       type: record.external ? 'DEPENDS_ON' : 'IMPORTS',
       status: target ? 'resolved' : 'unresolved',
@@ -217,7 +300,7 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
       ? call.source
       : fileNodeIds.has(call.source)
         ? call.source
-        : `file:${call.file}`;
+        : normalizeFileNodeId(call.file);
     const target = call.target && symbolNodeIds.has(call.target) ? call.target : null;
     return {
       id: call.id,
@@ -235,11 +318,12 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     };
   });
 
-  const routeEdges: GraphEdge[] = project.routes.flatMap((route) => {
+  const routeEdges: GraphEdge[] = project.routes.flatMap((route, index) => {
+    const routeId = routeFinalIds[index];
     const fileEdge: GraphEdge = {
-      id: `exposes:${route.id}`,
-      source: `file:${route.file}`,
-      target: route.id,
+      id: `exposes:${routeId}`,
+      source: normalizeFileNodeId(route.file),
+      target: routeId,
       type: 'EXPOSES_ROUTE',
       status: 'extracted',
       confidence: route.confidence,
@@ -249,8 +333,8 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     };
     const handlerTarget = symbolNodeIds.has(route.handler) ? route.handler : null;
     const handlerEdge: GraphEdge = {
-      id: `handles:${route.id}`,
-      source: route.id,
+      id: `handles:${routeId}`,
+      source: routeId,
       target: handlerTarget,
       type: 'HANDLES',
       status: handlerTarget ? 'resolved' : 'unresolved',
@@ -266,8 +350,8 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     return [fileEdge, handlerEdge];
   });
 
-  const graphNodes = [...fileNodes, ...symbolNodes, ...routeNodes, ...dependencyNodes];
-  const graphEdges = [...defineEdges, ...importEdges, ...callEdges, ...routeEdges];
+  const graphNodes = [...fileNodes, ...routeNodes, ...dependencyNodes, ...symbolNodes];
+  const graphEdges = normalizeEdgeIds([...defineEdges, ...importEdges, ...callEdges, ...routeEdges]);
   const unresolved = graphEdges
     .filter((edge) => edge.status === 'unresolved' || edge.status === 'ambiguous')
     .map((edge) => ({

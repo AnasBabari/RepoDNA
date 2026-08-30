@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.0.0",
-  "generatedAt": "2026-08-26T10:18:21.188Z",
+  "generatedAt": "2026-08-30T00:58:25.635Z",
   "repository": {
     "name": "Twitter-Sentiment-Analysis",
     "source": "https://github.com/yusrababari/Twitter-Sentiment-Analysis",
@@ -56,6 +56,12 @@
       "HTML": 1,
       "JavaScript": 10,
       "CSS": 1
+    },
+    "acquisitionMode": "archive",
+    "truncation": {
+      "hitLimits": [],
+      "maxFilesReached": false,
+      "maxBytesReached": false
     }
   },
   "coverage": {
@@ -68,21 +74,6 @@
     "truncationReasons": []
   },
   "nodes": [
-    {
-      "id": "dependency:@vitejs",
-      "kind": "dependency",
-      "name": "@vitejs",
-      "qualifiedName": "@vitejs",
-      "path": "",
-      "language": "External",
-      "range": {
-        "startLine": 1,
-        "startCol": 0,
-        "endLine": 1,
-        "endCol": 0
-      },
-      "confidence": 1
-    },
     {
       "id": "dependency:react",
       "kind": "dependency",
@@ -2053,6 +2044,21 @@
         "parent": null,
         "exported": false
       }
+    },
+    {
+      "id": "dependency:@vitejs/plugin-react",
+      "kind": "dependency",
+      "name": "@vitejs/plugin-react",
+      "qualifiedName": "@vitejs/plugin-react",
+      "path": "",
+      "language": "External",
+      "range": {
+        "startLine": 1,
+        "startCol": 0,
+        "endLine": 1,
+        "endCol": 0
+      },
+      "confidence": 1
     }
   ],
   "edges": [
@@ -6104,7 +6110,7 @@
     {
       "id": "vite.config.js:import:2:@vitejs/plugin-react",
       "source": "file:vite.config.js",
-      "target": "dependency:@vitejs",
+      "target": "dependency:@vitejs/plugin-react",
       "type": "DEPENDS_ON",
       "status": "resolved",
       "confidence": 0.9,
@@ -6117,7 +6123,7 @@
           "endCol": 0
         }
       },
-      "explanation": "Import @vitejs/plugin-react resolves to dependency:@vitejs",
+      "explanation": "Import @vitejs/plugin-react resolves to dependency:@vitejs/plugin-react",
       "resolver": {
         "name": "legacy-import-resolver",
         "version": "1.2.0"
@@ -6713,12 +6719,12 @@
   "diagnostics": [],
   "timings": {
     "stages": {
-      "parse": 10,
-      "adapt": 0,
+      "parse": 85,
+      "adapt": 2,
       "compact": 0,
       "analytics": 1
     },
-    "totalMs": 11
+    "totalMs": 88
   },
   "parsers": {
     "versions": {
@@ -6733,11 +6739,11 @@
   },
   "security": {
     "limits": {
-      "maxArchiveEntries": 50000,
-      "maxFiles": 10000,
+      "maxArchiveEntries": 100000,
+      "maxFiles": 20000,
       "maxFileBytes": 1000000,
       "maxArchiveBytes": 134217728,
-      "maxTotalExtractedBytes": 134217728,
+      "maxTotalExtractedBytes": 201326592,
       "maxAstNodes": 25000,
       "maxAstDepth": 128,
       "maxGraphNodes": 8000,
@@ -6768,10 +6774,10 @@
     "executedRepositoryCode": false,
     "analyzerVersion": "2.0.0",
     "limits": {
-      "maxFiles": 10000,
+      "maxFiles": 20000,
       "maxFileBytes": 1000000,
       "maxArchiveBytes": 134217728,
-      "maxTotalExtractedBytes": 134217728,
+      "maxTotalExtractedBytes": 201326592,
       "fetchTimeoutMs": 60000
     },
     "fileComponents": {

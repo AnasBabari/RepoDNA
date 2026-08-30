@@ -3,6 +3,38 @@ import { describe, expect, it } from 'vitest';
 import { extractFromZip } from '../../app/lib/analyzer/ingestion';
 
 describe('True Bounded Decompression Defense & Adversarial ZIP Protection', () => {
+  it('rejects duplicate normalized file paths instead of producing ambiguous graph nodes', async () => {
+    const chunks: Uint8Array[] = [];
+    const buffer = await new Promise<Uint8Array>((resolve, reject) => {
+      const zip = new fflate.Zip((error, chunk, final) => {
+        if (error) return reject(error);
+        chunks.push(chunk);
+        if (final) {
+          const size = chunks.reduce((sum, item) => sum + item.byteLength, 0);
+          const combined = new Uint8Array(size);
+          let offset = 0;
+          for (const item of chunks) {
+            combined.set(item, offset);
+            offset += item.byteLength;
+          }
+          resolve(combined);
+        }
+      });
+      const first = new fflate.ZipPassThrough('repo-main/src/index.ts');
+      const second = new fflate.ZipPassThrough('repo-main/src/index.ts');
+      zip.add(first);
+      zip.add(second);
+      first.push(fflate.strToU8('export const first = true;'), true);
+      second.push(fflate.strToU8('export const second = true;'), true);
+      zip.end();
+    });
+
+    await expect(extractFromZip(buffer, 'duplicate-paths')).rejects.toMatchObject({
+      code: 'INVALID_ARCHIVE',
+      status: 400,
+    });
+  });
+
   it('enforces hard maxArchiveEntries cap against header bombs (>20,000 entries)', async () => {
     const entries: Record<string, Uint8Array> = {};
     for (let i = 0; i < 250; i++) {

@@ -58,7 +58,7 @@ describe('Reliability Smoke Tests', () => {
       errorCode: rawError.code,
       requestId: rawError.requestId,
       analysisMode: 'server',
-      appVersion: 'v1.1.0-a91b35f',
+      appVersion: 'v1.1.0',
       timestamp: new Date().toISOString(),
       fallbackAvailable: true,
     };

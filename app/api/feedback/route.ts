@@ -12,6 +12,7 @@ export interface FeedbackPayload {
 }
 
 const MAX_FEEDBACK_BYTES = 16 * 1024;
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 
 async function readBoundedJson<T>(request: NextRequest, maxBytes: number): Promise<T> {
   const contentLength = request.headers.get('content-length');
@@ -71,12 +72,12 @@ export async function POST(request: NextRequest) {
     if (err instanceof Error && err.message === 'PAYLOAD_TOO_LARGE') {
       return NextResponse.json(
         { success: false, error: 'Request body exceeds 16 KB limit', requestId },
-        { status: 413 }
+        { status: 413, headers: NO_STORE_HEADERS }
       );
     }
     return NextResponse.json(
       { success: false, error: 'Invalid or malformed JSON body.', requestId },
-      { status: 400 }
+      { status: 400, headers: NO_STORE_HEADERS }
     );
   }
 
@@ -101,14 +102,16 @@ export async function POST(request: NextRequest) {
     if (!usefulnessScore) {
       return NextResponse.json(
         { success: false, error: 'usefulnessScore must be an integer between 1 and 5', requestId },
-        { status: 400 }
+        { status: 400, headers: NO_STORE_HEADERS }
       );
     }
 
     const entry = {
       requestId,
       timestamp: new Date().toISOString(),
-      user: session?.user?.id || 'anonymous',
+      user: session?.user?.id
+        ? crypto.createHash('sha256').update(session.user.id).digest('hex').slice(0, 16)
+        : 'anonymous',
       usefulnessScore,
       primaryUsecase,
       missingCapabilities,
@@ -118,11 +121,14 @@ export async function POST(request: NextRequest) {
 
     console.log(`[RepoDNA:Feedback] ${JSON.stringify(entry)}`);
 
-    return NextResponse.json({ success: true, message: 'Thank you for your feedback!', requestId });
+    return NextResponse.json(
+      { success: true, message: 'Thank you for your feedback!', requestId },
+      { headers: NO_STORE_HEADERS }
+    );
   } catch {
     return NextResponse.json(
       { success: false, error: 'Failed to process feedback submission.', requestId },
-      { status: 400 }
+      { status: 400, headers: NO_STORE_HEADERS }
     );
   }
 }

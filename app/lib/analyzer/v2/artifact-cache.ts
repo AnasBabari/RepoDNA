@@ -1,9 +1,11 @@
 import { del, get, put } from '@vercel/blob';
 
 import type { RepoDNAProjectV2 } from './types';
+import { validateRepoDNAProjectV2 } from '../../schema/safe-validator';
 
 export const PUBLIC_ARTIFACT_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const V2_ANALYZER_VERSION = '2.0.0';
+export const MAX_PUBLIC_ARTIFACT_BYTES = 128 * 1024 * 1024;
 
 export interface PublicArtifactSummary {
   schemaVersion: '2.0.0';
@@ -85,7 +87,22 @@ export async function readCachedPublicArtifact(input: {
     return null;
   }
 
-  const project = (await new Response(result.stream).json()) as RepoDNAProjectV2;
+  if (result.blob.size > MAX_PUBLIC_ARTIFACT_BYTES) {
+    await del(pathname).catch(() => undefined);
+    return null;
+  }
+
+  let project: RepoDNAProjectV2;
+  try {
+    project = JSON.parse(await new Response(result.stream).text()) as RepoDNAProjectV2;
+  } catch {
+    await del(pathname).catch(() => undefined);
+    return null;
+  }
+  if (!validateRepoDNAProjectV2(project).valid) {
+    await del(pathname).catch(() => undefined);
+    return null;
+  }
   return {
     project,
     summary: summarizePublicArtifact(project),
@@ -108,9 +125,16 @@ export async function storePublicArtifact(input: {
   if (!isPublicArtifactCacheConfigured()) {
     throw new Error('PUBLIC_ARTIFACT_CACHE_NOT_CONFIGURED');
   }
+  if (!validateRepoDNAProjectV2(input.project).valid) {
+    throw new Error('PUBLIC_ARTIFACT_SCHEMA_INVALID');
+  }
 
   const pathname = publicArtifactPath(input);
-  const stored = await put(pathname, JSON.stringify(input.project), {
+  const serialized = JSON.stringify(input.project);
+  if (new TextEncoder().encode(serialized).byteLength > MAX_PUBLIC_ARTIFACT_BYTES) {
+    throw new Error('PUBLIC_ARTIFACT_TOO_LARGE');
+  }
+  const stored = await put(pathname, serialized, {
     access: 'private',
     addRandomSuffix: false,
     allowOverwrite: true,

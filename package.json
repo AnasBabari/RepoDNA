@@ -1,8 +1,8 @@
 {
   "name": "repodna-viewer",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Interactive visualizer for RepoDNA static repository analysis",
+  "description": "Open-source static analyzer that turns Python, JavaScript, and TypeScript repositories into interactive architecture maps without executing code",
   "engines": {
     "node": ">=22.13.0"
   },
@@ -22,10 +22,11 @@
     "build:vercel": "next build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern app/.well-known/workflow --ignore-pattern tests/fixtures --ignore-pattern public/tree-sitter",
+    "typecheck": "tsc --noEmit --incremental false -p tsconfig.json",
     "test:unit": "vitest run",
     "test:python": "python -c \"import sys, unittest; sys.path.insert(0, 'core'); test_suite = unittest.defaultTestLoader.discover('tests'); runner = unittest.TextTestRunner(verbosity=2); res = runner.run(test_suite); sys.exit(0 if res.wasSuccessful() else 1)\"",
     "test:e2e": "playwright test",
-    "test": "npm run lint && npm run test:unit && npm run build"
+    "test": "npm run lint && npm run typecheck && npm run test:unit && npm run build"
   },
   "dependencies": {
     "@upstash/ratelimit": "^2.0.8",
@@ -46,7 +47,7 @@
     "tree-sitter-javascript": "^0.25.0",
     "tree-sitter-typescript": "^0.23.2",
     "web-tree-sitter": "^0.26.12",
-    "workflow": "^4.8.4"
+    "workflow": "^4.8.5"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.53.1",
@@ -75,6 +76,9 @@
     "wrangler": "^4.125.0"
   },
   "overrides": {
+    "@workflow/core": {
+      "nanoid": "5.1.16"
+    },
     "@workflow/world-local": {
       "undici": "7.29.0"
     },
