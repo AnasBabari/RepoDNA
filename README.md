@@ -4,7 +4,7 @@
 
 [Open the live Vercel web application](https://repodna-one.vercel.app)
 
-RepoDNA turns an unfamiliar Python, JavaScript, or TypeScript repository into an interactive structural map: files, symbols, imports, routes, databases, external systems, architecture layers, execution traces, impact slices, and an onboarding tour.
+RepoDNA turns unfamiliar Python, JavaScript, and TypeScript repositories into interactive structural maps, with experimental Go analysis for files, symbols, imports, routes, databases, external systems, architecture layers, execution traces, impact slices, and onboarding.
 
 It is deterministic, local-first, and does not use an LLM. The analyzer reads source code as text and **never executes repository code**.
 

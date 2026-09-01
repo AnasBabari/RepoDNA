@@ -316,7 +316,7 @@ function LandingView({
           <span>visually in seconds.</span>
         </h1>
         <p className="subtitle">
-          Statically analyze Python, JavaScript, and TypeScript repositories. Discover architecture layers, execution traces, dependencies, data models, and entry points.
+          Statically analyze Python, JavaScript, and TypeScript repositories, with experimental Go analysis. Discover architecture layers, execution traces, dependencies, data models, and entry points.
         </p>
 
         <ScannedRepositoryCounter />
