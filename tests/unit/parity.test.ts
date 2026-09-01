@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { analyzeRepositoryFiles } from '../../app/lib/analyzer';
 import { validateRepoDNAProject } from '../../app/lib/schema/validator';
 import type { DiscoveredFile } from '../../app/lib/analyzer/types';
+import type { RepoDNAProject } from '../../app/lib/types';
 
 function readFixtureFiles(fixtureDir: string): DiscoveredFile[] {
   const baseDir = path.resolve(process.cwd(), fixtureDir);
@@ -33,99 +34,102 @@ function readFixtureFiles(fixtureDir: string): DiscoveredFile[] {
   return results;
 }
 
-describe('Cross-Engine Conformance & Schema Parity Suite', () => {
-  it('verifies schema validity and parity on fastapi-basic fixture', async () => {
-    const fixturePath = 'tests/fixtures/fastapi-basic';
-    const files = readFixtureFiles(fixturePath);
+/**
+ * Cross-engine parity is a fail-hard architectural invariant: if the Python
+ * engine cannot be executed, crashes, emits unparseable output, or diverges
+ * from the TypeScript engine, the parity case FAILS.
+ *
+ * Local development escape hatch only: contributors without a Python
+ * environment may set REPODNA_ALLOW_PYTHON_PARITY_SKIP=1 to skip the Python
+ * half of a parity case instead of failing. CI never sets this variable —
+ * the dedicated `parity` workflow job enforces the contract fail-hard.
+ */
+const ALLOW_PYTHON_PARITY_SKIP = process.env.REPODNA_ALLOW_PYTHON_PARITY_SKIP === '1';
 
-    // 1. TypeScript Engine Analysis
-    const tsResult = await analyzeRepositoryFiles(
-      { name: 'fastapi-basic', source: `file://${fixturePath}`, files, skipped: [] },
-      {}
+function runPythonEngineAnalysis(fixturePath: string): RepoDNAProject {
+  const pyJson = execSync(
+    `python -c "import sys, json; sys.path.insert(0, 'core'); from repodna.engine import analyze_repository; res = analyze_repository('${fixturePath}'); print(json.dumps(res.to_dict()))"`,
+    { encoding: 'utf-8' }
+  );
+  return JSON.parse(pyJson) as RepoDNAProject;
+}
+
+interface ParityCase {
+  fixtureName: string;
+  expectedFramework: string;
+  expectArchitectureComponents: boolean;
+}
+
+async function assertCrossEngineParity(parityCase: ParityCase, ctx: { skip: () => void }): Promise<void> {
+  const fixturePath = `tests/fixtures/${parityCase.fixtureName}`;
+  const files = readFixtureFiles(fixturePath);
+
+  // 1. TypeScript Engine Analysis
+  const tsResult = await analyzeRepositoryFiles(
+    { name: parityCase.fixtureName, source: `file://${fixturePath}`, files, skipped: [] },
+    {}
+  );
+
+  // Validate TS schema conformance
+  const tsValidation = validateRepoDNAProject(tsResult);
+  expect(tsValidation.valid).toBe(true);
+  expect(tsValidation.errors).toEqual([]);
+
+  // 2. Python Engine Analysis via CLI — fail-hard on any invocation or parse
+  // failure so a missing Python engine can never silently pass parity.
+  let pyResult: RepoDNAProject;
+  try {
+    pyResult = runPythonEngineAnalysis(fixturePath);
+  } catch (e) {
+    if (ALLOW_PYTHON_PARITY_SKIP) {
+      console.warn(`REPODNA_ALLOW_PYTHON_PARITY_SKIP=1: skipping Python engine parity for '${parityCase.fixtureName}':`, e);
+      ctx.skip();
+    }
+    throw new Error(
+      `Python engine invocation failed for fixture '${parityCase.fixtureName}'. ` +
+      'Cross-engine parity is enforced fail-hard; install the Python engine (python -m pip install -e .) ' +
+      'or set REPODNA_ALLOW_PYTHON_PARITY_SKIP=1 to skip locally.',
+      { cause: e }
     );
+  }
 
-    // Validate TS schema conformance
-    const tsValidation = validateRepoDNAProject(tsResult);
-    expect(tsValidation.valid).toBe(true);
-    expect(tsValidation.errors).toEqual([]);
+  // Validate Python schema conformance
+  const pyValidation = validateRepoDNAProject(pyResult);
+  expect(pyValidation.valid).toBe(true);
+  expect(pyValidation.errors).toEqual([]);
 
-    // 2. Python Engine Analysis via CLI
-    let pyResult: RepoDNAProject | null = null;
-    try {
-      const pyJson = execSync(
-        `python -c "import sys, json; sys.path.insert(0, 'core'); from repodna.engine import analyze_repository; res = analyze_repository('${fixturePath}'); print(json.dumps(res.to_dict()))"`,
-        { encoding: 'utf-8' }
-      );
-      pyResult = JSON.parse(pyJson);
-    } catch (e) {
-      console.warn('Python engine parity check skipped or failed:', e);
-    }
+  // 3. Structural Parity Assertions
+  expect(tsResult.schemaVersion).toBe(pyResult.schemaVersion);
+  expect(tsResult.repository.sourceFileCount).toBe(pyResult.repository.sourceFileCount);
 
-    if (pyResult) {
-      // Validate Python schema conformance
-      const pyValidation = validateRepoDNAProject(pyResult);
-      expect(pyValidation.valid).toBe(true);
-      expect(pyValidation.errors).toEqual([]);
+  // Verify routes parity
+  const tsRoutes = tsResult.routes.map((r) => `${r.method} ${r.path}`).sort();
+  const pyRoutes = pyResult.routes.map((r) => `${r.method} ${r.path}`).sort();
+  expect(tsRoutes).toEqual(pyRoutes);
 
-      // 3. Structural Parity Assertions
-      expect(tsResult.schemaVersion).toBe(pyResult.schemaVersion);
-      expect(tsResult.repository.sourceFileCount).toBe(pyResult.repository.sourceFileCount);
+  // Verify framework detection parity
+  expect(tsResult.repository.fingerprint.frameworks).toContain(parityCase.expectedFramework);
+  expect(pyResult.repository.fingerprint.frameworks).toContain(parityCase.expectedFramework);
 
-      // Verify routes parity
-      const tsRoutes = tsResult.routes.map((r) => `${r.method} ${r.path}`).sort();
-      const pyRoutes = pyResult.routes.map((r) => `${r.method} ${r.path}`).sort();
-      expect(tsRoutes).toEqual(pyRoutes);
+  // Verify architecture component count
+  if (parityCase.expectArchitectureComponents) {
+    expect(tsResult.architecture.components.length).toBeGreaterThan(0);
+    expect(pyResult.architecture.components.length).toBeGreaterThan(0);
+  }
+}
 
-      // Verify framework detection parity
-      expect(tsResult.repository.fingerprint.frameworks).toContain('FastAPI');
-      expect(pyResult.repository.fingerprint.frameworks).toContain('FastAPI');
-
-      // Verify architecture component count
-      expect(tsResult.architecture.components.length).toBeGreaterThan(0);
-      expect(pyResult.architecture.components.length).toBeGreaterThan(0);
-    }
+describe('Cross-Engine Conformance & Schema Parity Suite', () => {
+  it('verifies schema validity and parity on fastapi-basic fixture', async (ctx) => {
+    await assertCrossEngineParity(
+      { fixtureName: 'fastapi-basic', expectedFramework: 'FastAPI', expectArchitectureComponents: true },
+      ctx
+    );
   });
 
-  it('verifies schema validity and parity on express-basic fixture', async () => {
-    const fixturePath = 'tests/fixtures/express-basic';
-    const files = readFixtureFiles(fixturePath);
-
-    // 1. TypeScript Engine Analysis
-    const tsResult = await analyzeRepositoryFiles(
-      { name: 'express-basic', source: `file://${fixturePath}`, files, skipped: [] },
-      {}
+  it('verifies schema validity and parity on express-basic fixture', async (ctx) => {
+    await assertCrossEngineParity(
+      { fixtureName: 'express-basic', expectedFramework: 'Express', expectArchitectureComponents: false },
+      ctx
     );
-
-    const tsValidation = validateRepoDNAProject(tsResult);
-    expect(tsValidation.valid).toBe(true);
-    expect(tsValidation.errors).toEqual([]);
-
-    // 2. Python Engine Analysis
-    let pyResult: RepoDNAProject | null = null;
-    try {
-      const pyJson = execSync(
-        `python -c "import sys, json; sys.path.insert(0, 'core'); from repodna.engine import analyze_repository; res = analyze_repository('${fixturePath}'); print(json.dumps(res.to_dict()))"`,
-        { encoding: 'utf-8' }
-      );
-      pyResult = JSON.parse(pyJson);
-    } catch (e) {
-      console.warn('Python engine parity check skipped or failed:', e);
-    }
-
-    if (pyResult) {
-      const pyValidation = validateRepoDNAProject(pyResult);
-      expect(pyValidation.valid).toBe(true);
-      expect(pyValidation.errors).toEqual([]);
-
-      expect(tsResult.schemaVersion).toBe(pyResult.schemaVersion);
-      expect(tsResult.repository.sourceFileCount).toBe(pyResult.repository.sourceFileCount);
-
-      const tsRoutes = tsResult.routes.map((r) => `${r.method} ${r.path}`).sort();
-      const pyRoutes = pyResult.routes.map((r) => `${r.method} ${r.path}`).sort();
-      expect(tsRoutes).toEqual(pyRoutes);
-
-      expect(tsResult.repository.fingerprint.frameworks).toContain('Express');
-      expect(pyResult.repository.fingerprint.frameworks).toContain('Express');
-    }
   });
 });

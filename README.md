@@ -94,20 +94,18 @@ Exports use a private seven-day Vercel Blob cache for public commit-addressed an
 
 ## Enforced Resource Limits & Quotas
 
-| Limit | Maximum | Action upon breach |
-|---|---|---|
-| **Public Rate Limit** | 5 analyses / 10 min per IP | Returns `429 RATE_LIMITED` |
-| **Authenticated Rate Limit** | 20 analyses / 10 min per user | Returns `429 RATE_LIMITED` |
-| **Total archive entries** | 20,000 entries | Returns `413 TOO_MANY_ARCHIVE_ENTRIES` (header bomb defense) |
-| **Candidate repository files** | 10,000 files | Returns `413 TOO_MANY_FILES` |
-| **Individual file size** | 1 MB (1,000,000 bytes) | Skipped with diagnostic (`exceeds_file_size_limit`) |
-| **Declared compression ratio** | 200:1 (entries > 256 KB) | Returns `413 SUSPICIOUS_COMPRESSION_RATIO` |
-| **Private/browser compressed archive** | 25 MB (26,214,400 bytes) | Returns `413 ARCHIVE_TOO_LARGE` |
-| **Private/browser extracted content** | 100 MB (104,857,600 bytes) | Returns `413 EXTRACTED_TOO_LARGE` (ZIP bomb protection) |
-| **Public durable compressed archive** | 128 MB before Git tree fallback | Uses bounded archive or Git tree acquisition |
-| **Public durable extracted content** | 192 MB | Produces an honest partial inventory when bounded limits are reached |
-| **Interactive graph** | 8,000 nodes / 12,000 edges in the v2 artifact; 240 rendered nodes / edges in the live canvas | Preserves full inventory and reports compaction diagnostics |
-| **GitHub fetch timeout** | 20 seconds private/browser; 60 seconds public durable | Returns a controlled upstream timeout/failure |
+| Limit | Browser / private analysis | Public durable analysis | Action upon breach |
+|---|---|---|---|
+| **Public rate limit** | 5 analyses / 10 min per IP | Same | Returns `429 RATE_LIMITED` |
+| **Authenticated rate limit** | 20 analyses / 10 min per user | Same | Returns `429 RATE_LIMITED` |
+| **Candidate repository files** | 10,000 files | 20,000 files | Browser/private returns `413 TOO_MANY_FILES`; public durable produces an honest partial inventory (`max_files_limit`) |
+| **Total archive entries** | 20,000 entries | 100,000 entries | Returns `413 TOO_MANY_ARCHIVE_ENTRIES` (header bomb defense) |
+| **Individual file size** | 1 MB (1,000,000 bytes) | Same | Skipped with diagnostic (`exceeds_file_size_limit`) |
+| **Declared compression ratio** | 200:1 (entries emitting > 256 KB decompressed) | Same | Entry is **quarantined, not fatal**: its stream is terminated and buffers discarded, it is skipped with a `suspicious_compression_ratio` diagnostic, and analysis of the remaining safe files continues. Every emitted byte—including quarantined entries—still counts toward the cumulative extracted-bytes cap. |
+| **Compressed archive download** | 25 MB (26,214,400 bytes) | 128 MB before Git-tree fallback | Browser/private returns `413 ARCHIVE_TOO_LARGE`; public durable uses bounded archive or Git-tree acquisition |
+| **Extracted content** | 100 MB (104,857,600 bytes) | 192 MB | Browser/private returns `413 EXTRACTED_TOO_LARGE` (ZIP bomb protection); public durable produces an honest partial inventory when bounded limits are reached |
+| **Interactive graph** | 8,000 nodes / 12,000 edges in the v2 artifact; 240 rendered nodes / edges in the live canvas | Same | Preserves full inventory and reports compaction diagnostics |
+| **GitHub fetch timeout** | 20 seconds | 60 seconds | Returns a controlled upstream timeout/failure |
 
 ---
 
@@ -157,6 +155,21 @@ npm test
 # Run native Vercel Next.js build
 npm run build:vercel
 ```
+
+### Cross-Engine Parity Enforcement
+
+The `fastapi-basic` and `express-basic` parity cases run both the TypeScript
+engine and the Python engine (`core/repodna`) over the same fixtures and
+**fail hard** when the Python engine is unavailable, crashes, emits
+unparseable output, or diverges from the TypeScript engine. A missing Python
+implementation can never silently pass.
+
+- Locally, contributors without a Python environment can set
+  `REPODNA_ALLOW_PYTHON_PARITY_SKIP=1` to skip the Python half of the parity
+  cases instead of failing.
+- CI never sets that variable: a dedicated `parity` job installs the Python
+  engine (`python -m pip install -e .`) and enforces the contract fail-hard
+  on every push and pull request.
 
 ---
 

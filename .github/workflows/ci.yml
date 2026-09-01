@@ -31,9 +31,33 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm run test:unit
+      # The dedicated `parity` job enforces cross-engine parity fail-hard with
+      # the Python engine installed; the visualizer job has no Python runtime.
+      - name: Unit tests (cross-engine parity enforced in dedicated parity job)
+        run: npm run test:unit
+        env:
+          REPODNA_ALLOW_PYTHON_PARITY_SKIP: '1'
       - run: npm run build
       - run: npm run build:vercel
+
+  parity:
+    name: Cross-engine parity (TS + Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: npm ci
+      - run: python -m pip install -e .
+      # Fail-hard cross-engine contract: a missing Python engine, a crash, or
+      # any TypeScript/Python output drift fails CI. No skip env var is set.
+      - run: npx vitest run tests/unit/parity.test.ts
 
   browser-smoke:
     runs-on: ubuntu-latest
