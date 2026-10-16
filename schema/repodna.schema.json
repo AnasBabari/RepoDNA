@@ -379,6 +379,78 @@
       "type": "object",
       "required": ["analysisMode", "executedRepositoryCode"],
       "properties": {
+        "extractionLimits": {
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "file",
+              "category",
+              "limit",
+              "omittedCount",
+              "countIsLowerBound",
+              "range"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "category": {
+                "enum": [
+                  "symbols",
+                  "imports",
+                  "calls",
+                  "ast_nodes",
+                  "ast_depth"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "omittedCount": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "countIsLowerBound": {
+                "type": "boolean"
+              },
+              "range": {
+                "type": "object",
+                "required": [
+                  "startLine",
+                  "endLine",
+                  "startColumn",
+                  "endColumn"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "startLine": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "endLine": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "startColumn": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "endColumn": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
         "analysisMode": { "type": "string" },
         "executedRepositoryCode": { "type": "boolean" },
         "analyzerVersion": { "type": "string" },

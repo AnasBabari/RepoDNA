@@ -7,6 +7,8 @@ import {
 } from '../../../app/lib/export/browser-export-cache';
 import { buildGraphExportViaWorker } from '../../../app/lib/export/graph/worker-client';
 import { makeV2Fixture } from './fixtures';
+import { V2_ANALYZER_VERSION } from '../../../app/lib/analyzer/v2/version';
+import { GRAPH_EXPORTER_VERSION, GRAPH_EXPORT_SCHEMA_VERSION } from '../../../app/lib/export/graph/types';
 
 describe('graph export worker client', () => {
   it('falls back to the main thread outside a browser and preserves progress metadata', async () => {
@@ -42,12 +44,16 @@ describe('browser export cache identities', () => {
 
     expect(first).toBe(second);
     expect(first).not.toBe(different);
+    expect(first).not.toBe(await hashCacheKey('github-private:source-digest-123'));
+    expect(first).toBe(await hashCacheKey(`${V2_ANALYZER_VERSION}:github-private:source-digest-123`));
     expect(first).toMatch(/^[0-9a-f]{64}$/);
     expect(first).not.toContain('github-private');
     expect(await hashCacheKey('owner/private-repository')).not.toContain('private-repository');
   });
 
-  it('names cached formats by artifact key and export schema', () => {
-    expect(createBrowserExportId('abc123', 'cypher')).toBe('abc123:1.0.0:cypher');
+  it('separates current exporter bytes from old schema-compatible cached exports', () => {
+    const id = createBrowserExportId('abc123', 'cypher');
+    expect(id).toBe(`abc123:${GRAPH_EXPORT_SCHEMA_VERSION}:${GRAPH_EXPORTER_VERSION}:cypher`);
+    expect(id).not.toBe('abc123:1.0.0:cypher');
   });
 });

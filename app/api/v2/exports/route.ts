@@ -9,7 +9,7 @@ import { buildCsvBundle } from '../../../lib/export/graph/csv';
 import { buildCypher } from '../../../lib/export/graph/cypher';
 import { buildGraphJson } from '../../../lib/export/graph/json';
 import { graphExportFilename } from '../../../lib/export/graph';
-import { isGraphExportFormat } from '../../../lib/export/graph/types';
+import { graphExportCacheIdentity, isGraphExportFormat } from '../../../lib/export/graph/types';
 import { checkExportRateLimit } from '../../../lib/export/export-rate-limit';
 import { validateRepoDNAProjectV2 } from '../../../lib/schema/safe-validator';
 import {
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
         fallbackAvailable: true,
       });
     }
-    const exportId = await sha256Hex(`${sourceDigest}:${format}:1.0.0`);
+    const exportId = await sha256Hex(graphExportCacheIdentity(sourceDigest, format));
     const filename = filenameForFormat(normalized.document.manifest, format);
     return NextResponse.json({
       exportId,
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
       fallbackAvailable: true,
     });
   }
-  const exportId = await sha256Hex(`${sourceDigest}:${format}:1.0.0`);
+  const exportId = await sha256Hex(graphExportCacheIdentity(sourceDigest, format));
 
   return NextResponse.json({
     exportId,

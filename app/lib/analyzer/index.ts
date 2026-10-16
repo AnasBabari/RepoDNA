@@ -149,6 +149,12 @@ export async function analyzeRepositoryFiles(
     }
 
     partials.push(partial);
+    const extractionLimits = partial.parseMeta?.extractionLimits ?? [];
+    if (partial.parseMeta?.quality === 'partial') {
+      partial.file.error = extractionLimits.length && !partial.parseMeta.hasSyntaxErrors
+        ? 'SOURCE_EXTRACTION_LIMIT_REACHED'
+        : 'SOURCE_PARSE_PARTIAL';
+    }
     fileRec.parsed = partial.file.parsed;
     fileRec.error = partial.file.error;
     if (partial.parserNotice) {
@@ -158,22 +164,28 @@ export async function analyzeRepositoryFiles(
         message: partial.parserNotice.message,
         file: partial.file.path,
       });
-    } else if (partial.parseMeta?.quality === 'partial') {
+    } else if (partial.parseMeta?.quality === 'partial' && (partial.parseMeta.hasSyntaxErrors || !extractionLimits.length)) {
       diagnostics.push({
         severity: 'warning',
         code: 'SOURCE_PARSE_PARTIAL',
-        message: `Python source contained syntax errors and was partially analyzed.`,
+        message: `${partial.file.language} source contained syntax errors and was partially analyzed.`,
         file: partial.file.path,
       });
     } else if (partial.parseMeta?.quality === 'failed') {
       diagnostics.push({
         severity: 'warning',
         code: 'SOURCE_PARSE_FAILED',
-        message: `Python source could not be parsed and was skipped from syntax analysis.`,
+        message: `${partial.file.language} source could not be parsed and was skipped from syntax analysis.`,
         file: partial.file.path,
       });
     }
-    if (partial.file.error && !partial.parserNotice) {
+    for (const notice of extractionLimits) {
+      diagnostics.push({
+        severity: 'warning', code: 'SOURCE_EXTRACTION_LIMIT_REACHED', file: partial.file.path,
+        message: `${partial.file.path}:${notice.range.startLine}: ${notice.category} extraction limit ${notice.limit}; omitted ${notice.omittedCount === null ? 'unknown (unvisited subtree)' : `${notice.countIsLowerBound ? 'at least ' : ''}${notice.omittedCount}`} ${notice.category} facts. Syntax validity is reported separately.`,
+      });
+    }
+    if (partial.file.error && !partial.parserNotice && partial.parseMeta?.quality !== 'partial') {
       diagnostics.push({
         severity: 'warning',
         code: 'parse_error',
@@ -350,6 +362,7 @@ export async function analyzeRepositoryFiles(
     },
     diagnostics,
     metadata: {
+      extractionLimits: partials.flatMap((partial) => (partial.parseMeta?.extractionLimits ?? []).map((notice) => ({ ...notice, file: partial.file.path }))),
       analysisMode: parserMode === 'tree-sitter' ? 'static-typescript-tree-sitter' : 'static-typescript',
       executedRepositoryCode: false,
       analyzerVersion: '1.2.0',

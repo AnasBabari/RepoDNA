@@ -1,4 +1,4 @@
-import { compactStableStringify, sha256Hex, utf8Bytes } from './stable-json';
+import { compactStableStringify, sha256Hex, utf8Base64, utf8Bytes } from './stable-json';
 import { graphExportFilename } from './index';
 import { GRAPH_EXPORT_MEDIA_TYPES } from './types';
 import type { GraphExportDocumentV1, GraphExportFile } from './types';
@@ -106,6 +106,7 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
   const manifest = document.manifest;
 
   lines.push('// RepoDNA Graph Export — Cypher');
+  lines.push(`// Export manifest JSON (base64 UTF-8): ${utf8Base64(compactStableStringify(manifest))}`);
   lines.push(`// Export schema: ${commentValue(manifest.exportSchemaVersion)}  Exporter: ${commentValue(manifest.exporterVersion)}`);
   lines.push(`// Source digest: ${commentValue(manifest.sourceArtifactSha256)}`);
   lines.push(`// Repository: ${commentValue(manifest.repository.name)}  Source: ${commentValue(manifest.repository.source)}`);

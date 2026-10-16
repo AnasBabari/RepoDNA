@@ -165,6 +165,7 @@ export type RepoDNAProject = {
     analysisMode: string;
     executedRepositoryCode: boolean;
     analyzerVersion?: string;
+    extractionLimits?: import('./analyzer/parser/types').SourceExtractionLimit[];
     limits: {
       maxFiles: number;
       maxFileBytes: number;

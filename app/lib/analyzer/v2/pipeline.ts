@@ -5,6 +5,8 @@ import type { IngestionInventory } from '../types';
 import { adaptV1ToV2Viewer } from '../../schema/artifact-loader';
 import type { GraphEdge, GraphNode, RepoDNAProjectV2 } from './types';
 import { detectCentrality, detectCommunities, detectDependencyCycles } from './analytics';
+import { analysisQuality } from '../../analysis-quality';
+import { V2_ANALYZER_VERSION } from './version';
 
 const DEFAULT_GRAPH_LIMITS = {
   // The full repository inventory is retained separately. These caps keep a
@@ -318,7 +320,7 @@ export async function analyzeRepositoryV2(
       maxGraphEdges: graphLimits.maxEdges,
     },
     truncated: [...new Set([
-      ...v1.diagnostics.filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE'].includes(d.code)).map((d) => d.code),
+      ...v1.diagnostics.filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_EXTRACTION_LIMIT_REACHED'].includes(d.code)).map((d) => d.code),
       ...(v2.inventory.truncation?.hitLimits ?? []),
       ...graphTruncation,
     ])],
@@ -340,7 +342,7 @@ export async function analyzeRepositoryV2(
 
   v2.metadata = {
     ...v2.metadata,
-    analyzerVersion: '2.0.0',
+    analyzerVersion: V2_ANALYZER_VERSION,
     analysisMode: 'canonical-graph',
   };
 
@@ -348,19 +350,9 @@ export async function analyzeRepositoryV2(
   const totalMs = Date.now() - start;
   v2.timings = { stages: timings, totalMs };
 
-  // Completeness
-  const hasUnresolved = v2.unresolved.length > 0 || v2.edges.some((e) => e.status === 'unresolved' || e.status === 'ambiguous');
-  const hasTruncation = v2.security.truncated.length > 0;
-  const parseOk = v1.metrics.parseSuccessRate === 100;
-  if (parseOk && !hasUnresolved && !hasTruncation) {
-    v2.completeness = { status: 'FULLY_MAPPED', reasons: [] };
-  } else if (hasTruncation) {
-    v2.completeness = { status: 'COVERAGE_LIMITED', reasons: [...v2.security.truncated, hasUnresolved ? 'unresolved relationships' : ''].filter(Boolean) };
-  } else if (!parseOk || hasUnresolved) {
-    v2.completeness = { status: parseOk ? 'MOSTLY_MAPPED' : 'PARTIAL', reasons: hasUnresolved ? ['unresolved relationships'] : [`parseSuccessRate ${v1.metrics.parseSuccessRate}%`] };
-  } else {
-    v2.completeness = { status: 'MOSTLY_MAPPED', reasons: [] };
-  }
+  // One conservative interpretation shared by the adapter, UI and exports.
+  const { status, reasons } = analysisQuality(v2);
+  v2.completeness = { status, reasons };
 
   // Ensure deterministic ordering for nodes/edges
   v2.nodes.sort((a, b) => a.id.localeCompare(b.id));

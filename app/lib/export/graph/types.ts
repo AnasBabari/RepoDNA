@@ -1,9 +1,14 @@
 import type { GraphEdgeStatus, GraphEdgeType, GraphNodeKind, SourceRange } from '../../analyzer/v2/types';
 
 export const GRAPH_EXPORT_SCHEMA_VERSION = '1.0.0' as const;
-export const GRAPH_EXPORTER_VERSION = '1.0.0' as const;
+export const GRAPH_EXPORTER_VERSION = '1.0.1' as const;
 
 export type GraphExportFormat = 'graph-json' | 'csv' | 'cypher' | 'parquet';
+
+// Schema compatibility does not imply byte-for-byte exporter compatibility.
+export function graphExportCacheIdentity(artifactKey: string, format: string): string {
+  return `${artifactKey}:${GRAPH_EXPORT_SCHEMA_VERSION}:${GRAPH_EXPORTER_VERSION}:${format}`;
+}
 
 export type GraphExportErrorCode =
   | 'INVALID_EXPORT_REQUEST'
@@ -46,6 +51,7 @@ export interface GraphExportManifest {
   coverage: {
     percentage: number;
     truncationReasons: string[];
+    extractionLimits?: import('../../analyzer/parser/types').SourceExtractionLimit[];
   };
   completeness: {
     status: string;

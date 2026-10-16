@@ -1,10 +1,11 @@
 import { del, get, put } from '@vercel/blob';
 
 import type { RepoDNAProjectV2 } from './types';
+import { V2_ANALYZER_VERSION } from './version';
 import { validateRepoDNAProjectV2 } from '../../schema/safe-validator';
 
 export const PUBLIC_ARTIFACT_TTL_SECONDS = 7 * 24 * 60 * 60;
-export const V2_ANALYZER_VERSION = '2.0.0';
+export { V2_ANALYZER_VERSION } from './version';
 export const MAX_PUBLIC_ARTIFACT_BYTES = 128 * 1024 * 1024;
 
 export interface PublicArtifactSummary {

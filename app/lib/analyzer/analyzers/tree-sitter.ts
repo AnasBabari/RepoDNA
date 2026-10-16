@@ -1,7 +1,7 @@
 import type { DiscoveredFile, PartialAnalysis } from '../types';
 import { isTestFile } from '../detection';
 import { getSyntaxParser, languageForPath } from '../parser/registry';
-import type { SyntaxCall, SyntaxImport, SyntaxSymbol } from '../parser/types';
+import type { ExtractionLimit, SyntaxCall, SyntaxImport, SyntaxSymbol } from '../parser/types';
 import { ParserError } from '../parser/types';
 import { analyzeJavaScript } from './javascript';
 
@@ -53,7 +53,7 @@ export async function analyzeTreeSitter(file: DiscoveredFile): Promise<PartialAn
     const parser = await getSyntaxParser(language);
     if (!parser) throw new ParserError('UNSUPPORTED_LANGUAGE', `No parser for ${file.path}`);
     const { facts } = await parser.parse({ source: file.content });
-    return buildPartialAnalysis(file, facts.language, facts.symbols, facts.imports, facts.calls, facts.quality, facts.parse.errorNodes);
+    return buildPartialAnalysis(file, facts.language, facts.symbols, facts.imports, facts.calls, facts.quality, facts.parse.errorNodes, facts.parse.hasErrors, facts.extractionLimits ?? []);
   } catch (error) {
     // Fallback to legacy for JS/TS
     if (['javascript', 'typescript', 'tsx'].includes(language)) {
@@ -122,7 +122,9 @@ function buildPartialAnalysis(
   imports: SyntaxImport[],
   calls: SyntaxCall[],
   quality: 'complete' | 'partial' | 'failed',
-  errorNodes: number
+  errorNodes: number,
+  hasSyntaxErrors: boolean,
+  extractionLimits: ExtractionLimit[]
 ): PartialAnalysis {
   const lines = file.content.split(/\r?\n/).length;
   const result: PartialAnalysis = {
@@ -148,7 +150,7 @@ function buildPartialAnalysis(
     externals: new Set(),
     entrypointEvidence: [],
     expressMounts: [],
-    parseMeta: { quality, errorNodes },
+    parseMeta: { quality, errorNodes, hasSyntaxErrors, extractionLimits },
   };
 
   // Symbols

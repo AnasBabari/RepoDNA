@@ -16,6 +16,7 @@ import { MobileDetailSheet } from './MobileDetailSheet';
 import { Activity, Dna, Download, FileCode, FileText, LayoutDashboard, Map, MessageCircle, Network, Route } from './icons';
 import { analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import { filterMeaningfulDependencyCycles } from '../lib/analyzer/cycles';
+import { analysisQuality } from '../lib/analysis-quality';
 import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
 import {
   analyzePublicRepositoryDurably,
@@ -473,16 +474,17 @@ function Overview({
   const skippedCount = coverage?.skipped ?? (inventory ? Object.values(inventory.skippedByReason).reduce((a, b) => a + b, 0) : 0);
   const ignoredCount = coverage?.ignored ?? inventory?.ignoredFileCount ?? 0;
   const unsupportedCount = coverage?.unsupported ?? inventory?.unsupportedSourceFileCount ?? 0;
-  const unresolvedRelationships = deepProject?.unresolved.length ?? project.diagnostics.filter((d) => d.code.includes('UNRESOLVED')).length;
+  const quality = analysisQuality(deepProject ?? project);
+  const unresolvedRelationships = quality.unresolvedCount;
   const dependencyCycleCount = filterMeaningfulDependencyCycles(project.metrics.dependencyCycles).length;
   const truncationReasons = coverage?.truncationReasons ?? inventory?.truncation?.hitLimits ?? [];
   // Never display "Fully mapped" unless all supported first-party files parsed and no limits/truncation
   const hasSkippedDiagnostics = project.diagnostics.some(
     (d) => d.code.startsWith('skipped_') || ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_PARSE_PARTIAL', 'SOURCE_PARSE_FAILED', 'GRAPH_NODES_COMPACTED', 'GRAPH_EDGES_COMPACTED', 'GITHUB_TREE_TRUNCATED'].includes(d.code)
   ) || truncationReasons.length > 0 || skippedCount > 0;
-  const hasUnresolvedRoutes = incompletePaths > 0;
-  const isFullyMapped = project.metrics.parseSuccessRate === 100 && !hasSkippedDiagnostics && !hasUnresolvedRoutes;
-  const mapQualityLabel = isFullyMapped ? 'Fully mapped' : hasUnresolvedRoutes || hasSkippedDiagnostics ? (project.metrics.parseSuccessRate < 70 ? 'Coverage limited' : 'Mostly mapped') : 'Mostly mapped';
+  const isFullyMapped = quality.status === 'FULLY_MAPPED';
+  const mapQualityLabel = quality.label;
+  const extractionNotices = project.diagnostics.filter((item) => item.code === 'SOURCE_EXTRACTION_LIMIT_REACHED');
   const primaryTechnology = project.technologies[0] ?? Object.keys(project.repository.languages)[0] ?? 'Custom application';
 
   return (
@@ -541,6 +543,17 @@ function Overview({
         </div>
       </section>
 
+      {extractionNotices.length > 0 && (
+        <section className="panel coverage-panel" aria-label="Extraction limits">
+          <details className="coverage-skipped-details">
+            <summary>{extractionNotices.length} extraction limits reached — valid source was only partially analyzed</summary>
+            <p>These are resource bounds, not necessarily syntax errors. Omitted-count lower bounds are explicitly labeled.</p>
+            <ul>{extractionNotices.slice(0, 50).map((notice, index) => <li key={`${notice.file}-${index}`}><code>{notice.file}</code><span>{notice.message}</span></li>)}</ul>
+            {extractionNotices.length > 50 && <p>Showing 50 of {extractionNotices.length}; all notices are retained in the machine-readable export.</p>}
+          </details>
+        </section>
+      )}
+
       {audience === 'plain' ? (
         <>
           <section className="plain-summary-grid" aria-label="Plain-language summary">
@@ -560,6 +573,8 @@ function Overview({
               <p>
                 {isFullyMapped
                   ? 'No unresolved relationships; all supported first-party files parsed.'
+                  : unresolvedRelationships
+                    ? `${formatNumber(unresolvedRelationships)} relationships could not be proven statically.`
                   : incompletePaths
                     ? `${incompletePaths} request path${incompletePaths === 1 ? '' : 's'} need verification.`
                     : hasSkippedDiagnostics
@@ -575,7 +590,7 @@ function Overview({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Scan coverage</p>
-                <h2>{coveragePercentage}% · {mapQualityLabel}</h2>
+                <h2>{coveragePercentage}% source parsed · {mapQualityLabel}</h2>
               </div>
               <span>{formatNumber(parsedCount)} parsed</span>
             </div>
@@ -645,7 +660,7 @@ function Overview({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Scan coverage</p>
-                <h2>{coveragePercentage}% parsed · {formatNumber(parsedCount)}/{formatNumber(firstPartyFileCount)} files</h2>
+                <h2>{coveragePercentage}% source parsed · {mapQualityLabel}</h2>
               </div>
               <span>{truncationReasons.length ? truncationReasons.join(', ') : 'No truncation'}</span>
             </div>

@@ -38,6 +38,16 @@ export function utf8Bytes(text: string): Uint8Array {
   return new TextEncoder().encode(text);
 }
 
+/** Browser/Node compatible, deterministic ASCII carrier for inert metadata comments. */
+export function utf8Base64(text: string): string {
+  const bytes = utf8Bytes(text);
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 32768) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+  }
+  return btoa(binary);
+}
+
 export async function sha256Hex(input: string | Uint8Array): Promise<string> {
   const bytes = typeof input === 'string' ? utf8Bytes(input) : input;
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);

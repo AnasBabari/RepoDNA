@@ -2,7 +2,7 @@ import { del, get, head, issueSignedToken, list, presignUrl, put } from '@vercel
 import { Buffer } from 'node:buffer';
 
 import { PUBLIC_ARTIFACT_TTL_SECONDS, V2_ANALYZER_VERSION, isPublicArtifactCacheConfigured } from '../analyzer/v2/artifact-cache';
-import { GRAPH_EXPORT_EXTENSIONS, type GraphExportFormat } from './graph/types';
+import { GRAPH_EXPORTER_VERSION, GRAPH_EXPORT_SCHEMA_VERSION, GRAPH_EXPORT_EXTENSIONS, type GraphExportFormat } from './graph/types';
 import { sha256Hex } from './graph/stable-json';
 
 const SIGNED_URL_TTL_MS = 5 * 60 * 1000;
@@ -33,7 +33,8 @@ export function publicExportBlobPath(input: {
     safeSegment(input.commitSha),
     analyzer,
     'exports',
-    '1.0.0',
+    GRAPH_EXPORT_SCHEMA_VERSION,
+    GRAPH_EXPORTER_VERSION,
     input.sourceDigest,
     `expires-${input.expiresEpoch}`,
     `${formatSegment}.${extension}`,

@@ -84,6 +84,7 @@ export interface GraphEdge {
 }
 
 export interface Inventory {
+  extractionLimits?: import('../parser/types').SourceExtractionLimit[];
   totalFileCount: number;
   totalBytes: number;
   firstPartySourceFileCount: number;

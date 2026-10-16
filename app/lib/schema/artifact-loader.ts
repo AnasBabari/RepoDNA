@@ -2,6 +2,7 @@ import { validateAnyArtifact } from './safe-validator';
 import type { RepoDNAProject } from '../types';
 import type { GraphEdge, GraphNode, GraphNodeKind, RepoDNAProjectV2 } from '../analyzer/v2/types';
 import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
+import { analysisQuality } from '../analysis-quality';
 
 export type AnyRepoDNAArtifact = RepoDNAProject | RepoDNAProjectV2;
 export type ArtifactVersion = '1.1.0' | '2.0.0' | 'unknown';
@@ -361,7 +362,7 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     }));
   const dependencyCycles = filterMeaningfulDependencyCycles(project.metrics.dependencyCycles);
 
-  return {
+  const result: RepoDNAProjectV2 = {
     schemaVersion: '2.0.0',
     generatedAt: project.generatedAt || now,
     repository: {
@@ -384,14 +385,15 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
       },
     },
     inventory: {
+      extractionLimits: project.metadata.extractionLimits ?? [],
       totalFileCount: totalFiles,
       totalBytes: project.files.reduce((a, f) => a + f.bytes, 0),
       firstPartySourceFileCount: project.repository.sourceFileCount,
       firstPartyLoc,
       candidateFileCount: totalFiles,
       parsedFileCount: parsed,
-      partiallyParsedFileCount: project.diagnostics.filter((d) => d.code === 'SOURCE_PARSE_PARTIAL').length,
-      failedFileCount: project.diagnostics.filter((d) => d.code === 'SOURCE_PARSE_FAILED').length,
+      partiallyParsedFileCount: project.files.filter((file) => file.parsed && file.error).length,
+      failedFileCount: project.files.filter((file) => !file.parsed && file.error).length,
       unsupportedSourceFileCount: totalFiles - project.repository.sourceFileCount,
       ignoredFileCount: 0,
       generatedFileCount: 0,
@@ -409,12 +411,12 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     coverage: {
       percentage: coveragePct,
       parsed,
-      partial: project.diagnostics.filter((d) => d.code === 'SOURCE_PARSE_PARTIAL').length,
+      partial: project.files.filter((file) => file.parsed && file.error).length,
       unsupported: totalFiles - project.repository.sourceFileCount,
       ignored: 0,
       skipped: project.diagnostics.filter((d) => d.code.startsWith('skipped_')).length,
       truncationReasons: project.diagnostics
-        .filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE'].includes(d.code))
+        .filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'SOURCE_EXTRACTION_LIMIT_REACHED'].includes(d.code))
         .map((d) => d.code),
     },
     nodes: graphNodes,
@@ -458,4 +460,7 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     external_systems: project.external_systems,
     metadata: project.metadata,
   };
+  const { status, reasons } = analysisQuality(result);
+  result.completeness = { status, reasons };
+  return result;
 }

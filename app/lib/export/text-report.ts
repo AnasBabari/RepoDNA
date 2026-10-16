@@ -1,6 +1,7 @@
 import type { RepoDNAProject } from '../types';
 import type { RepoDNAProjectV2, GraphNode, GraphEdge } from '../analyzer/v2/types';
 import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
+import { analysisQuality } from '../analysis-quality';
 
 /**
  * Deterministic plain-text architecture report.
@@ -93,7 +94,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   const timings = v2 ? project.timings : null;
   const parsers = v2 ? project.parsers : null;
   const security = v2 ? project.security : null;
-  const completeness = v2 ? project.completeness : null;
+  const completeness = analysisQuality(project);
 
   // ---- Header --------------------------------------------------------------
   out.push(line('='));
@@ -168,7 +169,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
     out.push(`First-party source files:  ${inventory.firstPartySourceFileCount}`);
     out.push(`First-party lines of code: ${inventory.firstPartyLoc}`);
     out.push(`Parse candidates:          ${inventory.candidateFileCount}`);
-    out.push(`Parsed completely:         ${inventory.parsedFileCount}`);
+    out.push(`Parsed (incl. partial):    ${inventory.parsedFileCount}`);
     out.push(`Parsed partially:          ${inventory.partiallyParsedFileCount}`);
     out.push(`Failed to parse:           ${inventory.failedFileCount}`);
     out.push(`Unsupported source:        ${inventory.unsupportedSourceFileCount}`);
@@ -220,7 +221,13 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   } else {
     const rate = metrics ? metrics.parseSuccessRate : null;
     out.push(`Parse success rate: ${rate === null ? 'unknown' : `${rate}%`}`);
+    out.push(`Completeness: ${completeness.status}`);
   }
+  const extractionLimits = inventory?.extractionLimits ?? v1Metadata?.extractionLimits ?? [];
+  for (const notice of extractionLimits.slice(0, MAX_LIST)) {
+    out.push(`  Extraction limit ${notice.category}=${notice.limit} @ ${notice.file}:${notice.range.startLine}; omitted=${notice.omittedCount ?? 'unknown'}${notice.countIsLowerBound ? ' (lower bound)' : ''}`);
+  }
+  if (extractionLimits.length > MAX_LIST) out.push(truncationFooter({ total: extractionLimits.length, shown: MAX_LIST }));
   if (!v2) {
     out.push('Note: this artifact predates canonical graph coverage reporting (schema 1.1.0).');
   }
@@ -467,7 +474,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
     }
     if (sorted.length > MAX_LIST) out.push(truncationFooter({ total: sorted.length, shown: MAX_LIST }));
   } else if (v2) {
-    out.push('  All extracted relationships resolved.');
+    out.push(completeness.status === 'FULLY_MAPPED' ? '  All extracted relationships resolved.' : '  No unresolved records retained; completeness and extraction limitations still apply.');
   } else {
     out.push('  Resolution detail not available for this artifact version.');
   }

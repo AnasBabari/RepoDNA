@@ -74,6 +74,24 @@ describe('CSP-safe schema fallback', () => {
     expect(result.valid).toBe(true);
   });
 
+  it('validates optional extraction provenance even without generated validators', () => {
+    globalAny.__repodnaAjvV1 = null;
+    globalAny.__repodnaAjvV2 = null;
+    const v1 = minimalProject();
+    const v2 = makeV2Fixture();
+    const notice = { file: 'src/a.py', category: 'symbols', limit: 1000, omittedCount: 1, countIsLowerBound: false, range: { startLine: 1, endLine: 2, startColumn: 0, endColumn: 4 } };
+    Object.assign(v1.metadata, { extractionLimits: [notice] });
+    Object.assign(v2.inventory, { extractionLimits: [notice] });
+    expect(validateRepoDNAProject(v1).valid).toBe(true);
+    expect(validateRepoDNAProjectV2(v2).valid).toBe(true);
+    for (const bad of [{}, { ...notice, limit: -1 }, { ...notice, omittedCount: -1 }, { ...notice, category: 'made-up' }, { ...notice, range: null }]) {
+      Object.assign(v1.metadata, { extractionLimits: [bad] });
+      Object.assign(v2.inventory, { extractionLimits: [bad] });
+      expect(validateRepoDNAProject(v1).valid).toBe(false);
+      expect(validateRepoDNAProjectV2(v2).valid).toBe(false);
+    }
+  });
+
   it('rejects artifacts missing required top-level collections without ajv', () => {
     globalAny.__repodnaAjvV1 = null;
     const project = minimalProject();

@@ -137,7 +137,12 @@ export interface PartialAnalysis {
   externals: Set<string>;
   entrypointEvidence: string[];
   expressMounts?: ExpressMountRecord[];
-  parseMeta?: { quality: 'complete' | 'partial' | 'failed'; errorNodes: number };
+  parseMeta?: {
+    quality: 'complete' | 'partial' | 'failed';
+    errorNodes: number;
+    hasSyntaxErrors?: boolean;
+    extractionLimits?: import('./parser/types').ExtractionLimit[];
+  };
   parserNotice?: { code: string; message: string };
 }
 
