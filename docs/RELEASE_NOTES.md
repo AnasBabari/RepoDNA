@@ -1,3 +1,15 @@
+# Unreleased — local review candidate
+
+- Cleaner charcoal-and-cyan split landing, with a bounded preview of actual bundled nanoGPT relationships, visible unresolved-link count and snapshot provenance.
+- Clear GitHub, folder and ZIP/JSON import actions; plain capability/privacy disclosures and experimental Go labeling. Existing analysis/auth/export paths are preserved.
+- Shared dark workspace surfaces and wrapping mobile graph/architecture controls.
+- Cypher manifest comments keep control characters and Unicode line separators inert; hostile header and graph-data fixtures are checked through a real Neo4j double import.
+- Typecheck regenerates compatible Next route types before checking, including after Vinext; CI exercises both build orders.
+
+These are unmerged review-branch changes. Historical release verification below describes the released baseline, not this review candidate.
+
+---
+
 # 🧬 RepoDNA v1.2.0 — Durable Deep Analysis, Graph Exports & Large-Repository Support
 
 Understand any codebase visually in seconds — local-first, deterministic, with zero code execution.

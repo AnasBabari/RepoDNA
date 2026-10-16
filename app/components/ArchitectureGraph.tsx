@@ -67,6 +67,7 @@ function ArchitectureNodeCard({ data }: NodeProps<ArchitectureNode>) {
       }
     >
       <Handle type="target" position={Position.Top} id="top" className="arch-handle" />
+      <Handle type="source" position={Position.Top} id="top-source" className="arch-handle" />
       <Handle type="target" position={Position.Left} id="left" className="arch-handle" />
 
       <div className="arch-node-header">
@@ -89,6 +90,7 @@ function ArchitectureNodeCard({ data }: NodeProps<ArchitectureNode>) {
 
       <Handle type="source" position={Position.Right} id="right" className="arch-handle" />
       <Handle type="source" position={Position.Bottom} id="bottom" className="arch-handle" />
+      <Handle type="target" position={Position.Bottom} id="bottom-target" className="arch-handle" />
     </div>
   );
 }
@@ -409,8 +411,8 @@ export function ArchitectureGraph({
         sourceHandle = 'right';
         targetHandle = 'left';
       } else if (sourceTier > targetTier) {
-        sourceHandle = 'top';
-        targetHandle = 'bottom';
+        sourceHandle = 'top-source';
+        targetHandle = 'bottom-target';
       }
 
       let strokeColor = 'rgba(76, 225, 245, 0.45)';

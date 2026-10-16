@@ -11,9 +11,9 @@ import { CodeGraph } from './CodeGraph';
 import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
-import { ScannedRepositoryCounter } from './ScannedRepositoryCounter';
+import { LandingView } from './LandingView';
 import { MobileDetailSheet } from './MobileDetailSheet';
-import { Activity, Download, FileCode, FileText, Github, LayoutDashboard, Map, MessageCircle, Network, Route, Sparkles } from './icons';
+import { Activity, Dna, Download, FileCode, FileText, LayoutDashboard, Map, MessageCircle, Network, Route } from './icons';
 import { analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import { filterMeaningfulDependencyCycles } from '../lib/analyzer/cycles';
 import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
@@ -106,19 +106,6 @@ function formatNumber(value: number) {
   return Intl.NumberFormat('en-GB', { notation: value > 9999 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value);
 }
 
-function sourceTypeLabel(sourceType: BrowserCacheSourceType): string {
-  const labels: Record<BrowserCacheSourceType, string> = {
-    'public-durable': 'Public GitHub',
-    'public-browser': 'Public GitHub · browser',
-    'github-private': 'Private GitHub',
-    'local-folder': 'Local folder',
-    'zip-upload': 'ZIP upload',
-    'imported-json': 'Imported JSON',
-    sample: 'Sample',
-  };
-  return labels[sourceType];
-}
-
 function generateTextReport(project: RepoDNAProject | RepoDNAProjectV2): string {
   // Local import keeps the exporter out of the initial component graph.
   return generateTextReportImpl(project);
@@ -204,279 +191,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 }
 
-// Landing View when no project is loaded
-function LandingView({
-  onAnalyzeGitHub,
-  onAnalyzeFolder,
-  onAnalyzeZip,
-  onLoadDemo,
-  onOpenPrivatePicker,
-  onOpenFeedback,
-  session,
-  recentArtifacts,
-  onOpenRecent,
-  onRemoveRecent,
-  onClearRecent,
-}: {
-  onAnalyzeGitHub: (url: string) => void;
-  onAnalyzeFolder: (files: FileList) => void;
-  onAnalyzeZip: (file: File) => void;
-  onLoadDemo: () => void;
-  onOpenPrivatePicker: () => void;
-  onOpenFeedback: () => void;
-  session: { user?: { name?: string; image?: string } } | null;
-  recentArtifacts: BrowserCachedArtifact[];
-  onOpenRecent: (entry: BrowserCachedArtifact) => void;
-  onRemoveRecent: (entry: BrowserCachedArtifact) => void;
-  onClearRecent: () => void;
-}) {
-  const [url, setUrl] = useState('');
-  const folderInputRef = useRef<HTMLInputElement>(null);
-  const zipInputRef = useRef<HTMLInputElement>(null);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (url.trim()) {
-      onAnalyzeGitHub(url.trim());
-    }
-  }
-
-  return (
-    <main className="landing-shell">
-      <header className="landing-topbar">
-        <Link className="brand" href="/" aria-label="RepoDNA">
-          <span className="brand-mark">R</span>
-          <span className="brand-title">RepoDNA</span>
-          <span className="version">v{APP_VERSION} BETA</span>
-        </Link>
-        <div className="landing-nav-center">
-          <button className="chip-button" onClick={onLoadDemo} type="button">
-            <Sparkles size={14} aria-hidden="true" /> Try Demo Project
-          </button>
-          <button
-            className="chip-button"
-            onClick={onOpenFeedback}
-            type="button"
-            style={{ fontSize: '0.8rem', padding: '5px 12px', color: '#fbbf24', borderColor: 'rgba(251, 191, 36, 0.4)' }}
-          >
-            <MessageCircle size={14} aria-hidden="true" /> Feedback
-          </button>
-          <a
-            href="https://github.com/AnasBabari/RepoDNA"
-            target="_blank"
-            rel="noreferrer"
-            className="chip-button"
-            style={{ fontSize: '0.8rem', padding: '5px 12px', textDecoration: 'none' }}
-          >
-            <Github size={14} aria-hidden="true" /> GitHub
-          </a>
-        </div>
-
-        <div className="landing-auth-right">
-          {session?.user ? (
-            <div className="flex items-center gap-2">
-              {session.user.image && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={session.user.image}
-                  alt={session.user.name || 'User avatar'}
-                  style={{ width: '26px', height: '26px', borderRadius: '50%', border: '1px solid var(--cyan-border)' }}
-                />
-              )}
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-bright)' }}>
-                {session.user.name || 'Developer'}
-              </span>
-              <button
-                className="chip-button"
-                onClick={onOpenPrivatePicker}
-                type="button"
-                style={{ fontSize: '0.8rem', padding: '5px 12px' }}
-              >
-                🔒 Your Repos
-              </button>
-            </div>
-          ) : (
-            <Link
-              href="/api/auth/signin?callbackUrl=/"
-              className="chip-button"
-              style={{ fontSize: '0.8rem', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <span>GitHub</span> Sign In (Beta)
-            </Link>
-          )}
-        </div>
-      </header>
-
-      <section className="landing-hero">
-        <div className="landing-badge">
-          <span>◆</span> Deterministic Codebase Analysis · Zero Code Execution
-        </div>
-        <h1>
-          Decode any repository<br />
-          <span>visually in seconds.</span>
-        </h1>
-        <p className="subtitle">
-          Statically analyze Python, JavaScript, and TypeScript repositories, with experimental Go analysis. Discover architecture layers, execution traces, dependencies, data models, and entry points.
-        </p>
-
-        <ScannedRepositoryCounter />
-
-        <form className="landing-input-box" onSubmit={handleSubmit} aria-label="Analyze public GitHub repository">
-          <span className="landing-input-glyph" aria-hidden="true">⌕</span>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://github.com/owner/repository"
-            aria-label="GitHub repository URL"
-            autoComplete="off"
-            spellCheck={false}
-            autoFocus
-          />
-          <button className="analyse-button" type="submit" aria-label="Analyze repository">
-            Analyze Repository <span aria-hidden="true">→</span>
-          </button>
-        </form>
-
-        <div className="landing-chips-row">
-          <span className="label">Featured repos:</span>
-          <button
-            className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/usestrix/strix')}
-            type="button"
-          >
-            usestrix/strix
-          </button>
-          <button
-            className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/karpathy/nanoGPT')}
-            type="button"
-          >
-            karpathy/nanoGPT
-          </button>
-          <button
-            className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/tiangolo/full-stack-fastapi-template')}
-            type="button"
-          >
-            tiangolo/full-stack-fastapi-template
-          </button>
-          <button
-            className="chip-button"
-            onClick={onLoadDemo}
-            type="button"
-          >
-            mixed-basic (demo)
-          </button>
-        </div>
-
-        <div className="landing-dropzones-grid">
-          <button
-            className="dropzone-card"
-            onClick={onOpenPrivatePicker}
-            type="button"
-          >
-            <span className="icon" aria-hidden="true">🔒</span>
-            <strong>Private Repositories (Beta)</strong>
-            <p>Select from your authorized GitHub private & public repositories</p>
-          </button>
-
-          <button
-            className="dropzone-card"
-            onClick={() => folderInputRef.current?.click()}
-            type="button"
-          >
-            <span className="icon" aria-hidden="true">📁</span>
-            <strong>Select Local Directory</strong>
-            <p>Analyze a local project folder directly in your browser tab</p>
-          </button>
-          <input
-            ref={folderInputRef}
-            hidden
-            type="file"
-            // @ts-expect-error webkitdirectory is standard for folder picker
-            webkitdirectory="true"
-            directory="true"
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                onAnalyzeFolder(e.target.files);
-              }
-            }}
-          />
-
-          <button
-            className="dropzone-card"
-            onClick={() => zipInputRef.current?.click()}
-            type="button"
-          >
-            <span className="icon" aria-hidden="true">📦</span>
-            <strong>Upload Repository .zip or .json</strong>
-            <p>Load a zipped source archive or existing RepoDNA JSON file</p>
-          </button>
-          <input
-            ref={zipInputRef}
-            hidden
-            type="file"
-            accept=".zip,application/zip,.json,application/json"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                onAnalyzeZip(file);
-              }
-            }}
-          />
-        </div>
-
-        {recentArtifacts.length > 0 ? (
-          <section className="recent-analyses" aria-labelledby="recent-analyses-title">
-            <div className="recent-analyses-heading">
-              <div>
-                <p className="eyebrow cyan-text">On-device cache</p>
-                <h2 id="recent-analyses-title">Recent on this device</h2>
-              </div>
-              <button className="chip-button" type="button" onClick={onClearRecent}>Clear all</button>
-            </div>
-            <div className="recent-analyses-grid">
-              {recentArtifacts.map((entry) => (
-                <article className="recent-analysis-card" key={entry.key}>
-                  <div>
-                    <span className="graph-export-badge">{sourceTypeLabel(entry.sourceType)}</span>
-                    <h3>{entry.project.repository.name}</h3>
-                    <p>
-                      {entry.project.nodes.length} nodes · {entry.project.edges.length} relationships · expires{' '}
-                      {new Date(entry.expiresAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="recent-analysis-actions">
-                    <button className="chip-button" type="button" onClick={() => onOpenRecent(entry)}>Open</button>
-                    <button className="chip-button danger" type="button" onClick={() => onRemoveRecent(entry)}>Remove</button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <div className="landing-features-grid">
-          <div className="feature-box">
-            <span className="glyph">01 / SAFE</span>
-            <strong>Zero Code Execution</strong>
-            <p>The parser analyzes abstract source code syntax as text. It never runs scripts or executes packages.</p>
-          </div>
-          <div className="feature-box">
-            <span className="glyph">02 / DEEP</span>
-            <strong>Multi-Tier Execution Traces</strong>
-            <p>Follow full execution paths from HTTP routes through controllers, services, repositories, and ORM models.</p>
-          </div>
-          <div className="feature-box">
-            <span className="glyph">03 / EXPORT</span>
-            <strong>Mermaid & Portable Artifacts</strong>
-            <p>Export interactive architecture maps as Mermaid diagrams or standardized JSON for documentation and PRs.</p>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
 
 const APP_BUILD_VERSION = `v${APP_VERSION}`;
 
@@ -529,9 +243,11 @@ function AnalyzingView({
 
   return (
     <main className="landing-shell">
-      <div className="analyzing-container">
-        <div className="analyzing-mark">R</div>
-        <h2>{error ? 'Analysis Failed' : 'Decoding Repository'}</h2>
+      <div className="analyzing-container" data-testid="analysis-progress">
+        <div className="analyzing-mark">
+          <Dna size={28} className="analyzing-dna-pulse" aria-hidden="true" />
+        </div>
+        <h2>{error ? 'Analysis Failed' : 'Analyzing repository'}</h2>
         <p className="target-url">{target}</p>
 
         {error ? (
@@ -619,7 +335,7 @@ function AnalyzingView({
                 : `Stage ${Math.min(step + 1, ANALYSIS_PROGRESS_STEPS.length)} of ${ANALYSIS_PROGRESS_STEPS.length}`)}
             </p>
             <p className="privacy-note">
-              <span>◆</span> Local-first & serverless analysis. Your source is never persisted.
+              <span aria-hidden="true">◆</span> Repository code is read statically, not executed.
             </p>
           </div>
         )}
@@ -2427,7 +2143,7 @@ function WorkspaceContent() {
       <header className="topbar">
         <div className="topbar-left">
           <Link className="brand" href="/" onClick={(e) => { e.preventDefault(); returnToLanding(); }} aria-label="RepoDNA overview">
-            <span className="brand-mark">R</span>
+            <span className="brand-mark"><Dna size={16} aria-hidden="true" /></span>
             <span className="brand-title">RepoDNA</span>
             <span className="version">v{APP_VERSION}</span>
           </Link>
@@ -2469,7 +2185,8 @@ function WorkspaceContent() {
             <FileText size={14} aria-hidden="true" /> TXT
           </button>
           <button className="analyse-button" onClick={() => setDialogOpen(true)} type="button">
-            New analysis
+            <Dna size={14} aria-hidden="true" />
+            <span>New Analysis</span>
           </button>
         </div>
       </header>
