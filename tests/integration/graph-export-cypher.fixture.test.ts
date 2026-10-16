@@ -42,6 +42,7 @@ const HOSTILE_NAME = [
 ].join('|');
 /** Delete-only variant (variety over the DETACH DELETE payload above). */
 const PAYLOAD_DELETE = "'); MATCH (x:RepoDNAEntity) DELETE x; //";
+const HEADER_PAYLOAD = "header'\"/* */;\\u000A\r\n\u0085\u2028\u2029CREATE (:RepoDNAHeaderInjectionProbe); //";
 
 function makeNode(
   id: string,
@@ -187,17 +188,17 @@ function buildFixtureDocument(): GraphExportDocumentV1 {
 
   const manifest: GraphExportDocumentV1['manifest'] = {
     exportSchemaVersion: GRAPH_EXPORT_SCHEMA_VERSION,
-    exporterVersion: '1.0.0',
+    exporterVersion: HEADER_PAYLOAD,
     sourceSchemaVersion: '2.0.0',
     analyzerVersion: 'integration-fixture',
     sourceArtifactSha256: createHash('sha256')
       .update('repodna-neo4j-idempotency-fixture')
       .digest('hex'),
     repository: {
-      name: 'RepoDNA integration fixture',
-      source: 'local://tests/integration',
-      commitSha: null,
-      analyzedRef: 'refs/heads/main',
+      name: HEADER_PAYLOAD,
+      source: HEADER_PAYLOAD,
+      commitSha: HEADER_PAYLOAD,
+      analyzedRef: HEADER_PAYLOAD,
     },
     analyzedAt: '2026-08-26T00:00:00.000Z',
     coverage: { percentage: 100, truncationReasons: [] },
@@ -224,6 +225,7 @@ function buildFixtureDocument(): GraphExportDocumentV1 {
  * ------------------------------------------------------------------ */
 interface StringScan {
   mask: Uint8Array;
+  commentMask: Uint8Array;
   /** false if EOF reached while still inside a literal (unterminated). */
   terminated: boolean;
   /** Characters seen OUTSIDE literals (structural-code channel only). */
@@ -232,12 +234,21 @@ interface StringScan {
 
 function scanCypherStringLiterals(text: string): StringScan {
   const mask = new Uint8Array(text.length);
+  const commentMask = new Uint8Array(text.length);
   const outsideChars: string[] = [];
   let inString = false;
   let i = 0;
   while (i < text.length) {
     const ch = text[i];
     if (!inString) {
+      if (ch === '/' && text[i + 1] === '/') {
+        while (i < text.length && text[i] !== '\n') {
+          commentMask[i] = 1;
+          outsideChars.push(text[i]);
+          i += 1;
+        }
+        continue;
+      }
       if (ch === "'") {
         inString = true;
         mask[i] = 1;
@@ -262,7 +273,7 @@ function scanCypherStringLiterals(text: string): StringScan {
       }
     }
   }
-  return { mask, terminated: !inString, outsideChars };
+  return { mask, commentMask, terminated: !inString, outsideChars };
 }
 
 /** Splits on ';' characters that sit OUTSIDE any string literal. */
@@ -270,7 +281,7 @@ function topLevelSegments(text: string, scan: StringScan): string[] {
   const segments: string[] = [];
   let current = '';
   for (let i = 0; i < text.length; i++) {
-    if (text[i] === ';' && scan.mask[i] === 0) {
+    if (text[i] === ';' && scan.mask[i] === 0 && scan.commentMask[i] === 0) {
       segments.push(current);
       current = '';
     } else {

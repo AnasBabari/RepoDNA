@@ -88,6 +88,17 @@ function chunk<T>(items: T[], size: number): T[][] {
   return groups;
 }
 
+/**
+ * Headers are code too: never interpolate untrusted metadata across a line
+ * boundary. Use visible code-point markers (not backslash Unicode escapes,
+ * which a lexer could interpret) for controls, line separators and backslashes.
+ * This deliberately affects only the informational comment, not graph values.
+ */
+function commentValue(value: unknown): string {
+  return String(value ?? 'null').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\\]/g,
+    (character) => `[U+${character.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}]`);
+}
+
 export async function buildCypher(document: GraphExportDocumentV1): Promise<GraphExportFile> {
   assertExportableDocument(document);
 
@@ -95,11 +106,11 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
   const manifest = document.manifest;
 
   lines.push('// RepoDNA Graph Export — Cypher');
-  lines.push(`// Export schema: ${manifest.exportSchemaVersion}  Exporter: ${manifest.exporterVersion}`);
-  lines.push(`// Source digest: ${manifest.sourceArtifactSha256}`);
-  lines.push(`// Repository: ${manifest.repository.name}  Source: ${manifest.repository.source}`);
-  lines.push(`// Commit: ${manifest.repository.commitSha ?? 'null'}  Ref: ${manifest.repository.analyzedRef ?? 'null'}`);
-  lines.push(`// Analyzed at: ${manifest.analyzedAt}`);
+  lines.push(`// Export schema: ${commentValue(manifest.exportSchemaVersion)}  Exporter: ${commentValue(manifest.exporterVersion)}`);
+  lines.push(`// Source digest: ${commentValue(manifest.sourceArtifactSha256)}`);
+  lines.push(`// Repository: ${commentValue(manifest.repository.name)}  Source: ${commentValue(manifest.repository.source)}`);
+  lines.push(`// Commit: ${commentValue(manifest.repository.commitSha)}  Ref: ${commentValue(manifest.repository.analyzedRef)}`);
+  lines.push(`// Analyzed at: ${commentValue(manifest.analyzedAt)}`);
   lines.push(
     `// Counts: nodes=${manifest.counts.nodes} relationships=${manifest.counts.relationships} groups=${manifest.counts.groups} memberships=${manifest.counts.groupMemberships} unresolved=${manifest.counts.unresolved}`
   );
@@ -321,9 +332,6 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
   }
 
   const text = lines.join('\n');
-  if (/\bDETACH\s+DELETE\b/i.test(text) && !text.includes('//')) {
-    throw new Error('Generated Cypher contains unexpected destructive statement');
-  }
   const bytes = utf8Bytes(text);
   const sha256 = await sha256Hex(bytes);
   return {

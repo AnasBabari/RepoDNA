@@ -279,6 +279,7 @@ function collectCounts(sidecar) {
     RepoDNAEntity: countOf('MATCH (n:RepoDNAEntity) RETURN count(n);'),
     RepoDNAGroup: countOf('MATCH (n:RepoDNAGroup) RETURN count(n);'),
     RepoDNAUnresolved: countOf('MATCH (n:RepoDNAUnresolved) RETURN count(n);'),
+    headerInjectionProbes: countOf('MATCH (n:RepoDNAHeaderInjectionProbe) RETURN count(n);'),
     allRelationships: countOf('MATCH ()-[r]->() RETURN count(r);'),
     memberOfRelationships: countOf(
       'MATCH (:RepoDNAEntity)-[r:MEMBER_OF]->(:RepoDNAGroup) RETURN count(r);',
@@ -402,6 +403,9 @@ async function main() {
     }
 
     /* Step 8 — Injection evidence probes. */
+    if (afterSecond.headerInjectionProbes !== 0) {
+      problems.push(`HEADER INJECTION: ${afterSecond.headerInjectionProbes} probe node(s) escaped metadata comments`);
+    }
     if (afterSecond.hostileNamedEntities !== expected.injectionProbeHostileNamedEntities) {
       problems.push(
         `INJECTION EVIDENCE: wanted exactly ${expected.injectionProbeHostileNamedEntities} entity holding the hostile payload as DATA, found ${afterSecond.hostileNamedEntities}`,
