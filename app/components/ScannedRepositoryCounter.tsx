@@ -1,20 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-
-type StatsSuccess = {
-  scannedRepositories: number;
-  updatedAt: string;
-};
-
-type StatsUnavailable = {
-  scannedRepositories: null;
-  unavailable: true;
-  reason?: string;
-  updatedAt: string;
-};
-
-type StatsResponse = StatsSuccess | StatsUnavailable;
+import { useEffect, useState } from 'react';
+import { createRepositoryStatsRefresher } from '../lib/stats/client';
 
 type CounterState =
   | { status: 'loading' }
@@ -27,58 +14,16 @@ function formatCount(value: number): string {
   return Intl.NumberFormat('en-GB').format(value);
 }
 
-function isAbortError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
-}
-
 export function ScannedRepositoryCounter() {
   const [state, setState] = useState<CounterState>({ status: 'loading' });
-  const abortRef = useRef<AbortController | null>(null);
-  const intervalRef = useRef<number | null>(null);
-
-  const fetchStats = async (signal?: AbortSignal) => {
-    try {
-      const response = await fetch('/api/stats', {
-        method: 'GET',
-        cache: 'no-store',
-        signal,
-        headers: { Accept: 'application/json' },
-      });
-
-      // Controlled unavailable response uses 503 with JSON body
-      const data = (await response.json()) as StatsResponse;
-
-      if (
-        typeof (data as StatsSuccess).scannedRepositories === 'number' &&
-        Number.isFinite((data as StatsSuccess).scannedRepositories)
-      ) {
-        const success = data as StatsSuccess;
-        setState({ status: 'ready', count: success.scannedRepositories, updatedAt: success.updatedAt });
-        return;
-      }
-
-      if ((data as StatsUnavailable).unavailable === true || (data as StatsUnavailable).scannedRepositories === null) {
-        setState({ status: 'unavailable' });
-        return;
-      }
-
-      // Fallback: treat non-success as unavailable without inventing a number
-      setState({ status: 'unavailable' });
-    } catch (error) {
-      if (isAbortError(error)) return;
-      // Network error or parse failure — keep last known good value if present, otherwise show unavailable after initial load fails
-      setState((prev) => (prev.status === 'ready' ? prev : { status: 'unavailable' }));
-    }
-  };
 
   useEffect(() => {
-    let disposed = false;
+    const refresher = createRepositoryStatsRefresher(
+      (stats) => setState({ status: 'ready', count: stats.scannedRepositories, updatedAt: stats.updatedAt }),
+      () => setState((prev) => (prev.status === 'ready' ? prev : { status: 'unavailable' })),
+    );
     const startFetch = () => {
-      if (disposed) return;
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-      void fetchStats(controller.signal);
+      void refresher.refresh();
     };
 
     startFetch();
@@ -86,7 +31,6 @@ export function ScannedRepositoryCounter() {
     const intervalId = window.setInterval(() => {
       startFetch();
     }, POLL_INTERVAL_MS);
-    intervalRef.current = intervalId as unknown as number;
 
     const handleFocus = () => {
       startFetch();
@@ -107,13 +51,8 @@ export function ScannedRepositoryCounter() {
     window.addEventListener('repodna:analysis-complete' as never, handleAnalysisComplete as EventListener);
 
     return () => {
-      disposed = true;
-      abortRef.current?.abort();
-      abortRef.current = null;
-      if (intervalRef.current !== null) {
-        window.clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      refresher.dispose();
+      window.clearInterval(intervalId);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('repodna:analysis-complete' as never, handleAnalysisComplete as EventListener);
