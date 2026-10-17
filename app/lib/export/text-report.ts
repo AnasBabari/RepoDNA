@@ -4,6 +4,7 @@ import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 import { analysisQuality } from '../analysis-quality';
 import { formatGraphCount, GRAPH_COUNT_KEYS, resolveGraphScope } from '../graph-scope';
 import { manifestCounts, unavailableManifests } from '../analyzer/manifest-types';
+import { isSupportedSource } from '../analyzer/source-policy';
 
 /**
  * Deterministic plain-text architecture report.
@@ -73,7 +74,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   const diagnostics = project.diagnostics ?? [];
 
   // ---- v1 / v2 normalized views -------------------------------------------
-  const files = ('files' in project ? project.files : []) ?? [];
+  const files = ('files' in project ? project.files : project.nodes.filter((node) => node.kind === 'file').map((node) => ({ path: node.path, language: node.language, lines: Math.max(0, node.range.endLine - node.range.startLine + 1), parsed: node.metadata?.parsed === true, error: typeof node.metadata?.error === 'string' ? node.metadata.error : null }))) ?? [];
   const symbols = ('symbols' in project ? project.symbols : []) ?? [];
   const imports = ('imports' in project ? project.imports : []) ?? [];
   const calls = ('calls' in project ? project.calls : []) ?? [];
@@ -99,6 +100,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   const completeness = analysisQuality(project);
   const manifestInventory = inventory?.manifestInventory ?? v1Metadata?.manifestInventory ?? unavailableManifests();
   const declarationCounts = manifestCounts(manifestInventory);
+  const sourceInventory = inventory?.sourceInventory ?? v1Metadata?.sourceInventory;
   const scope = v2 ? resolveGraphScope(project) : null;
 
   // ---- Header --------------------------------------------------------------
@@ -172,12 +174,12 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
       out.push(`GitHub size hint (KB):     ${inventory.repositorySizeKb}`);
     }
     out.push(`First-party source files:  ${inventory.firstPartySourceFileCount}`);
-    out.push(`First-party lines of code: ${inventory.firstPartyLoc}`);
+    out.push(`Acquired source LOC:      ${inventory.firstPartyLoc} (may exclude unsupported or unacquired files)`);
     out.push(`Parse candidates:          ${inventory.candidateFileCount}`);
     out.push(`Parsed (incl. partial):    ${inventory.parsedFileCount}`);
     out.push(`Parsed partially:          ${inventory.partiallyParsedFileCount}`);
     out.push(`Failed to parse:           ${inventory.failedFileCount}`);
-    out.push(`Unsupported source:        ${inventory.unsupportedSourceFileCount}`);
+    out.push(`Unsupported source:        ${sourceInventory?.unsupportedSourceFileCount ?? 'not recorded (legacy classification)'}`);
     out.push(`Ignored (vendor/lockfile): ${inventory.ignoredFileCount}`);
     out.push(`Generated artifacts:       ${inventory.generatedFileCount}`);
     out.push(`Packages/workspaces:       ${declarationCounts.packages ?? 'not recorded'}`);
@@ -496,9 +498,10 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
 
   // 25. Unsupported, skipped, partial, failed files
   out.push(...heading(25, 'Unsupported, skipped, partial, and failed files'));
-  const partialFiles = files.filter((f) => f.parsed && f.error);
-  const failedFiles = files.filter((f) => !f.parsed && f.error);
-  const unparsed = files.filter((f) => !f.parsed && !f.error);
+  const sourceRecords = files.filter((file) => isSupportedSource(file.path));
+  const partialFiles = sourceRecords.filter((f) => f.parsed && f.error);
+  const failedFiles = sourceRecords.filter((f) => !f.parsed && f.error);
+  const unparsed = sourceRecords.filter((f) => !f.parsed && !f.error);
   if (partialFiles.length > 0) {
     out.push(`Partial parses (${partialFiles.length}):`);
     for (const f of partialFiles.slice(0, MAX_LIST)) out.push(`  ${f.path}: ${f.error}`);
@@ -510,7 +513,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
     if (failedFiles.length > MAX_LIST) out.push(truncationFooter({ total: failedFiles.length, shown: MAX_LIST }));
   }
   if (inventory) {
-    out.push(`Unsupported source files: ${inventory.unsupportedSourceFileCount}`);
+    out.push(`Unsupported source files: ${sourceInventory?.unsupportedSourceFileCount ?? 'not recorded (legacy classification)'}`);
     out.push(`Ignored files: ${inventory.ignoredFileCount}`);
     out.push(`Generated files: ${inventory.generatedFileCount}`);
     const skipTotal = Object.values(inventory.skippedByReason).reduce((a, b) => a + b, 0);
@@ -519,11 +522,12 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
       for (const r of Object.keys(inventory.skippedByReason).sort()) out.push(`  ${r}: ${inventory.skippedByReason[r]}`);
     }
   }
-  if (partialFiles.length === 0 && failedFiles.length === 0) {
-    out.push(`No partial or failed parses among ${files.length} candidate file records.`);
+  if (outcomes) out.push(`Whole-scan supported source: complete=${outcomes.complete}, partial=${outcomes.partial}, failed=${outcomes.failed}, skipped=${outcomes.skipped}, unprocessed=${outcomes.unprocessed}. Path lists below describe retained records only.`);
+  if (partialFiles.length === 0 && failedFiles.length === 0 && (!outcomes || outcomes.partial + outcomes.failed === 0)) {
+    out.push(`No partial or failed parses among ${sourceRecords.length} retained supported-source records.`);
   }
   if (unparsed.length > 0) {
-    out.push(`Candidate files without parse records: ${unparsed.length}`);
+    out.push(`Supported-source records without parse outcomes: ${unparsed.length}`);
     for (const f of unparsed.slice(0, MAX_LIST)) out.push(`  ${f.path}`);
     if (unparsed.length > MAX_LIST) out.push(truncationFooter({ total: unparsed.length, shown: MAX_LIST }));
   }
