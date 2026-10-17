@@ -10,6 +10,7 @@ import { buildParquetBundle } from '../../../app/lib/export/graph/parquet';
 import { buildCypher } from '../../../app/lib/export/graph/cypher';
 import { generateTextReport } from '../../../app/lib/export/text-report';
 import { makeV2Fixture } from './fixtures';
+import { analyzeRepositoryFiles } from '../../../app/lib/analyzer';
 
 it('retains the same source outcomes and manifest declarations in every portable format', async () => {
   const file = (path: string, content: string) => ({ path, content, size: content.length, hash: path });
@@ -52,4 +53,11 @@ it('keeps whole-scan partial counts when the affected file record was compacted 
   const txt = generateTextReport(project);
   expect(txt).toContain('Whole-scan supported source: complete=1, partial=1');
   expect(txt).not.toContain('No partial or failed parses');
+});
+it('prints manifest-backed totals for the local v1 upload report as well as canonical reports', async () => {
+  const content = JSON.stringify({ name: 'local', dependencies: { react: '*' } });
+  const project = await analyzeRepositoryFiles({ files: [{ path: 'package.json', content, hash: 'fixture', size: content.length }], skipped: [], name: 'local' });
+  const txt = generateTextReport(project);
+  expect(txt).toContain('Packages/workspaces:       1');
+  expect(txt).toContain('Declared dependencies:     1');
 });

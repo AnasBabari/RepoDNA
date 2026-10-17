@@ -202,6 +202,8 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
     out.push(`Source files:       ${v1?.repository.sourceFileCount ?? 'n/a'}`);
     out.push(`Parsed files:       ${v1?.repository.parsedFileCount ?? 'n/a'}`);
     out.push(`Lines of code:      ${(v1?.repository.lines ?? 0).toLocaleString('en-US')}`);
+    out.push(`Packages/workspaces:       ${declarationCounts.packages ?? 'not recorded'}`);
+    out.push(`Declared dependencies:     ${declarationCounts.dependencies ?? 'not recorded'}`);
   }
 
   out.push(`Manifest inventory: ${manifestInventory.status}${manifestInventory.status === 'partial' ? ' (counts are lower bounds)' : ''}`);
