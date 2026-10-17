@@ -4,7 +4,7 @@ import { IngestionError } from './analyzer/types';
 export function revisionCandidates(parsed: ParsedGitHubUrl): string[] {
   const parts = parsed.refSegments;
   if (!parts) return ['HEAD'];
-  const count = parts[0].includes('/') ? 1 : parts.length - (parsed.view === 'blob' ? 1 : 0);
+  const count = parts[0].includes('/') || /^[0-9a-f]{40}$/i.test(parts[0]) ? 1 : parts.length - (parsed.view === 'blob' ? 1 : 0);
   if (count > 8) throw new IngestionError('GITHUB_REF_UNSUPPORTED', 'Too many possible ref boundaries. Use a commit URL or percent-encode slashes inside the ref.', 400);
   const candidates = Array.from({ length: count }, (_, index) => parts.slice(0, index + 1).join('/'));
   const valid = candidates.filter((ref) => ref !== '@' && !/[\x00-\x20\x7f~^:?*\[\\]/.test(ref) && !ref.includes('..') && !ref.includes('@{') &&
