@@ -5,7 +5,7 @@ import { resolveGitHubRevision, revisionCandidates } from '../../app/lib/github-
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 const sha = 'b'.repeat(40);
 const parse = (suffix = '') => parseGitHubUrl(`https://github.com/owner/repo${suffix}`)!;
-it.each(['/tree/%2e%2e', '/tree/..', '/tree/tag%00', '/blob/main', '/tree/', '/issues/42'])('rejects unsupported or normalization-changing URL %s', (suffix) => {
+it.each(['/tree/%2e%2e', '/tree/..', '/tree/tag%00', '/blob/main', '/tree/', '/issues/42', '/commit/main', `/commit/${sha}/file`])('rejects unsupported or normalization-changing URL %s', (suffix) => {
   expect(parseGitHubUrl(`https://github.com/owner/repo${suffix}`)).toBeNull();
 });
 function mockRefs(refs: string[]) {
@@ -17,6 +17,7 @@ function mockRefs(refs: string[]) {
 
 it.each([
   ['', 'HEAD'], ['/tree/v2.31.0', 'v2.31.0'], [`/tree/${sha}`, sha],
+  [`/commit/${sha}`, sha], ['/tree/release@1', 'release@1'], ["/tree/release'", "release'"],
   ['/blob/v2.31.0/src/index.py', 'v2.31.0'], ['/tree/feature%2Fnested', 'feature/nested'],
   ['/tree/feature/nested', 'feature/nested'], ['/blob/feature%2Fnested/src/index.py', 'feature/nested'],
 ])('resolves %s without substituting another branch', async (suffix, ref) => {

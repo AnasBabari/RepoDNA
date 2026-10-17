@@ -25,7 +25,7 @@ export interface ParsedGitHubUrl {
   owner: string;
   repo: string;
   canonicalUrl: string;
-  view?: 'tree' | 'blob';
+  view?: 'tree' | 'blob' | 'commit';
   refSegments?: string[];
 }
 
@@ -34,13 +34,15 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
   let trimmed = url.trim();
 
   // Strip wrapping quotes
-  trimmed = trimmed.replace(/^["']|["']$/g, '').trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
   if (!trimmed) return null;
   // Reject normalization hazards before WHATWG URL parsing erases them.
   if (/[\x00-\x1f\x7f\\]/.test(trimmed) || /\/(?:\.|%2e){1,2}(?:\/|[?#]|$)/i.test(trimmed)) return null;
 
   // Reject credential-bearing URLs (e.g. https://user:pass@github.com)
-  if (/@/.test(trimmed) && /^https?:\/\//i.test(trimmed)) {
+  if (/^https?:\/\/[^/?#]*@/i.test(trimmed)) {
     return null;
   }
 
@@ -89,9 +91,10 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
         if (isValidOwnerRepo(owner, repo)) {
           if (segments.length > 2) {
             const view = segments[2];
-            if (view !== 'tree' && view !== 'blob') return null;
+            if (view !== 'tree' && view !== 'blob' && view !== 'commit') return null;
             const refSegments = segments.slice(3).map(decodeURIComponent);
             if (!refSegments.length || (view === 'blob' && refSegments.length < 2)) return null;
+            if (view === 'commit' && (refSegments.length !== 1 || !/^[a-f0-9]{40}$/i.test(refSegments[0]))) return null;
             if (refSegments.some((part) => !part || /[\x00-\x1f\x7f\\]/.test(part) || part === '.' || part === '..')) return null;
             if (parsed.pathname.length > 4096 || refSegments.length > 32) return null;
             return { owner, repo, view, refSegments, canonicalUrl: `https://github.com/${owner}/${repo}/${view}/${refSegments.map(encodeURIComponent).join('/')}` };
