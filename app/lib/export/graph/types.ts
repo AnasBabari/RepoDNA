@@ -1,7 +1,7 @@
-import type { GraphEdgeStatus, GraphEdgeType, GraphNodeKind, SourceRange } from '../../analyzer/v2/types';
+import type { GraphEdgeStatus, GraphEdgeType, GraphNodeKind, GraphScope, SourceRange } from '../../analyzer/v2/types';
 
 export const GRAPH_EXPORT_SCHEMA_VERSION = '1.0.0' as const;
-export const GRAPH_EXPORTER_VERSION = '1.0.1' as const;
+export const GRAPH_EXPORTER_VERSION = '1.0.2' as const;
 
 export type GraphExportFormat = 'graph-json' | 'csv' | 'cypher' | 'parquet';
 
@@ -57,6 +57,7 @@ export interface GraphExportManifest {
     status: string;
     reasons: string[];
   };
+  graphScope?: GraphScope;
   executedRepositoryCode: false;
   adaptedFromLegacy: boolean;
   ordering: 'stable-id-ascending';

@@ -2,17 +2,18 @@ import type { RepoDNAProject } from '../types';
 import type { RepoDNAProjectV2, GraphNode, GraphEdge } from '../analyzer/v2/types';
 import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 import { analysisQuality } from '../analysis-quality';
+import { formatGraphCount, GRAPH_COUNT_KEYS, resolveGraphScope } from '../graph-scope';
 
 /**
  * Deterministic plain-text architecture report.
  * Accepts either a v1.1 artifact or a canonical v2 graph artifact and renders
  * every section without AI involvement. Very large sections are summarized
- * with bounded ranked lists followed by totals; the JSON export always
- * contains the complete machine-readable data.
+ * with bounded ranked lists followed by totals; JSON contains retained data
+ * only. Facts lost to extraction limits or compaction are not recovered.
  */
 
 const MAX_LIST = 25;
-const MAX_ITEMS_NOTE = 'Full machine-readable data is available in the JSON export (repodna.json).';
+const MAX_ITEMS_NOTE = 'All retained machine-readable data is available in the JSON export; omitted facts are not recovered.';
 
 type AnyProject = RepoDNAProject | RepoDNAProjectV2;
 
@@ -95,6 +96,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   const parsers = v2 ? project.parsers : null;
   const security = v2 ? project.security : null;
   const completeness = analysisQuality(project);
+  const scope = v2 ? resolveGraphScope(project) : null;
 
   // ---- Header --------------------------------------------------------------
   out.push(line('='));
@@ -233,6 +235,15 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   }
 
   // 7. Languages
+  if (scope) {
+    out.push(`Graph scope: ${scope.kind}`);
+    out.push(`Analytics scope: ${scope.analyticsScope}`);
+    out.push('Counts describe extracted facts, not proven runtime completeness.');
+    for (const key of GRAPH_COUNT_KEYS) out.push(`  ${key}: original=${formatGraphCount(scope.original[key])}; retained=${formatGraphCount(scope.retained[key])}; omitted=${formatGraphCount(scope.omitted[key])}`);
+    out.push(`Whole-analysis resolution gaps: ${formatGraphCount(scope.original.unresolvedRelationships)}`);
+    if (scope.kind === 'compacted') out.push('Cycles, communities, centrality and blast-radius findings use only the retained subgraph. Unknown original counts are not zero.');
+  }
+
   out.push(...heading(7, 'Languages'));
   const langKeys = Object.keys(languages).sort((a, b) => (languages[b] ?? 0) - (languages[a] ?? 0));
   for (const l of langKeys) out.push(`  ${l}: ${languages[l]}`);
@@ -462,6 +473,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
 
   // 24. Unresolved and ambiguous relationships
   out.push(...heading(24, 'Unresolved and ambiguous relationships'));
+  if (scope) out.push(`Whole-analysis gaps: ${formatGraphCount(scope.original.unresolvedRelationships)}; retained gaps: ${formatGraphCount(scope.retained.unresolvedRelationships)}.`);
   const ambEdges = edges.filter((e) => e.status === 'ambiguous' || e.status === 'unresolved');
   const unresolvedList = unresolved.length > 0 ? unresolved : ambEdges.map((e) => ({ edgeId: e.id, reason: e.explanation, candidates: e.alternativeCandidates ?? [] }));
   if (unresolvedList.length > 0) {
