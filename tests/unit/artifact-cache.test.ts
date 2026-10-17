@@ -90,4 +90,11 @@ describe('public artifact cache integrity', () => {
     await expect(storePublicArtifact({ ...cacheKey, project })).rejects.toThrow('PUBLIC_ARTIFACT_SCHEMA_INVALID');
     expect(mocks.put).not.toHaveBeenCalled();
   });
+
+  it('stores a validated pinned artifact under its immutable commit key', async () => {
+    const stored = await storePublicArtifact({ ...cacheKey, project: pinnedProject() });
+    expect(stored.project.repository.commitSha).toBe(cacheKey.commitSha);
+    expect(mocks.put.mock.calls[0][0]).toContain(`/${cacheKey.commitSha}/2.0.6/`);
+    expect(mocks.put.mock.calls[0][2]).toMatchObject({ access: 'private', cacheControlMaxAge: 604800 });
+  });
 });
