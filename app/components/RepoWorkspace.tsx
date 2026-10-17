@@ -771,6 +771,7 @@ function Overview({
               <div>
                 <p className="eyebrow">Structural importance</p>
                 <h2>Highest-impact files</h2>
+                {deepProject && <p className="muted">Scores sum retained node records per file, not unique inter-file dependencies. Internal links can count twice; unranked files are not assessed.</p>}
               </div>
               <span>Top {Math.min(5, project.important_files.length)}</span>
             </div>
@@ -779,7 +780,7 @@ function Overview({
                 <article key={file.file}>
                   <span>0{index + 1}</span>
                   <strong>{file.file}</strong>
-                  <p>{file.reasons.slice(0, 2).join(' · ')}</p>
+                  <p>{file.reasons.slice(0, 2).join(' · ')}{file.reasons.length > 2 ? ` · +${file.reasons.length - 2} more recorded node summaries` : ''}</p>
                   <i>{file.score} pts</i>
                 </article>
               ))}
