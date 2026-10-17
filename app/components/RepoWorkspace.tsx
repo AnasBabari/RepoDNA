@@ -9,6 +9,7 @@ import { ArchitectureGraph } from './ArchitectureGraph';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 import { CodeGraph } from './CodeGraph';
 import { GraphScopeSummary } from './GraphScopeSummary';
+import { ManifestInventoryPanel } from './ManifestInventoryPanel';
 import { formatGraphCount, resolveGraphScope } from '../lib/graph-scope';
 import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
@@ -472,10 +473,13 @@ function Overview({
   const coveragePercentage = coverage?.percentage ?? project.metrics.parseSuccessRate;
   const parsedCount = coverage?.parsed ?? inventory?.parsedFileCount ?? project.repository.sourceFileCount;
   const partialCount = coverage?.partial ?? inventory?.partiallyParsedFileCount ?? 0;
-  const failedCount = inventory?.failedFileCount ?? project.files.filter((f) => f.error).length;
+  const failedCount = inventory?.failedFileCount ?? project.files.filter((f) => !f.parsed && f.error).length;
   const skippedCount = coverage?.skipped ?? (inventory ? Object.values(inventory.skippedByReason).reduce((a, b) => a + b, 0) : 0);
   const ignoredCount = coverage?.ignored ?? inventory?.ignoredFileCount ?? 0;
-  const unsupportedCount = coverage?.unsupported ?? inventory?.unsupportedSourceFileCount ?? 0;
+  const sourceInventory = inventory?.sourceInventory ?? project.metadata.sourceInventory;
+  const sourceOutcomes = inventory?.sourceOutcomes ?? project.metadata.sourceOutcomes;
+  const unsupportedCount = sourceInventory?.unsupportedSourceFileCount;
+  const coverageBasis = sourceOutcomes ? 'supported source parsed (including partial)' : 'source parsed (legacy denominator)';
   const quality = analysisQuality(deepProject ?? project);
   const unresolvedRelationships = quality.unresolvedCount;
   const graphScope = deepProject ? resolveGraphScope(deepProject) : null;
@@ -559,6 +563,7 @@ function Overview({
       )}
 
       {graphScope?.kind === 'compacted' ? <GraphScopeSummary scope={graphScope} /> : null}
+      <ManifestInventoryPanel manifests={inventory?.manifestInventory ?? project.metadata.manifestInventory} sources={sourceInventory} outcomes={sourceOutcomes} />
 
       {audience === 'plain' ? (
         <>
@@ -598,12 +603,12 @@ function Overview({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Scan coverage</p>
-                <h2>{coveragePercentage}% source parsed · {mapQualityLabel}</h2>
+                <h2>{coveragePercentage}% {coverageBasis} · {mapQualityLabel}</h2>
               </div>
               <span>{formatNumber(parsedCount)} parsed</span>
             </div>
             <div className="coverage-grid">
-              <div><span>Parsed</span><strong>{formatNumber(parsedCount)}</strong></div>
+              <div><span>Parsed (includes partial)</span><strong>{formatNumber(parsedCount)}</strong></div>
               <div><span>Skipped</span><strong>{formatNumber(skippedCount)}</strong></div>
               <div><span>Partial</span><strong>{formatNumber(partialCount)}</strong></div>
               <div><span>Unresolved relationships</span><strong>{unresolvedLabel}</strong></div>
@@ -645,10 +650,10 @@ function Overview({
             <article>
               <span>First-party source</span>
               <strong>{formatNumber(firstPartyFileCount)}</strong>
-              <i>{formatNumber(firstPartyLoc)} LOC · {project.metrics.parseSuccessRate}% parsed · {formatNumber(project.repository.fileCount)} total files</i>
+              <i>{formatNumber(firstPartyLoc)} acquired-source LOC · {coveragePercentage}% parsed · {formatNumber(inventory?.totalFileCount ?? project.repository.fileCount)} observed files</i>
             </article>
             <article>
-              <span>Dependencies</span>
+              <span>Import relationships</span>
               <strong>{formatNumber(project.metrics.localDependencies)}</strong>
               <i>{project.metrics.externalDependencies} external · {dependencyCycleCount} cycles</i>
             </article>
@@ -668,17 +673,17 @@ function Overview({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Scan coverage</p>
-                <h2>{coveragePercentage}% source parsed · {mapQualityLabel}</h2>
+                <h2>{coveragePercentage}% {coverageBasis} · {mapQualityLabel}</h2>
               </div>
               <span>{truncationReasons.length ? truncationReasons.join(', ') : 'No truncation'}</span>
             </div>
             <div className="coverage-grid technical">
-              <div><span>Parsed</span><strong>{formatNumber(parsedCount)}</strong></div>
+              <div><span>Parsed (includes partial)</span><strong>{formatNumber(parsedCount)}</strong></div>
               <div><span>Partial</span><strong>{formatNumber(partialCount)}</strong></div>
               <div><span>Failed</span><strong>{formatNumber(failedCount)}</strong></div>
               <div><span>Skipped</span><strong>{formatNumber(skippedCount)}</strong></div>
               <div><span>Ignored</span><strong>{formatNumber(ignoredCount)}</strong></div>
-              <div><span>Unsupported</span><strong>{formatNumber(unsupportedCount)}</strong></div>
+              <div><span>Unsupported source</span><strong>{unsupportedCount === undefined ? 'Not recorded' : formatNumber(unsupportedCount)}</strong></div>
               <div><span>Unresolved routes</span><strong>{formatNumber(incompletePaths)}</strong></div>
               <div><span>Unresolved relationships</span><strong>{unresolvedLabel}</strong></div>
             </div>
