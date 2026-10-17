@@ -1,13 +1,15 @@
 import type { ManifestSink } from './manifest-types';
-import { groupScope, pythonDependencyName } from './manifest-python';
+import { pythonDependencyName } from './manifest-python';
 
 export function readRequirements(file: string, files: Map<string, string>, sink: ManifestSink, chain: string[] = []): void {
+  sink.step(file);
   if (chain.includes(file) || chain.length >= 16) { sink.problem(file, 'MANIFEST_DYNAMIC_UNRESOLVED', 'Requirements include is cyclic or exceeds depth 16.'); return; }
   const content = files.get(file);
   if (content === undefined) { sink.problem(file, 'MANIFEST_DYNAMIC_UNRESOLVED', 'A local requirements include was not acquired.'); return; }
   for (const raw of content.replace(/\\\r?\n/g, '').split(/\r?\n/)) {
     const value = raw.trim();
     if (!value || value.startsWith('#')) continue;
+    sink.step(file);
     const include = value.match(/^(?:-r\s*|--requirement(?:=|\s+))(.+)$/);
     if (include) {
       const parts = [...file.split('/').slice(0, -1), ...include[1].trim().split('/')];
@@ -46,7 +48,8 @@ export function readSetupCfg(file: string, content: string, sink: ManifestSink):
 }
 export function readGoMod(file: string, content: string, sink: ManifestSink): void {
   const module = content.match(/^\s*module\s+([^\s]+)\s*$/m);
-  if (module) sink.package(file, 'go', module[1]);
+  sink.package(file, 'go', module ? module[1].replace(/^"|"$/g, '') : null);
+  if (!module) sink.problem(file, 'MANIFEST_PARSE_FAILED', 'The go.mod module directive is missing or unsupported.');
   let block = false;
   for (const raw of content.split(/\r?\n/)) {
     const line = raw.trim();

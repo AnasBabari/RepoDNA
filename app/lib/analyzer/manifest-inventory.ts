@@ -21,6 +21,7 @@ export function collectManifestInventory(files: DiscoveredFile[], skipped: { pat
   const root = (file: string) => file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '.';
   let visits = 0;
   const sink: ManifestSink = {
+    step() { if (++visits > MANIFEST_LIMITS.visits) throw new ManifestBudgetReached(); },
     package(file, ecosystem, name, workspace = false) {
       if (name && name.length > 512) { sink.problem(file, 'MANIFEST_PARSE_FAILED', 'Package name exceeds the metadata bound.'); name = null; }
       const key = JSON.stringify([ecosystem, root(file)]);
@@ -28,7 +29,8 @@ export function collectManifestInventory(files: DiscoveredFile[], skipped: { pat
       packages.set(key, { ecosystem, root: root(file), name: name || old?.name || null, workspace: workspace || old?.workspace || false, manifests: [...new Set([...(old?.manifests ?? []), file])].sort() });
     },
     dependency(file, ecosystem, name, scope, group) {
-      if (++visits > MANIFEST_LIMITS.visits || declarations.size >= MANIFEST_LIMITS.declarations) throw new ManifestBudgetReached();
+      sink.step(file);
+      if (declarations.size >= MANIFEST_LIMITS.declarations) throw new ManifestBudgetReached();
       if (group.length > 1024 || file.length > 4096) { sink.problem(file.slice(0, 4096), 'MANIFEST_INVENTORY_LIMIT_REACHED', 'Manifest provenance exceeds the metadata length bound.'); return; }
       const normalized = ecosystem === 'python' ? name.toLowerCase().replace(/[-_.]+/g, '-') : ecosystem === 'npm' ? name.toLowerCase() : name;
       const allowed = ecosystem === 'npm' ? /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/ : ecosystem === 'go' ? /^[a-zA-Z0-9._~!/-]+$/ : /^[a-z0-9][a-z0-9-]*$/;

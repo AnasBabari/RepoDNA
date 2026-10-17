@@ -48,6 +48,7 @@ export function readPythonToml(file: string, content: string, sink: ManifestSink
   for (const [group, value] of Object.entries(objectValue(poetry.group))) table(objectValue(value).dependencies, groupScope(group), `tool.poetry.group.${group}.dependencies`);
   const groups = objectValue(data['dependency-groups']);
   const expand = (name: string, chain: string[], owner: string): void => {
+    sink.step(file);
     if (chain.includes(name) || chain.length >= 16) { sink.problem(file, 'MANIFEST_DYNAMIC_UNRESOLVED', 'Dependency-group include is cyclic or exceeds depth 16.'); return; }
     const values = groups[name];
     if (!Array.isArray(values)) { sink.problem(file, 'MANIFEST_PARSE_FAILED', 'A dependency group or included group is missing or invalid.'); return; }

@@ -24,6 +24,7 @@ export interface ManifestInventory {
   problems: ManifestProblem[];
 }
 export interface ManifestSink {
+  step: (file: string) => void;
   package: (file: string, ecosystem: ManifestEcosystem, name: string | null, workspace?: boolean) => void;
   dependency: (file: string, ecosystem: ManifestEcosystem, name: string, scope: DependencyScope, group: string) => void;
   problem: (file: string, code: string, message: string) => void;
