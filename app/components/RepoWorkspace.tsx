@@ -1661,6 +1661,7 @@ function WorkspaceContent() {
 
     const startTime = Date.now();
     const controller = beginAnalysis(targetUrl);
+    if (parsed?.refSegments) setAnalyzingMessage('Resolving the selected revision; scanning the full repository, not only the URL subpath.');
     let failureCode = 'CLIENT_ERROR';
     let loadedSample = false;
     let canonicalProject: RepoDNAProjectV2 | null = null;

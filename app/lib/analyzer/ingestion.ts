@@ -36,6 +36,8 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
   // Strip wrapping quotes
   trimmed = trimmed.replace(/^["']|["']$/g, '').trim();
   if (!trimmed) return null;
+  // Reject normalization hazards before WHATWG URL parsing erases them.
+  if (/[\x00-\x1f\x7f\\]/.test(trimmed) || /\/(?:\.|%2e){1,2}(?:\/|[?#]|$)/i.test(trimmed)) return null;
 
   // Reject credential-bearing URLs (e.g. https://user:pass@github.com)
   if (/@/.test(trimmed) && /^https?:\/\//i.test(trimmed)) {
