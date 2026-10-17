@@ -1,54 +1,9 @@
 import * as fflate from 'fflate';
 import { DEFAULT_INGESTION_LIMITS, IngestionError, type DiscoveredFile, type IngestionInventory, type IngestionLimits, type IngestionErrorCode } from './types';
-
-export const DEFAULT_IGNORES = new Set([
-  '.git', '.hg', '.svn', 'node_modules', 'venv', '.venv', 'env',
-  'dist', 'build', 'coverage', '.next', '.vinext', '__pycache__',
-  'vendor', '.tox', '.mypy_cache', '.pytest_cache', '.ruff_cache',
-  '.idea', '.vscode', '.repodna', '.turbo', '.cache',
-]);
-
-export const SOURCE_EXTENSIONS = new Set([
-  '.py', '.pyi', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx',
-  '.go', '.json', '.toml', '.yaml', '.yml', '.ini', '.cfg', '.sql',
-  '.prisma', '.md', '.mdx', '.html', '.css', '.scss', '.dockerfile',
-  '.sh', '.bash', '.graphql', '.gql',
-]);
-
-export const SUPPORTED_SOURCE_EXTENSIONS = new Set([
-  '.py', '.pyi', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.go',
-]);
+import { isCandidate, isGeneratedPath, isIgnored, isSupportedSource } from './source-policy';
+export { DEFAULT_IGNORES, SOURCE_EXTENSIONS, SUPPORTED_SOURCE_EXTENSIONS, SPECIAL_FILES } from './source-policy';
 
 const MAX_INGESTION_PATH_LENGTH = 4096;
-
-function isSupportedSource(path: string): boolean {
-  const filename = path.split('/').pop()!;
-  const dotIndex = filename.lastIndexOf('.');
-  if (dotIndex === -1) return SPECIAL_FILES.has(filename);
-  const ext = filename.slice(dotIndex).toLowerCase();
-  return SUPPORTED_SOURCE_EXTENSIONS.has(ext);
-}
-
-function isGeneratedPath(path: string): boolean {
-  const lower = path.toLowerCase();
-  return (
-    lower.includes('/generated/') ||
-    lower.includes('__generated__') ||
-    lower.endsWith('.generated.ts') ||
-    lower.endsWith('.generated.js') ||
-    lower.endsWith('.min.js') ||
-    lower.endsWith('.bundle.js') ||
-    lower.startsWith('dist/') ||
-    lower.startsWith('build/')
-  );
-}
-
-export const SPECIAL_FILES = new Set([
-  'Dockerfile', 'Procfile', 'Makefile', 'Pipfile', 'package.json',
-  'requirements.txt', 'pyproject.toml', 'poetry.lock', 'Pipfile.lock',
-  'docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml',
-  'go.mod', 'Cargo.toml', 'pom.xml', 'build.gradle', 'tsconfig.json', 'jsconfig.json',
-]);
 
 export interface GitHubFetchOptions {
   /** Pin acquisition to the commit already resolved by the public API route. */
@@ -155,19 +110,6 @@ function isValidOwnerRepo(owner: string, repo: string): boolean {
   if (owner === '.' || owner === '..' || repo === '.' || repo === '..') return false;
   if (RESERVED_GITHUB_ROOT_SEGMENTS.has(owner.toLowerCase())) return false;
   return true;
-}
-
-function isCandidate(path: string): boolean {
-  const filename = path.split('/').pop()!;
-  if (SPECIAL_FILES.has(filename)) return true;
-  const dotIndex = filename.lastIndexOf('.');
-  if (dotIndex === -1) return false;
-  return SOURCE_EXTENSIONS.has(filename.slice(dotIndex).toLowerCase());
-}
-
-function isIgnored(path: string): boolean {
-  const parts = path.split('/');
-  return parts.some((p) => DEFAULT_IGNORES.has(p));
 }
 
 function validatePath(rawPath: string): void {
