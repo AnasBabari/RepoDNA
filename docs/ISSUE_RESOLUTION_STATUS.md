@@ -30,6 +30,12 @@ local test is not evidence that production contains a fix.
 5. `codex/inventory-evidence` → `codex/unresolved-relationships`: manifest-backed
    declarations, supported-source coverage, unavailable legacy counts, bounded
    provenance and a browser grammar-loader fix found during real upload tests.
+   [PR #28](https://github.com/AnasBabari/RepoDNA/pull/28) is draft and unmerged;
+   hosted CI run 39053444088 passed all jobs for commit 7b652e5. Its exact
+   Vercel preview is READY; interactive acceptance still requires Vercel login.
+6. `codex/evidence-based-roles` → `codex/inventory-evidence`: primary language
+   ranked by recorded evidence, syntax-backed components, neutral Python src/app
+   roles and explicitly heuristic confidence. This batch addresses #8.
 
 ## Issue-by-issue state
 
@@ -42,7 +48,7 @@ local test is not evidence that production contains a fix.
 | #5 | Implemented in PR #24: original/retained/omitted scope and bounded-export disclosure. Hosted CI passed; review and interactive preview acceptance remain. |
 | #6 | Implemented in PR #25: searchable retained gaps, null targets, relevant-only nodes and drawable-edge counts. 368 unit / 31 Python and both local browser variants passed; hosted CI passed. Unmerged. |
 | #7 | Implemented on inventory-evidence: manifest roots/scopes, supported-source denominator, reconciled outcomes, schema/UI/TXT/all export evidence and nullable legacy counts. Local verification below; unmerged review remains. |
-| #8 | Pending: Python src-layout architecture roles and primary-language selection. |
+| #8 | Implemented on evidence-based-roles: quantitative language ranking, syntax-backed UI roles and neutral Python src/app files. Local verification below; unmerged review remains. |
 | #9 | Pending: honor explicit tree/blob refs during GitHub analysis. |
 | #10 | Partially addressed by visible bundled-snapshot provenance; sample short-circuit/reanalyze behavior still pending. |
 | #11 | Pending: GitHub repository pagination and search beyond first page. |
@@ -111,3 +117,18 @@ are conservatively counted as gaps even if an older artifact flags them resolved
 - Protected interactive Vercel preview acceptance remains separate: local
   development OIDC is expired. No token was printed, env file overwritten,
   deployment protection disabled, production deployment promoted or PR merged.
+
+## Evidence-based roles verification checkpoint
+
+- 412 unit tests and 34 Python tests pass; both builds and subsequent typechecks
+  pass. Lint has zero errors and the same two authentication-navigation warnings.
+- The targeted Vinext browser run passed all eight tests, including real ZIP
+  uploads: Python src/app files remain unclassified; observed React/Next JSX
+  retains frontend evidence; canonical language proportions remain unchanged.
+- Full local Next production browser confirmation: 55 passed / one expected
+  feature-off skip with Parquet enabled, including real downloads in all formats.
+- Confidence is documented as a rule-based heuristic, not a probability or an
+  architecture-match score. See `docs/role-evidence.md` for exact fallback rules.
+- Cache namespaces are analyzer 2.0.5 / exporter 1.0.5; old artifacts retain
+  their own TTL and evidence. No cache schema, retention or privacy change.
+- These are local results, not a production release. All PRs remain unmerged.
