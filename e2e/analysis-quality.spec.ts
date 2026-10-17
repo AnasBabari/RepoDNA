@@ -13,7 +13,7 @@ test('nanoGPT never claims full mapping beside its 444 unresolved relationships'
   await expect(summary).toContainText('Mostly mapped');
   await expect(summary).toContainText('444 relationships could not be proven statically.');
   await expect(summary).not.toContainText('No unresolved relationships');
-  await expect(page.getByRole('region', { name: 'Scan coverage', exact: true })).toContainText('100% source parsed · Mostly mapped');
+  await expect(page.getByRole('region', { name: 'Scan coverage', exact: true })).toContainText('100% source parsed (legacy denominator) · Mostly mapped');
   await page.getByRole('button', { name: 'Technical', exact: false }).click();
   await expect(page.getByRole('region', { name: 'Scan coverage details' })).toContainText('Mostly mapped');
 });
