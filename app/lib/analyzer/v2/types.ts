@@ -171,6 +171,23 @@ export interface Completeness {
   reasons: string[];
 }
 
+/** Counts of extracted facts, never a claim of runtime or parser completeness. */
+export interface GraphScopeCounts {
+  nodes: number | null;
+  relationships: number | null;
+  /** Union of unresolved records and null-target/unresolved/ambiguous edges. */
+  unresolvedRelationships: number | null;
+  ambiguousRelationships: number | null;
+}
+
+export interface GraphScope {
+  kind: 'uncompacted' | 'compacted';
+  original: GraphScopeCounts;
+  retained: GraphScopeCounts;
+  omitted: GraphScopeCounts;
+  analyticsScope: 'uncompacted-extracted-graph' | 'retained-subgraph';
+}
+
 export interface RepoDNAProjectV2 {
   schemaVersion: '2.0.0';
   generatedAt: string;
@@ -210,6 +227,7 @@ export interface RepoDNAProjectV2 {
   parsers: Parsers;
   security: Security;
   completeness: Completeness;
+  graphScope?: GraphScope;
   entrypoints?: EntrypointRecord[];
   databases?: TechnologyBoundary[];
   externalSystems?: TechnologyBoundary[];
