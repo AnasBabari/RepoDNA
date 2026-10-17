@@ -26,6 +26,18 @@
       ],
       "additionalProperties": false,
       "properties": {
+        "graphScope": {
+          "type": "object",
+          "required": ["kind", "original", "retained", "omitted", "analyticsScope"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["uncompacted", "compacted"] },
+            "original": { "$ref": "#/definitions/graphScopeCounts" },
+            "retained": { "$ref": "#/definitions/graphScopeCounts" },
+            "omitted": { "$ref": "#/definitions/graphScopeCounts" },
+            "analyticsScope": { "enum": ["uncompacted-extracted-graph", "retained-subgraph"] }
+          }
+        },
         "exportSchemaVersion": { "const": "1.0.0" },
         "exporterVersion": { "type": "string", "minLength": 1 },
         "sourceSchemaVersion": { "enum": ["2.0.0", "1.1.0"] },
@@ -297,6 +309,17 @@
     }
   },
   "definitions": {
+    "graphScopeCounts": {
+      "type": "object",
+      "required": ["nodes", "relationships", "unresolvedRelationships", "ambiguousRelationships"],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": { "type": ["integer", "null"], "minimum": 0 },
+        "relationships": { "type": ["integer", "null"], "minimum": 0 },
+        "unresolvedRelationships": { "type": ["integer", "null"], "minimum": 0 },
+        "ambiguousRelationships": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
     "sourceRange": {
       "type": "object",
       "required": ["startLine", "startCol", "endLine", "endCol"],

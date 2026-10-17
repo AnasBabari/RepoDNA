@@ -134,6 +134,20 @@ function checkExtractionLimits(value: unknown, errors: string[], label: string):
   }
 }
 
+function checkGraphScope(value: unknown, errors: string[]): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) return addError(errors, 'graphScope must be an object');
+  if (!['uncompacted', 'compacted'].includes(value.kind as string)) addError(errors, 'graphScope.kind is invalid');
+  if (!['uncompacted-extracted-graph', 'retained-subgraph'].includes(value.analyticsScope as string)) addError(errors, 'graphScope.analyticsScope is invalid');
+  for (const group of ['original', 'retained', 'omitted']) {
+    const counts = value[group];
+    if (!isRecord(counts)) { addError(errors, `graphScope.${group} must be an object`); continue; }
+    for (const key of ['nodes', 'relationships', 'unresolvedRelationships', 'ambiguousRelationships']) {
+      if (counts[key] !== null && !isNonNegativeInteger(counts[key])) addError(errors, `graphScope.${group}.${key} must be a non-negative integer or null`);
+    }
+  }
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
@@ -331,6 +345,7 @@ export function validateRepoDNAProjectV2(data: unknown): ValidationResult {
   if ((data as { schemaVersion?: unknown }).schemaVersion !== '2.0.0') {
     errors.push('schemaVersion must be "2.0.0"');
   }
+  checkGraphScope(data.graphScope, errors);
   for (const k of missingKeys(data, ['generatedAt', 'repository', 'inventory', 'coverage', 'nodes', 'edges', 'architecture', 'flows', 'communities', 'dependencyCycles', 'centrality', 'unresolved', 'diagnostics', 'timings', 'parsers', 'security', 'completeness'])) {
     errors.push(`${k} is required`);
   }

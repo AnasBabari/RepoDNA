@@ -3,6 +3,19 @@
   "title": "RepoDNAProjectV2",
   "description": "Canonical graph contract v2 for RepoDNA deterministic code-intelligence. Preserves v1.1 compatibility via artifact-loader.",
   "type": "object",
+  "definitions": {
+    "graphScopeCounts": {
+      "type": "object",
+      "required": ["nodes", "relationships", "unresolvedRelationships", "ambiguousRelationships"],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": { "type": ["integer", "null"], "minimum": 0 },
+        "relationships": { "type": ["integer", "null"], "minimum": 0 },
+        "unresolvedRelationships": { "type": ["integer", "null"], "minimum": 0 },
+        "ambiguousRelationships": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    }
+  },
   "required": [
     "schemaVersion",
     "generatedAt",
@@ -24,6 +37,18 @@
     "completeness"
   ],
   "properties": {
+    "graphScope": {
+      "type": "object",
+      "required": ["kind", "original", "retained", "omitted", "analyticsScope"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["uncompacted", "compacted"] },
+        "original": { "$ref": "#/definitions/graphScopeCounts" },
+        "retained": { "$ref": "#/definitions/graphScopeCounts" },
+        "omitted": { "$ref": "#/definitions/graphScopeCounts" },
+        "analyticsScope": { "enum": ["uncompacted-extracted-graph", "retained-subgraph"] }
+      }
+    },
     "schemaVersion": { "type": "string", "const": "2.0.0" },
     "generatedAt": { "type": "string", "format": "date-time" },
     "repository": {
