@@ -1,4 +1,5 @@
 import type { GraphScope, GraphScopeCounts, RepoDNAProjectV2 } from './analyzer/v2/types';
+import { resolutionGaps } from './resolution-gaps';
 
 export const GRAPH_COUNT_KEYS = ['nodes', 'relationships', 'unresolvedRelationships', 'ambiguousRelationships'] as const;
 
@@ -6,10 +7,7 @@ export function graphCounts(project: RepoDNAProjectV2): GraphScopeCounts {
   return {
     nodes: project.nodes.length,
     relationships: project.edges.length,
-    unresolvedRelationships: new Set([
-      ...project.unresolved.map((record) => record.edgeId),
-      ...project.edges.filter((edge) => edge.target === null || edge.status === 'unresolved' || edge.status === 'ambiguous').map((edge) => edge.id),
-    ]).size,
+    unresolvedRelationships: resolutionGaps(project).length,
     ambiguousRelationships: project.edges.filter((edge) => edge.status === 'ambiguous').length,
   };
 }

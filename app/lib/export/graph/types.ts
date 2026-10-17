@@ -1,7 +1,7 @@
 import type { GraphEdgeStatus, GraphEdgeType, GraphNodeKind, GraphScope, SourceRange } from '../../analyzer/v2/types';
 
 export const GRAPH_EXPORT_SCHEMA_VERSION = '1.0.0' as const;
-export const GRAPH_EXPORTER_VERSION = '1.0.2' as const;
+export const GRAPH_EXPORTER_VERSION = '1.0.3' as const;
 
 export type GraphExportFormat = 'graph-json' | 'csv' | 'cypher' | 'parquet';
 

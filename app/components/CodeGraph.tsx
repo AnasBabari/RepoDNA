@@ -41,6 +41,8 @@ import { GraphExportDialog } from './GraphExportDialog';
 import { analysisQuality } from '../lib/analysis-quality';
 import { resolveGraphScope } from '../lib/graph-scope';
 import { GraphScopeSummary } from './GraphScopeSummary';
+import { isDrawableGraphEdge, resolutionGaps, resolutionGapNodeIds } from '../lib/resolution-gaps';
+import { UnresolvedRelationshipList } from './UnresolvedRelationshipList';
 import type { BrowserCacheSourceType } from '../lib/export/browser-export-cache';
 
 const INITIAL_NODE_LIMIT = 80;
@@ -474,6 +476,9 @@ export function CodeGraph({
 }) {
   const graph = useMemo(() => normalizeProject(project), [project]);
   const scope = useMemo(() => resolveGraphScope(graph), [graph]);
+  const gaps = useMemo(() => resolutionGaps(graph), [graph]);
+  const gapIds = useMemo(() => new Set(gaps.map((gap) => gap.id)), [gaps]);
+  const [gapSourceId, setGapSourceId] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const [layoutSeed, setLayoutSeed] = useState(0);
   const sig = `${resetKey}:${layoutSeed}`;
@@ -518,7 +523,7 @@ export function CodeGraph({
 
   const filteredEdges = useMemo(() => {
     let edges = graph.edges;
-    if (unresolvedOnly) edges = edges.filter((e) => e.status === 'unresolved' || e.status === 'ambiguous');
+    if (unresolvedOnly) edges = edges.filter((e) => gapIds.has(e.id));
     if (relationFilter !== 'all') {
       const groups: Record<string, Set<string>> = {
         imports_calls: new Set(['IMPORTS', 'CALLS', 'INVOKES', 'DEPENDS_ON']),
@@ -529,7 +534,7 @@ export function CodeGraph({
       edges = edges.filter((e) => allowed.has(e.type));
     }
     return edges;
-  }, [graph.edges, unresolvedOnly, relationFilter]);
+  }, [graph.edges, unresolvedOnly, relationFilter, gapIds]);
 
   const degreeById = useMemo(() => {
     const deg = new Map<string, number>();
@@ -544,10 +549,13 @@ export function CodeGraph({
    * Deterministic visible-node selection:
    * seed = top-degree nodes matching filters/search; plus expanded neighborhoods.
    */
-  const visibleNodes = useMemo(() => {
-    let candidates = graph.nodes.filter((n) =>
-      granularity === 'structure' ? structureKinds.has(n.kind) : symbolKinds.has(n.kind)
-    );
+  const relevantGapNodes = useMemo(() => {
+    const ids = new Set(filteredEdges.map((edge) => edge.id));
+    return resolutionGapNodeIds(gaps.filter((gap) => gap.edge ? ids.has(gap.id) : relationFilter === 'all'));
+  }, [gaps, filteredEdges, relationFilter]);
+  const candidateNodes = useMemo(() => {
+    let candidates = graph.nodes.filter((n) => unresolvedOnly ? relevantGapNodes.has(n.id) :
+      (granularity === 'structure' ? structureKinds.has(n.kind) : symbolKinds.has(n.kind)));
     const q = search.trim().toLowerCase();
     if (q) {
       candidates = candidates.filter(
@@ -555,7 +563,10 @@ export function CodeGraph({
       );
     }
 
-    const ranked = [...candidates].sort((a, b) => {
+    return candidates;
+  }, [graph.nodes, unresolvedOnly, relevantGapNodes, granularity, structureKinds, symbolKinds, search]);
+  const visibleNodes = useMemo(() => {
+    const ranked = [...candidateNodes].sort((a, b) => {
       const da = degreeById.get(a.id) ?? 0;
       const dbv = degreeById.get(b.id) ?? 0;
       return dbv - da || a.id.localeCompare(b.id);
@@ -584,10 +595,10 @@ export function CodeGraph({
 
     if (selectedNodeId && !selected.has(selectedNodeId)) {
       const n = graph.nodes.find((x) => x.id === selectedNodeId);
-      if (n) selected.set(n.id, n);
+      if (n && (!unresolvedOnly || relevantGapNodes.has(n.id))) selected.set(n.id, n);
     }
     return Array.from(selected.values());
-  }, [graph.nodes, filteredEdges, granularity, structureKinds, symbolKinds, search, degreeById, expandedIds, selectedNodeId, nodeById]);
+  }, [graph.nodes, filteredEdges, candidateNodes, unresolvedOnly, relevantGapNodes, degreeById, expandedIds, selectedNodeId, nodeById]);
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
 
@@ -597,7 +608,7 @@ export function CodeGraph({
   );
 
   const renderedEdges = useMemo(
-    () => selectRenderedEdges(candidateEdges, MAX_RENDERED_EDGE_LIMIT, degreeById),
+    () => selectRenderedEdges(candidateEdges.filter(isDrawableGraphEdge), MAX_RENDERED_EDGE_LIMIT, degreeById),
     [candidateEdges, degreeById]
   );
 
@@ -856,6 +867,8 @@ export function CodeGraph({
 
   const selectedNode = graph.nodes.find((n) => n.id === selectedNodeId) ?? null;
   const selectedEdge = graph.edges.find((e) => e.id === selectedEdgeId) ?? null;
+  const selectedGap = useMemo(() => gaps.find((gap) => gap.id === selectedEdgeId), [gaps, selectedEdgeId]);
+  const incidentGapCount = useMemo(() => selectedNode ? gaps.filter((gap) => gap.edge?.source === selectedNode.id).length : 0, [gaps, selectedNode]);
 
   const onNodeClick = useCallback((_: unknown, node: Node<CodeGraphNodeData>) => {
     setSelectedEdgeId(null);
@@ -881,6 +894,7 @@ export function CodeGraph({
     setExpandedIds(new Set());
     setSearch('');
     setUnresolvedOnly(false);
+    setGapSourceId(null);
     setRelationFilter('all');
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
@@ -890,9 +904,14 @@ export function CodeGraph({
     setLayoutSeed((k) => k + 1);
   }
 
-  const candidateNodeCount = graph.nodes.filter((n) => (granularity === 'structure' ? structureKinds : symbolKinds).has(n.kind)).length;
+  const candidateNodeCount = candidateNodes.length;
   const nodesTruncated = visibleNodes.length < candidateNodeCount;
-  const edgesTruncated = renderedEdges.length < candidateEdges.length;
+  const drawableCandidateCount = candidateEdges.filter(isDrawableGraphEdge).length;
+  const edgesTruncated = rfEdges.length < drawableCandidateCount;
+  const undrawnGapCount = useMemo(() => {
+    const drawnIds = new Set(renderedEdges.map((edge) => edge.id));
+    return gaps.filter((gap) => !drawnIds.has(gap.id)).length;
+  }, [gaps, renderedEdges]);
 
   return (
     <div className="code-graph-container">
@@ -930,12 +949,12 @@ export function CodeGraph({
           <option value="data">Reads / writes</option>
           <option value="routes">Routes</option>
         </select>
-        <button className={`chip-button ${unresolvedOnly ? 'active' : ''}`} onClick={() => setUnresolvedOnly((v) => !v)} type="button">
+        <button className={`chip-button ${unresolvedOnly ? 'active' : ''}`} aria-pressed={unresolvedOnly} onClick={() => { setUnresolvedOnly((v) => !v); setSelectedNodeId(null); setSelectedEdgeId(null); setHoveredNodeId(null); setGapSourceId(null); }} type="button">
           Unresolved only
         </button>
         <button className="chip-button" onClick={resetView} type="button">Reset view</button>
         <span className="code-graph-status" role="status">
-          {visibleNodes.length}{nodesTruncated ? ` of ${candidateNodeCount}` : ''} nodes · {renderedEdges.length}{edgesTruncated ? ` of ${candidateEdges.length}` : ''} edges shown · drag nodes, click to expand
+          {visibleNodes.length}{nodesTruncated ? ` of ${candidateNodeCount}` : ''} nodes · {rfEdges.length}{edgesTruncated ? ` of ${drawableCandidateCount}` : ''} {rfEdges.length === 1 ? 'edge' : 'edges'} shown · {undrawnGapCount} retained unresolved records not drawn
         </span>
       </div>
 
@@ -1004,12 +1023,14 @@ export function CodeGraph({
         <span>— dashed = unresolved/ambiguous</span>
       </div>
 
+      <UnresolvedRelationshipList key={`${gapSourceId ?? 'all'}:${unresolvedOnly}`} gaps={gaps} sourceId={gapSourceId} onClearSource={() => setGapSourceId(null)} onInspect={setSelectedEdgeId} autoOpen={unresolvedOnly} />
+
       {selectedEdge && (
-        <CodeGraphEvidenceDrawer edge={selectedEdge} onClose={() => setSelectedEdgeId(null)} />
+        <CodeGraphEvidenceDrawer edge={selectedEdge} gap={selectedGap} onClose={() => setSelectedEdgeId(null)} />
       )}
 
       {selectedNode && !selectedEdge && (
-        <CodeGraphNodeDetail node={selectedNode} degree={degreeById.get(selectedNode.id) ?? 0} />
+        <CodeGraphNodeDetail node={selectedNode} degree={degreeById.get(selectedNode.id) ?? 0} unresolvedCount={incidentGapCount} onShowUnresolved={() => setGapSourceId(selectedNode.id)} />
       )}
 
       {exportOpen && (
