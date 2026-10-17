@@ -8,6 +8,8 @@ import packageMetadata from '../../package.json';
 import { ArchitectureGraph } from './ArchitectureGraph';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 import { CodeGraph } from './CodeGraph';
+import { GraphScopeSummary } from './GraphScopeSummary';
+import { formatGraphCount, resolveGraphScope } from '../lib/graph-scope';
 import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
@@ -476,6 +478,8 @@ function Overview({
   const unsupportedCount = coverage?.unsupported ?? inventory?.unsupportedSourceFileCount ?? 0;
   const quality = analysisQuality(deepProject ?? project);
   const unresolvedRelationships = quality.unresolvedCount;
+  const graphScope = deepProject ? resolveGraphScope(deepProject) : null;
+  const unresolvedLabel = unresolvedRelationships === null ? `Unknown (${formatGraphCount(quality.retainedUnresolvedCount)} retained)` : formatNumber(unresolvedRelationships);
   const dependencyCycleCount = filterMeaningfulDependencyCycles(project.metrics.dependencyCycles).length;
   const truncationReasons = coverage?.truncationReasons ?? inventory?.truncation?.hitLimits ?? [];
   // Never display "Fully mapped" unless all supported first-party files parsed and no limits/truncation
@@ -554,6 +558,8 @@ function Overview({
         </section>
       )}
 
+      {graphScope?.kind === 'compacted' ? <GraphScopeSummary scope={graphScope} /> : null}
+
       {audience === 'plain' ? (
         <>
           <section className="plain-summary-grid" aria-label="Plain-language summary">
@@ -573,6 +579,8 @@ function Overview({
               <p>
                 {isFullyMapped
                   ? 'No unresolved relationships; all supported first-party files parsed.'
+                  : unresolvedRelationships === null
+                    ? 'Whole-analysis relationship gaps are unknown; retained findings do not establish a complete map.'
                   : unresolvedRelationships
                     ? `${formatNumber(unresolvedRelationships)} relationships could not be proven statically.`
                   : incompletePaths
@@ -598,7 +606,7 @@ function Overview({
               <div><span>Parsed</span><strong>{formatNumber(parsedCount)}</strong></div>
               <div><span>Skipped</span><strong>{formatNumber(skippedCount)}</strong></div>
               <div><span>Partial</span><strong>{formatNumber(partialCount)}</strong></div>
-              <div><span>Unresolved relationships</span><strong>{formatNumber(unresolvedRelationships)}</strong></div>
+              <div><span>Unresolved relationships</span><strong>{unresolvedLabel}</strong></div>
             </div>
             {truncationReasons.length > 0 && (
               <div className="coverage-truncation">
@@ -672,7 +680,7 @@ function Overview({
               <div><span>Ignored</span><strong>{formatNumber(ignoredCount)}</strong></div>
               <div><span>Unsupported</span><strong>{formatNumber(unsupportedCount)}</strong></div>
               <div><span>Unresolved routes</span><strong>{formatNumber(incompletePaths)}</strong></div>
-              <div><span>Unresolved relationships</span><strong>{formatNumber(unresolvedRelationships)}</strong></div>
+              <div><span>Unresolved relationships</span><strong>{unresolvedLabel}</strong></div>
             </div>
             {inventory && (
               <div className="coverage-inventory">

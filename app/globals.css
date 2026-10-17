@@ -4140,3 +4140,9 @@ button.file-row:hover {
 @media (prefers-reduced-motion: reduce) {
   .analyzing-dna-pulse { animation: none; }
 }
+.graph-scope-summary { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--panel); font-size: 12px; line-height: 1.6; }
+.graph-scope-summary p { margin: 6px 0; }
+.graph-scope-summary summary { cursor: pointer; }
+.graph-scope-table-wrap { overflow-x: auto; }
+.graph-scope-summary table { width: 100%; border-collapse: collapse; text-align: left; }
+.graph-scope-summary th, .graph-scope-summary td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }

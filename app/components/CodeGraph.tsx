@@ -38,6 +38,9 @@ import { adaptV1ToV2Viewer } from '../lib/schema/artifact-loader';
 import type { RepoDNAProject } from '../lib/types';
 import type { GraphEdge, RepoDNAProjectV2, GraphNode } from '../lib/analyzer/v2/types';
 import { GraphExportDialog } from './GraphExportDialog';
+import { analysisQuality } from '../lib/analysis-quality';
+import { resolveGraphScope } from '../lib/graph-scope';
+import { GraphScopeSummary } from './GraphScopeSummary';
 import type { BrowserCacheSourceType } from '../lib/export/browser-export-cache';
 
 const INITIAL_NODE_LIMIT = 80;
@@ -470,6 +473,7 @@ export function CodeGraph({
   exportBrowserRetention?: { enabled: boolean; artifactKey: string | null; expiresAt: number | null };
 }) {
   const graph = useMemo(() => normalizeProject(project), [project]);
+  const scope = useMemo(() => resolveGraphScope(graph), [graph]);
   const [resetKey, setResetKey] = useState(0);
   const [layoutSeed, setLayoutSeed] = useState(0);
   const sig = `${resetKey}:${layoutSeed}`;
@@ -484,7 +488,7 @@ export function CodeGraph({
         unresolved: graph.unresolved.length,
       },
       coverage: { percentage: graph.coverage.percentage },
-      completeness: { status: graph.completeness.status },
+      completeness: { status: analysisQuality(graph).status },
       adaptedFromLegacy: (project as RepoDNAProjectV2).schemaVersion !== '2.0.0',
     }),
     [graph, project]
@@ -906,6 +910,7 @@ export function CodeGraph({
           <button className="export-pill-btn" onClick={() => setLayoutSeed((k) => k + 1)} type="button"><RefreshCw size={14} aria-hidden="true" /> Re-layout</button>
         </div>
       </section>
+      {scope.kind === 'compacted' ? <GraphScopeSummary scope={scope} /> : null}
       <div className="code-graph-controls">
         <input
           className="search-input"
