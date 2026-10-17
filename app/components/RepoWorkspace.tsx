@@ -1558,6 +1558,8 @@ function WorkspaceContent() {
 
   function showAnalysisError(controller: AbortController, error: unknown, fallbackMessage: string) {
     if (!isActiveAnalysis(controller) || error instanceof AnalysisCancelledError) return;
+    const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' ? error.code : null;
+    setAnalyzingErrorCode(code);
     setAnalyzingError(getUserFacingErrorMessage(error, fallbackMessage));
   }
 
