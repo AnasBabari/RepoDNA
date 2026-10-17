@@ -1,5 +1,6 @@
 import type { RepoDNAProjectV2 } from '../analyzer/v2/types';
 import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
+import { orderTechnologies } from '../technology-evidence';
 import type {
   CallRecord,
   FileRecord,
@@ -153,13 +154,13 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     description: entrypoint.evidence[0] ?? `Review this ${entrypoint.kind} entrypoint.`,
   }));
 
-  const technologies = [...new Set([
+  const technologies = orderTechnologies(project.repository, [...new Set([
     ...project.repository.fingerprint.languages,
     ...project.repository.fingerprint.frameworks,
     ...project.repository.fingerprint.infrastructure,
     ...project.repository.fingerprint.databases,
     ...project.repository.fingerprint.buildTools,
-  ])];
+  ])]);
   const dependencyCycles = filterMeaningfulDependencyCycles(project.dependencyCycles);
   const complexityScore = Math.min(
     100,

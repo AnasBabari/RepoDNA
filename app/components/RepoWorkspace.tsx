@@ -20,6 +20,7 @@ import { Activity, Dna, Download, FileCode, FileText, LayoutDashboard, Map, Mess
 import { analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import { filterMeaningfulDependencyCycles } from '../lib/analyzer/cycles';
 import { analysisQuality } from '../lib/analysis-quality';
+import { primaryTechnology } from '../lib/technology-evidence';
 import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
 import {
   analyzePublicRepositoryDurably,
@@ -493,7 +494,8 @@ function Overview({
   const isFullyMapped = quality.status === 'FULLY_MAPPED';
   const mapQualityLabel = quality.label;
   const extractionNotices = project.diagnostics.filter((item) => item.code === 'SOURCE_EXTRACTION_LIMIT_REACHED');
-  const primaryTechnology = project.technologies[0] ?? Object.keys(project.repository.languages)[0] ?? 'Custom application';
+  const primaryStack = primaryTechnology(project.repository);
+  const otherTechnologyCount = project.technologies.filter((name) => name !== primaryStack.name).length;
 
   return (
     <div className="view-stack overview-view">
@@ -575,8 +577,8 @@ function Overview({
             </article>
             <article>
               <span>Built with</span>
-              <strong>{primaryTechnology}</strong>
-              <p>{project.technologies.length > 1 ? `Plus ${project.technologies.length - 1} other detected technologies.` : 'Primary detected technology.'}</p>
+              <strong>{primaryStack.name}</strong>
+              <p>{primaryStack.evidence}{otherTechnologyCount > 0 ? ` Plus ${otherTechnologyCount} other detected technologies.` : ''}</p>
             </article>
             <article>
               <span>Map quality</span>
