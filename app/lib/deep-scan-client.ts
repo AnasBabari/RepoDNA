@@ -1,5 +1,7 @@
 import { PUBLIC_REPOSITORY_INGESTION_LIMITS, type DiscoveredFile, type IngestionInventory, type IngestionLimits } from './analyzer/types';
 import { getUserFacingErrorMessage } from './user-facing-errors';
+import { parseGitHubUrl } from './analyzer/ingestion';
+import { resolveGitHubRevision } from './github-revision';
 
 /**
  * Browser deep-scan client for private repositories.
@@ -47,6 +49,8 @@ interface DiscoveryPayload {
   skipped: { path: string; reason: string }[];
   name: string;
   source: string;
+  commitSha?: string;
+  analyzedRef?: string;
   inventory?: IngestionInventory;
 }
 
@@ -175,7 +179,11 @@ export async function analyzePublicRepositoryInBrowser(options: {
   let discovery: DiscoveryPayload;
   try {
     const { fetchGitHubRepo } = await import('./analyzer/ingestion');
-    discovery = await fetchGitHubRepo(url, PUBLIC_REPOSITORY_INGESTION_LIMITS);
+    const parsed = parseGitHubUrl(url);
+    if (!parsed) throw Object.assign(new Error('Invalid GitHub URL.'), { code: 'INVALID_GITHUB_URL' });
+    const revision = await resolveGitHubRevision(parsed, { signal });
+    onProgress?.({ stage: 'resolve', message: `Resolved ${revision.requestedRef} → ${revision.commitSha}; scanning the full repository`, percent: 2 });
+    discovery = await fetchGitHubRepo(url, PUBLIC_REPOSITORY_INGESTION_LIMITS, undefined, { commitSha: revision.commitSha });
   } catch (error) {
     if ((error as Error).name === 'AbortError') throw error;
     return mapBrowserAnalysisFailure(error);
@@ -252,6 +260,7 @@ export async function analyzePrivateRepositoryInBrowser(options: {
   signal?: AbortSignal;
 }): Promise<DeepScanOutcome> {
   const { url, onProgress, signal } = options;
+  if (parseGitHubUrl(url)?.refSegments) return analyzePrivateRepositoryViaTree(options);
 
   onProgress?.({ stage: 'download', message: 'Fetching private repository source…', percent: 2 });
 

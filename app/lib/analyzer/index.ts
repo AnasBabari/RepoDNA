@@ -457,7 +457,12 @@ export async function analyzeGitHubUrl(
   options?: AnalyzeOptions
 ): Promise<RepoDNAProject> {
   const discovery = await fetchGitHubRepo(url, limits, accessToken);
-  return analyzeRepositoryFiles(discovery, options);
+  const project = await analyzeRepositoryFiles(discovery, options);
+  if (discovery.commitSha) {
+    project.repository.commitSha = discovery.commitSha;
+    project.repository.analyzedRef = discovery.analyzedRef;
+  }
+  return project;
 }
 
 export async function analyzeUploadedFiles(
