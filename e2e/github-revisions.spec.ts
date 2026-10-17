@@ -4,7 +4,7 @@ import { installRevisionHarness, REVISION_REPO, REVISION_SHA } from './helpers/r
 import { generateExportToSuccess, openExportDialog } from './helpers/app-driver';
 import type { RepoDNAProjectV2 } from '../app/lib/analyzer/v2/types';
 
-for (const [path, ref] of [['/tree/test-v1', 'test-v1'], ['/blob/feature%2Freview/main.py', 'feature/review']]) {
+for (const [path, ref] of [['/tree/test-v1', 'test-v1'], ['/blob/feature%2Freview/main.py', 'feature/review'], [`/commit/${REVISION_SHA}`, REVISION_SHA]]) {
   test(`actual browser scan preserves ${path} through worker, workspace and exports`, async ({ page, baseURL }) => {
     const calls = await installRevisionHarness(page, baseURL, [ref]);
     const errors: string[] = [];
