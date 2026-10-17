@@ -36,6 +36,11 @@ local test is not evidence that production contains a fix.
 6. `codex/evidence-based-roles` → `codex/inventory-evidence`: primary language
    ranked by recorded evidence, syntax-backed components, neutral Python src/app
    roles and explicitly heuristic confidence. This batch addresses #8.
+   [PR #29](https://github.com/AnasBabari/RepoDNA/pull/29) is draft and unmerged;
+   hosted CI run 39073700085 passed all jobs at c08616b. Exact-commit preview
+   is READY; protected interactive acceptance remains unverified.
+7. `codex/file-ranking-evidence` → `codex/evidence-based-roles`: unique full-path
+   file summaries, merged per-symbol evidence and honest recorded-score scope (#26).
 
 ## Issue-by-issue state
 
@@ -62,7 +67,7 @@ local test is not evidence that production contains a fix.
 | #19 | Browser-copy drift regressions included in PR #22. |
 | #20 | Type generation fix implemented in PR #22; clean hosted CI verifies serial mixed Next/Vinext build orders. |
 | #21 | Pending: development-tool advisories need compatible patches or an explicit time-bounded, reproducible mitigation. Production audit success does not resolve this issue. |
-| #26 | Pending: aggregate file importance before rendering the projected ranked list; repeated train.py keys remain observable. |
+| #26 | Implemented on file-ranking-evidence: unique full-path rankings, merged symbol reasons and explicit score scope. Canonical node data stays unchanged; local verification below and unmerged review remain. |
 | #27 | Implemented on inventory-evidence: browser grammar bytes avoid unsafe Node detection; rejected parser promises retry. Real uploads parse Python/JS/TS/TSX/Go; unmerged review remains. |
 
 ## Analysis-truthfulness verification checkpoint
@@ -132,3 +137,25 @@ are conservatively counted as gaps even if an older artifact flags them resolved
 - Cache namespaces are analyzer 2.0.5 / exporter 1.0.5; old artifacts retain
   their own TTL and evidence. No cache schema, retention or privacy change.
 - These are local results, not a production release. All PRs remain unmerged.
+
+## File-ranking evidence verification checkpoint
+
+- 416 unit tests and 34 Python tests pass. Lint has zero errors and the same
+  two authentication-navigation warnings; production dependency audit is clean.
+- Vinext build → typecheck → Next production build → typecheck pass without
+  deleting generated outputs or changing environment files.
+- Five focused Vinext browser tests pass on frozen sources: normalized rows,
+  original nanoGPT duplicate-key regression, canonical JSON preservation and
+  the preceding Python/React role flows. An invalid new fixture was corrected
+  to include its referenced file; production guards were not weakened.
+- Full local Next production browser suite: 57 passed / one expected feature-off
+  skip with Parquet enabled. JSON, CSV, Cypher, Parquet and TXT downloads passed;
+  the new 390px long-symbol evidence check has no ranking-panel overflow.
+- `docs/file-rankings.md` defines distinct-node score sums, merged evidence,
+  path identity and pre-capped ranking scope. The TXT report no longer calls
+  node-link incidences unique dependents. Canonical JSON/graph facts are unchanged;
+  this projection-only fix needs no cache migration.
+- No merge or production deployment. Remaining audit issues above are not
+  resolved by these checks; protected interactive preview acceptance is separate.
+  A fresh Chrome check still redirects to Vercel login, and the browser connector
+  subsequently requests an extension update. No authentication or protection was changed.
