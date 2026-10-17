@@ -8,6 +8,7 @@ const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(val
 export function checkInventoryEvidence(value: unknown, errors: string[], prefix: string): void {
   if (!record(value)) return;
   const error = (message: string) => { if (errors.length < 100) errors.push(`${prefix}.${message}`); };
+  for (const field of ['packageCount', 'declaredDependencyCount']) if (field in value && value[field] !== null && !integer(value[field])) error(`${field} must be a non-negative integer or null`);
   const manifest = value.manifestInventory;
   if (manifest !== undefined) {
     if (!record(manifest)) error('manifestInventory must be an object');
@@ -15,6 +16,7 @@ export function checkInventoryEvidence(value: unknown, errors: string[], prefix:
       if (!only(manifest, ['status', 'packages', 'declarations', 'problems'])) error('manifestInventory contains unknown fields');
       if (!['complete', 'partial', 'unavailable'].includes(manifest.status as string)) error('manifestInventory.status is invalid');
       const arrays = [['packages', 2000], ['declarations', 50000], ['problems', 2000]] as const;
+      if (manifest.status === 'unavailable' && arrays.some(([field]) => Array.isArray(manifest[field]) && manifest[field].length > 0)) error('unavailable manifest evidence must not contain observations');
       for (const [field, cap] of arrays) {
         const items = manifest[field];
         if (!Array.isArray(items) || items.length > cap) { error(`manifestInventory.${field} exceeds its array bound or is missing`); continue; }
@@ -43,6 +45,7 @@ export function checkInventoryEvidence(value: unknown, errors: string[], prefix:
       if (!only(counts, ['classificationVersion', ...fields])) error('sourceInventory contains unknown fields');
       const sum = ['supportedSourceFileCount', 'unsupportedSourceFileCount', 'evidenceFileCount', 'otherFileCount', 'ignoredFileCount', 'generatedFileCount'].reduce((total, key) => total + (counts[key] as number), 0);
       if (counts.totalFileCount !== sum || counts.firstPartySourceFileCount !== (counts.supportedSourceFileCount as number) + (counts.unsupportedSourceFileCount as number)) error('sourceInventory classes do not reconcile');
+      if ((counts.candidateFileCount as number) > (counts.totalFileCount as number) || (counts.skippedSupportedSourceFileCount as number) > (counts.supportedSourceFileCount as number)) error('sourceInventory subset counts exceed their populations');
     }
   }
   const outcomes = value.sourceOutcomes;

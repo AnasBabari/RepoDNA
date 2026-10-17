@@ -2,12 +2,12 @@ import type { ManifestSink } from './manifest-types';
 import { pythonDependencyName } from './manifest-python';
 
 export function readRequirements(file: string, files: Map<string, string>, sink: ManifestSink, chain: string[] = []): void {
-  sink.step(file);
   if (chain.includes(file) || chain.length >= 16) { sink.problem(file, 'MANIFEST_DYNAMIC_UNRESOLVED', 'Requirements include is cyclic or exceeds depth 16.'); return; }
   const content = files.get(file);
   if (content === undefined) { sink.problem(file, 'MANIFEST_DYNAMIC_UNRESOLVED', 'A local requirements include was not acquired.'); return; }
+  sink.step(file, new TextEncoder().encode(content).byteLength);
   for (const raw of content.replace(/\\\r?\n/g, '').split(/\r?\n/)) {
-    const value = raw.trim();
+    const value = raw.trim().replace(/\s+#.*$/, '');
     if (!value || value.startsWith('#')) continue;
     sink.step(file);
     const include = value.match(/^(?:-r\s*|--requirement(?:=|\s+))(.+)$/);
@@ -47,9 +47,9 @@ export function readSetupCfg(file: string, content: string, sink: ManifestSink):
   }
 }
 export function readGoMod(file: string, content: string, sink: ManifestSink): void {
-  const module = content.match(/^\s*module\s+([^\s]+)\s*$/m);
-  sink.package(file, 'go', module ? module[1].replace(/^"|"$/g, '') : null);
-  if (!module) sink.problem(file, 'MANIFEST_PARSE_FAILED', 'The go.mod module directive is missing or unsupported.');
+  const moduleDirective = content.match(/^\s*module\s+([^\s]+)\s*(?:\/\/.*)?$/m);
+  sink.package(file, 'go', moduleDirective ? moduleDirective[1].replace(/^"|"$/g, '') : null);
+  if (!moduleDirective) sink.problem(file, 'MANIFEST_PARSE_FAILED', 'The go.mod module directive is missing or unsupported.');
   let block = false;
   for (const raw of content.split(/\r?\n/)) {
     const line = raw.trim();
@@ -57,5 +57,7 @@ export function readGoMod(file: string, content: string, sink: ManifestSink): vo
     if (line === ')') { block = false; continue; }
     const match = (block ? line : line.replace(/^require\s+/, '')).match(/^([^\s]+)\s+v\d[^\s]*(?:\s|$)/);
     if (match && (block || /^require\s+/.test(line))) sink.dependency(file, 'go', match[1], 'runtime', /\/\/\s*indirect/.test(line) ? 'require.indirect' : 'require');
+    else if ((block && line && !line.startsWith('//')) || /^require\s+/.test(line)) sink.problem(file, 'MANIFEST_PARSE_FAILED', 'A go.mod require entry could not be read statically.');
   }
+  if (block) sink.problem(file, 'MANIFEST_PARSE_FAILED', 'The go.mod require block is incomplete.');
 }

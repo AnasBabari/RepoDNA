@@ -5,7 +5,7 @@ import { readPythonToml } from './manifest-python';
 import { readGoMod, readRequirements, readSetupCfg } from './manifest-text';
 import { isIgnored, isGeneratedPath } from './source-policy';
 
-export const MANIFEST_LIMITS = { files: 2000, declarations: 50000, visits: 100000, bytes: 1000000 } as const;
+export const MANIFEST_LIMITS = { files: 2000, declarations: 50000, visits: 100000, bytes: 1000000, expandedBytes: 32 * 1024 * 1024 } as const;
 class ManifestBudgetReached extends Error {}
 export function isRequirementsManifest(path: string): boolean {
   return /^requirements(?:[._-][\w.-]+)?\.txt$/i.test(path.split('/').pop() ?? '') || (path.split('/').includes('requirements') && path.endsWith('.txt'));
@@ -20,8 +20,9 @@ export function collectManifestInventory(files: DiscoveredFile[], skipped: { pat
   const issues = new Set<string>();
   const root = (file: string) => file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '.';
   let visits = 0;
+  let expandedBytes = 0;
   const sink: ManifestSink = {
-    step() { if (++visits > MANIFEST_LIMITS.visits) throw new ManifestBudgetReached(); },
+    step(_file, bytes = 0) { expandedBytes += bytes; if (++visits > MANIFEST_LIMITS.visits || expandedBytes > MANIFEST_LIMITS.expandedBytes || bytes > MANIFEST_LIMITS.bytes) throw new ManifestBudgetReached(); },
     package(file, ecosystem, name, workspace = false) {
       if (name && name.length > 512) { sink.problem(file, 'MANIFEST_PARSE_FAILED', 'Package name exceeds the metadata bound.'); name = null; }
       const key = JSON.stringify([ecosystem, root(file)]);
@@ -51,6 +52,7 @@ export function collectManifestInventory(files: DiscoveredFile[], skipped: { pat
     const name = file.path.split('/').pop();
     try {
       if (new TextEncoder().encode(file.content).byteLength > MANIFEST_LIMITS.bytes) { sink.problem(file.path, 'MANIFEST_INVENTORY_LIMIT_REACHED', 'Manifest exceeds the 1 MB parsing bound.'); continue; }
+      sink.step(file.path, isRequirementsManifest(file.path) ? 0 : new TextEncoder().encode(file.content).byteLength);
       if (name === 'package.json') readPackageJson(file.path, file.content, sink);
       else if (name === 'pyproject.toml' || name === 'Pipfile') readPythonToml(file.path, file.content, sink);
       else if (isRequirementsManifest(file.path)) readRequirements(file.path, textByPath, sink);
