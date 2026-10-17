@@ -36,6 +36,9 @@ export class GraphExportError extends Error {
 }
 
 export interface GraphExportManifest {
+  manifestInventory?: import('../../analyzer/manifest-types').ManifestInventory;
+  sourceInventory?: import('../../analyzer/source-inventory').SourcePathCounts;
+  sourceOutcomes?: import('../../analyzer/source-inventory').SourceOutcomes;
   exportSchemaVersion: typeof GRAPH_EXPORT_SCHEMA_VERSION;
   exporterVersion: string;
   sourceSchemaVersion: '2.0.0' | '1.1.0';
