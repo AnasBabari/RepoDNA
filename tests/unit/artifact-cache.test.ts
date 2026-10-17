@@ -17,6 +17,12 @@ import {
 } from '../../app/lib/analyzer/v2/artifact-cache';
 
 const cacheKey = { owner: 'owner', repo: 'repo', commitSha: 'a'.repeat(40) };
+function pinnedProject() {
+  const project = makeV2Fixture();
+  project.repository.source = `https://github.com/owner/repo/tree/${cacheKey.commitSha}`;
+  project.repository.analyzedRef = cacheKey.commitSha;
+  return project;
+}
 
 describe('public artifact cache integrity', () => {
   beforeEach(() => {
@@ -49,7 +55,7 @@ describe('public artifact cache integrity', () => {
   });
 
   it('returns a valid cached artifact only after schema validation', async () => {
-    const project = makeV2Fixture();
+    const project = pinnedProject();
     const serialized = JSON.stringify(project);
     mocks.get.mockResolvedValue({
       statusCode: 200,
@@ -61,6 +67,20 @@ describe('public artifact cache integrity', () => {
     expect(cached?.project.schemaVersion).toBe('2.0.0');
     expect(cached?.summary.nodeCount).toBe(project.nodes.length);
     expect(mocks.del).not.toHaveBeenCalled();
+  });
+
+  it.each(['commit', 'ref', 'repository', 'private'])('refuses a cached or newly stored %s identity mismatch', async (mismatch) => {
+    const project = pinnedProject();
+    if (mismatch === 'commit') project.repository.commitSha = 'b'.repeat(40);
+    if (mismatch === 'ref') project.repository.analyzedRef = 'HEAD';
+    if (mismatch === 'repository') project.repository.source = `https://github.com/other/repo/tree/${cacheKey.commitSha}`;
+    if (mismatch === 'private') project.repository.source = 'private:repo';
+    const serialized = JSON.stringify(project);
+    mocks.get.mockResolvedValue({ statusCode: 200, blob: { uploadedAt: new Date(), url: 'private-url', size: serialized.length }, stream: new Blob([serialized]).stream() });
+    await expect(readCachedPublicArtifact(cacheKey)).resolves.toBeNull();
+    expect(mocks.del).toHaveBeenCalledOnce();
+    await expect(storePublicArtifact({ ...cacheKey, project })).rejects.toThrow('PUBLIC_ARTIFACT_IDENTITY_MISMATCH');
+    expect(mocks.put).not.toHaveBeenCalled();
   });
 
   it('rejects invalid artifacts before writing to private Blob storage', async () => {

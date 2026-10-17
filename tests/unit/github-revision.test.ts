@@ -5,6 +5,9 @@ import { resolveGitHubRevision, revisionCandidates } from '../../app/lib/github-
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 const sha = 'b'.repeat(40);
 const parse = (suffix = '') => parseGitHubUrl(`https://github.com/owner/repo${suffix}`)!;
+it.each(['/tree/%2e%2e', '/tree/..', '/tree/tag%00', '/blob/main', '/tree/', '/issues/42'])('rejects unsupported or normalization-changing URL %s', (suffix) => {
+  expect(parseGitHubUrl(`https://github.com/owner/repo${suffix}`)).toBeNull();
+});
 function mockRefs(refs: string[]) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const ref = decodeURIComponent(String(input).split('/commits/')[1]);
