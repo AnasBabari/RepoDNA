@@ -28,7 +28,7 @@ COMPONENT_NAMES = {
     "infrastructure": "Infrastructure",
     "tests": "Tests",
     "configuration": "Configuration",
-    "other": "Application core",
+    "other": "Unclassified files",
 }
 COMPONENT_ORDER = [
     "frontend", "api", "services", "domain", "repositories", "database",

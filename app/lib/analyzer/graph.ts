@@ -23,7 +23,7 @@ export const COMPONENT_NAMES: Record<string, string> = {
   infrastructure: 'Infrastructure',
   tests: 'Tests',
   configuration: 'Configuration',
-  other: 'Application core',
+  other: 'Unclassified files',
 };
 
 export const COMPONENT_ORDER = [

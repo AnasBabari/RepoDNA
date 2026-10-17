@@ -22,7 +22,7 @@ it('uses the weakest member heuristic rather than letting one component inflate 
   const files = ['src/App.tsx', 'frontend/helpers.ts', 'app/main.py'].map((path) => ({ id: path, path, parsed: true, error: null })) as FileRecord[];
   const { architecture } = buildArchitecture(files, [], [], []);
   expect(architecture.components.find((area) => area.type === 'frontend')).toMatchObject({ confidence: 0.65, files: ['frontend/helpers.ts', 'src/App.tsx'] });
-  expect(architecture.components.find((area) => area.type === 'other')).toMatchObject({ confidence: 0.35, evidence: ['generic src/app container; no specific layer evidence'] });
+  expect(architecture.components.find((area) => area.type === 'other')).toMatchObject({ name: 'Unclassified files', confidence: 0.35, evidence: ['generic src/app container; no specific layer evidence'] });
 });
 it('maps actual Python src/app and actual React/Next components from syntax evidence', async () => {
   const file = (path: string, content: string) => ({ path, content, size: content.length, hash: path });
