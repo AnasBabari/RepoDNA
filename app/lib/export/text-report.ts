@@ -3,6 +3,7 @@ import type { RepoDNAProjectV2, GraphNode, GraphEdge } from '../analyzer/v2/type
 import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 import { analysisQuality } from '../analysis-quality';
 import { formatGraphCount, GRAPH_COUNT_KEYS, resolveGraphScope } from '../graph-scope';
+import { manifestCounts, unavailableManifests } from '../analyzer/manifest-types';
 
 /**
  * Deterministic plain-text architecture report.
@@ -96,6 +97,8 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   const parsers = v2 ? project.parsers : null;
   const security = v2 ? project.security : null;
   const completeness = analysisQuality(project);
+  const manifestInventory = inventory?.manifestInventory ?? v1Metadata?.manifestInventory ?? unavailableManifests();
+  const declarationCounts = manifestCounts(manifestInventory);
   const scope = v2 ? resolveGraphScope(project) : null;
 
   // ---- Header --------------------------------------------------------------
@@ -160,10 +163,10 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   // 4. Inventory
   out.push(...heading(4, 'Repository inventory'));
   if (inventory) {
-    out.push(`${inventory.acquisitionMode === 'git-tree' ? 'Total tree entries' : 'Total archive entries'}:       ${inventory.totalFileCount}`);
+    out.push(`${inventory.acquisitionMode === 'git-tree' ? 'Total tree entries' : inventory.acquisitionMode === 'local-folder' ? 'Total directory files' : 'Total archive entries'}:       ${inventory.totalFileCount}`);
     out.push(`Total bytes (declared):    ${inventory.totalBytes}`);
     if (inventory.acquisitionMode) {
-      out.push(`Source acquisition:        ${inventory.acquisitionMode === 'git-tree' ? 'Git tree (large-repository mode)' : 'Repository archive'}`);
+      out.push(`Source acquisition:        ${inventory.acquisitionMode === 'git-tree' ? 'Git tree (large-repository mode)' : inventory.acquisitionMode === 'local-folder' ? 'Local directory' : 'Repository archive'}`);
     }
     if (typeof inventory.repositorySizeKb === 'number') {
       out.push(`GitHub size hint (KB):     ${inventory.repositorySizeKb}`);
@@ -177,8 +180,8 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
     out.push(`Unsupported source:        ${inventory.unsupportedSourceFileCount}`);
     out.push(`Ignored (vendor/lockfile): ${inventory.ignoredFileCount}`);
     out.push(`Generated artifacts:       ${inventory.generatedFileCount}`);
-    out.push(`Packages/workspaces:       ${inventory.packageCount}`);
-    out.push(`Declared dependencies:     ${inventory.declaredDependencyCount}`);
+    out.push(`Packages/workspaces:       ${declarationCounts.packages ?? 'not recorded'}`);
+    out.push(`Declared dependencies:     ${declarationCounts.dependencies ?? 'not recorded'}`);
     if (inventory.truncation?.maxFilesReached || inventory.truncation?.maxBytesReached) {
       out.push(`Inventory truncated:       ${inventory.truncation.hitLimits.join(', ') || 'resource limit'}`);
     }
@@ -199,6 +202,12 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
     out.push(`Lines of code:      ${(v1?.repository.lines ?? 0).toLocaleString('en-US')}`);
   }
 
+  out.push(`Manifest inventory: ${manifestInventory.status}${manifestInventory.status === 'partial' ? ' (counts are lower bounds)' : ''}`);
+  out.push('Dependency totals deduplicate by ecosystem + owning root + name; scopes may overlap. Import edges are not declarations.');
+  for (const [scope, count] of Object.entries(declarationCounts.scopes)) out.push(`  Declared ${scope}: ${count ?? 'not recorded'}`);
+  const outcomes = inventory?.sourceOutcomes ?? v1Metadata?.sourceOutcomes;
+  if (outcomes) out.push(`Supported source accounting: ${outcomes.complete} complete + ${outcomes.partial} partial + ${outcomes.failed} failed + ${outcomes.skipped} skipped + ${outcomes.unprocessed} unprocessed = ${outcomes.supported}. Parsed includes complete + partial; these categories must not be double-counted.`);
+
   // 5. Size classification
   out.push(...heading(5, 'Size classification'));
   const sizeFiles = inventory ? inventory.firstPartySourceFileCount : v1?.repository.sourceFileCount ?? 0;
@@ -213,7 +222,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   // 6. Coverage and limitations
   out.push(...heading(6, 'Scan coverage and limitations'));
   if (coverage && completeness) {
-    out.push(`Coverage: ${coverage.percentage}%`);
+    out.push(`Coverage: ${coverage.percentage}%${inventory?.sourceOutcomes ? ' of supported source files parsed (including partial)' : ' (legacy denominator; run a fresh scan for current evidence)'}`);
     out.push(`Completeness: ${completeness.status}`);
     for (const reason of completeness.reasons) out.push(`  - ${reason}`);
     if (coverage.truncationReasons.length > 0) {
@@ -250,16 +259,11 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
 
   // 8. Packages/workspaces
   out.push(...heading(8, 'Packages and workspaces'));
-  if (inventory && inventory.packageCount > 0) {
-    const pkgNodes = nodes.filter((n) => n.kind === 'package' || n.kind === 'workspace');
-    const { rows, total } = takeSorted(pkgNodes, (n) => n.path);
-    for (const p of rows) out.push(`  ${p.qualifiedName} (${p.path})`);
+  if (manifestInventory.packages.length) {
+    const { rows, total } = takeSorted(manifestInventory.packages, (pkg) => `${pkg.ecosystem}:${pkg.root}`);
+    for (const pkg of rows) out.push(`  ${pkg.ecosystem}:${pkg.root} ${pkg.name ?? '(name not recorded)'} — ${pkg.manifests.join(', ')}`);
     if (total > rows.length) out.push(truncationFooter({ total, shown: rows.length }));
-  } else if (inventory) {
-    out.push('  No package/workspace manifests detected.');
-  } else {
-    out.push(`  Local dependencies (v1 metric): ${metrics?.localDependencies ?? 'n/a'}`);
-  }
+  } else out.push(manifestInventory.status === 'unavailable' ? '  Package manifest evidence was not recorded in this artifact.' : '  No package/workspace manifest roots retained.');
 
   // 9. Frameworks and infrastructure
   out.push(...heading(9, 'Frameworks and infrastructure'));
@@ -271,13 +275,12 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
 
   // 10. Declared dependencies
   out.push(...heading(10, 'Declared dependencies'));
-  const depNodes = nodes.filter((n) => n.kind === 'dependency');
-  if (depNodes.length > 0) {
-    const { rows, total } = takeSorted(depNodes, (n) => n.qualifiedName);
-    for (const d of rows) out.push(`  ${d.qualifiedName}`);
+  if (manifestInventory.declarations.length > 0) {
+    const { rows, total } = takeSorted(manifestInventory.declarations, (row) => `${row.ecosystem}:${row.root}:${row.name}:${row.scope}:${row.file}`);
+    for (const row of rows) out.push(`  ${row.ecosystem}:${row.root} ${row.name} [${row.scope}; ${row.group}] — ${row.file}`);
     if (total > rows.length) out.push(truncationFooter({ total, shown: rows.length }));
   } else {
-    out.push(`  External dependencies (v1 metric): ${metrics?.externalDependencies ?? 'n/a'}`);
+    out.push(manifestInventory.status === 'unavailable' ? '  Declared dependencies were not recorded; import counts are not a substitute.' : '  No named dependency declarations retained.');
   }
 
   // 11. Architecture areas
