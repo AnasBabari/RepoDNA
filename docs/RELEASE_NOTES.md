@@ -1,5 +1,8 @@
 # Unreleased — local review candidate
 
+- Manifest-backed package/dependency counts and supported-source coverage replace language/import proxies. Overview, TXT and portable manifests expose declaration scopes, owning roots, observed-path partitions and disjoint parse outcomes; legacy missing evidence is explicitly unavailable.
+- Browser grammar loading uses explicit bytes instead of unreliable Node detection through process shims; failed parser promises can retry without weakening CSP. Real uploaded fixtures cover all five grammars.
+- These inventory semantics use analyzer 2.0.4 / graph exporter 1.0.4 cache namespaces. No production release or merge is implied.
 - Unresolved-only graph mode shows relevant sources/candidates, counts only drawable edges and provides a searchable, paginated evidence list for retained gaps, including null targets and orphan records. Node inspectors link to incident gaps.
 - Compacted artifacts preserve original/retained/omitted graph and resolution-gap counts. All export formats, workflow summaries and the UI distinguish bounded findings from runtime completeness; legacy totals are explicitly unknown and analytics are labelled retained-subgraph only.
 - Per-file symbol/import/call and AST budgets now emit structured extraction-limit provenance rather than silently claiming complete extraction. Syntax validity is reported separately.
