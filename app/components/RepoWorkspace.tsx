@@ -1793,6 +1793,7 @@ function WorkspaceContent() {
         } catch (error) {
           if (controller.signal.aborted) throw new AnalysisCancelledError();
           if (error instanceof DurableAnalysisUnavailableError) {
+            if (error.code === 'GITHUB_REF_NOT_FOUND' && session?.user && !forceClientOnly) return runPrivateBrowserAnalysis();
             if (error.code.startsWith('GITHUB_REF_') || error.code === 'INVALID_GITHUB_URL') throw error;
             failureCode = error.code;
             setAnalyzingRetryAfter(error.retryAfter ?? null);
