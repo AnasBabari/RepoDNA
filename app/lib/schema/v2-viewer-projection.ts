@@ -229,6 +229,9 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     },
     diagnostics: project.diagnostics,
     metadata: {
+      manifestInventory: project.inventory.manifestInventory,
+      sourceInventory: project.inventory.sourceInventory,
+      sourceOutcomes: project.inventory.sourceOutcomes,
       analysisMode: project.metadata?.analysisMode ?? 'canonical-graph-projection',
       executedRepositoryCode: project.security.executedRepositoryCode,
       analyzerVersion: project.metadata?.analyzerVersion,

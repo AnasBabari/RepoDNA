@@ -193,15 +193,8 @@ export async function analyzeRepositoryV2(
     v2.inventory.totalBytes = ingestionInventory.totalBytes ?? v2.inventory.totalBytes;
     v2.inventory.ignoredFileCount = ingestionInventory.ignoredFileCount ?? v2.inventory.ignoredFileCount;
     v2.inventory.generatedFileCount = ingestionInventory.generatedFileCount ?? v2.inventory.generatedFileCount;
-    // firstParty counts from v1 are already truthful (including Go)
-    if (typeof ingestionInventory.firstPartySourceFileCount === 'number') {
-      v2.inventory.firstPartySourceFileCount = ingestionInventory.firstPartySourceFileCount;
-    }
     if (typeof ingestionInventory.candidateFileCount === 'number') {
       v2.inventory.candidateFileCount = ingestionInventory.candidateFileCount;
-    }
-    if (typeof ingestionInventory.unsupportedSourceFileCount === 'number') {
-      v2.inventory.unsupportedSourceFileCount = ingestionInventory.unsupportedSourceFileCount;
     }
     if (ingestionInventory.skippedByReason) {
       v2.inventory.skippedByReason = { ...ingestionInventory.skippedByReason };
@@ -257,7 +250,7 @@ export async function analyzeRepositoryV2(
   v2.coverage.unsupported = v2.inventory.unsupportedSourceFileCount;
   v2.coverage.ignored = v2.inventory.ignoredFileCount;
   v2.coverage.skipped = v2.inventory.skippedByReason ? Object.values(v2.inventory.skippedByReason as Record<string, number>).reduce((a, b) => a + b, 0) : 0;
-  const coverageSourceTotal = ingestionInventory?.firstPartySourceFileCount ?? v1.repository.sourceFileCount;
+  const coverageSourceTotal = v2.inventory.sourceOutcomes?.supported ?? v1.metadata.sourceOutcomes?.supported ?? v1.repository.sourceFileCount;
   if (coverageSourceTotal > 0) {
     v2.coverage.percentage = Math.round((v2.coverage.parsed / coverageSourceTotal) * 1000) / 10;
   }
@@ -323,7 +316,7 @@ export async function analyzeRepositoryV2(
       maxGraphEdges: graphLimits.maxEdges,
     },
     truncated: [...new Set([
-      ...v1.diagnostics.filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_EXTRACTION_LIMIT_REACHED'].includes(d.code)).map((d) => d.code),
+      ...v1.diagnostics.filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_EXTRACTION_LIMIT_REACHED', 'MANIFEST_INVENTORY_LIMIT_REACHED'].includes(d.code)).map((d) => d.code),
       ...(v2.inventory.truncation?.hitLimits ?? []),
       ...graphTruncation,
     ])],
