@@ -166,6 +166,9 @@ export type RepoDNAProject = {
     executedRepositoryCode: boolean;
     analyzerVersion?: string;
     extractionLimits?: import('./analyzer/parser/types').SourceExtractionLimit[];
+    manifestInventory?: import('./analyzer/manifest-types').ManifestInventory;
+    sourceInventory?: import('./analyzer/source-inventory').SourcePathCounts;
+    sourceOutcomes?: import('./analyzer/source-inventory').SourceOutcomes;
     limits: {
       maxFiles: number;
       maxFileBytes: number;

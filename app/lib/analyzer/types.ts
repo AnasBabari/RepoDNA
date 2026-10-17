@@ -13,7 +13,7 @@ import type {
   TechnologyBoundary,
 } from '../types';
 
-export interface IngestionInventory {
+export interface IngestionInventory extends Partial<import('./source-inventory').SourcePathCounts> {
   totalFileCount: number;
   totalBytes: number;
   firstPartySourceFileCount: number;
@@ -24,7 +24,7 @@ export interface IngestionInventory {
   totalArchiveEntries: number;
   skippedByReason: Record<string, number>;
   /** How the source was acquired; tree mode avoids a single large ZIP payload. */
-  acquisitionMode?: 'archive' | 'git-tree';
+  acquisitionMode?: 'archive' | 'git-tree' | 'local-folder';
   /** GitHub's repository size hint, in KB, when tree mode was selected. */
   repositorySizeKb?: number;
   /** Limits that produced a truthful partial inventory rather than a hard failure. */
