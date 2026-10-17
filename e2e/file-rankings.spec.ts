@@ -16,7 +16,7 @@ test('technical file rankings group symbols but preserve canonical evidence and 
   expect(symbols).toHaveLength(2);
   const sourceFile = project.nodes.find((node) => node.path === 'train.py' && node.kind === 'file')!;
   project.nodes.push({ ...sourceFile, id: 'fixture-tools-file', path: 'tools/train.py', name: 'train.py', qualifiedName: 'tools/train.py' });
-  project.nodes.push({ ...symbols[0], id: 'fixture-tools-train', path: 'tools/train.py', qualifiedName: 'tools/train.py::train' });
+  project.nodes.push({ ...symbols[0], id: 'fixture-tools-train', path: 'tools/train.py', qualifiedName: `tools/train.py::${'LongSymbol'.repeat(20)}` });
   project.centrality.mostConnected = [
     { nodeId: symbols[0].id, score: 17, inDegree: 10, outDegree: 7 },
     { nodeId: symbols[1].id, score: 11, inDegree: 6, outDegree: 5 },
@@ -44,6 +44,9 @@ test('technical file rankings group symbols but preserve canonical evidence and 
   const artifact = JSON.parse(readFileSync((await (await downloadPromise).path())!, 'utf8')) as RepoDNAProjectV2;
   expect(artifact.nodes).toEqual(project.nodes);
   expect(artifact.centrality).toEqual(project.centrality);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.locator('.important-panel').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await page.screenshot({ path: 'test-results/file-rankings-mobile.png', fullPage: true });
   expect(duplicateWarnings).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
