@@ -24,6 +24,8 @@ export interface ParsedGitHubUrl {
   owner: string;
   repo: string;
   canonicalUrl: string;
+  view?: 'tree' | 'blob';
+  refSegments?: string[];
 }
 
 export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
@@ -72,7 +74,7 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
       }
 
       // Reject non-standard ports or username/password in URL object
-      if (parsed.username || parsed.password) {
+      if (parsed.username || parsed.password || parsed.port) {
         return null;
       }
 
@@ -82,6 +84,15 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
         const repo = segments[1].replace(/\.git$/i, '');
 
         if (isValidOwnerRepo(owner, repo)) {
+          if (segments.length > 2) {
+            const view = segments[2];
+            if (view !== 'tree' && view !== 'blob') return null;
+            const refSegments = segments.slice(3).map(decodeURIComponent);
+            if (!refSegments.length || (view === 'blob' && refSegments.length < 2)) return null;
+            if (refSegments.some((part) => !part || /[\x00-\x20\x7f\\]/.test(part) || part === '.' || part === '..')) return null;
+            if (parsed.pathname.length > 4096 || refSegments.length > 32) return null;
+            return { owner, repo, view, refSegments, canonicalUrl: `https://github.com/${owner}/${repo}/${view}/${refSegments.map(encodeURIComponent).join('/')}` };
+          }
           return { owner, repo, canonicalUrl: `https://github.com/${owner}/${repo}` };
         }
       }
