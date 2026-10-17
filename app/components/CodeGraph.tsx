@@ -903,7 +903,7 @@ export function CodeGraph({
           <p>Explore the repository as a living constellation. Drag nodes to pull the web around, hover to trace neighborhoods, click to expand.</p>
         </div>
         <div className="view-heading-actions">
-          <span>{graph.nodes.length} entities · {graph.edges.length} relationships</span>
+          <span>{graph.nodes.length} retained entities · {graph.edges.length} retained relationships</span>
           <button className="export-pill-btn" onClick={() => setExportOpen(true)} type="button">
             <Download size={14} aria-hidden="true" /> Export
           </button>
