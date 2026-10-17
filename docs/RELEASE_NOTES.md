@@ -1,5 +1,6 @@
 # Unreleased — local review candidate
 
+- Unresolved-only graph mode shows relevant sources/candidates, counts only drawable edges and provides a searchable, paginated evidence list for retained gaps, including null targets and orphan records. Node inspectors link to incident gaps.
 - Compacted artifacts preserve original/retained/omitted graph and resolution-gap counts. All export formats, workflow summaries and the UI distinguish bounded findings from runtime completeness; legacy totals are explicitly unknown and analytics are labelled retained-subgraph only.
 - Per-file symbol/import/call and AST budgets now emit structured extraction-limit provenance rather than silently claiming complete extraction. Syntax validity is reported separately.
 - One conservative completeness interpretation is shared by the overview, canonical pipeline, TXT and graph exports; 100% parsed files does not imply fully resolved relationships.
