@@ -244,6 +244,12 @@ export function resolveCalls(calls: CallRecord[], symbols: SymbolRecord[], impor
   }
 }
 
+export function classificationConfidence(category: string, evidence: string[]): number {
+  if (category === 'other') return 0.35;
+  if (category === 'frontend') return evidence.includes('UI component symbol') ? 0.94 : evidence.includes('presentation-capable file extension') ? 0.82 : 0.65;
+  return ['api', 'database', 'tests'].includes(category) ? 0.94 : 0.82;
+}
+
 export function classifyFile(path: string, routeFiles: Set<string>, symbolTypes: Set<string>): [category: string, evidence: string[]] {
   const lowered = path.toLowerCase();
   const parts = new Set(lowered.split('/'));
@@ -266,8 +272,10 @@ export function classifyFile(path: string, routeFiles: Set<string>, symbolTypes:
   if (['workers', 'worker', 'jobs', 'tasks', 'queues'].some((p) => parts.has(p))) {
     return ['workers', ['worker, job, or queue path']];
   }
-  if (['frontend', 'client', 'components', 'pages', 'views', 'ui'].some((p) => parts.has(p)) || symbolTypes.has('component')) {
-    return ['frontend', ['frontend path or component symbols']];
+  if (symbolTypes.has('component')) return ['frontend', ['UI component symbol']];
+  if (/\.(jsx|tsx|vue|svelte|html|css|scss|sass|less)$/.test(lowered)) return ['frontend', ['presentation-capable file extension']];
+  if (/\.(js|ts|mjs|cjs)$/.test(lowered) && ['frontend', 'client', 'components', 'pages', 'views', 'ui'].some((p) => parts.has(p))) {
+    return ['frontend', ['frontend directory with JS/TS source; UI behavior unverified']];
   }
   if (['domain', 'core'].some((p) => parts.has(p))) {
     return ['domain', ['domain or core path']];
@@ -279,7 +287,7 @@ export function classifyFile(path: string, routeFiles: Set<string>, symbolTypes:
     return ['configuration', ['configuration file']];
   }
   if (['src', 'app'].some((p) => parts.has(p))) {
-    return ['frontend', ['frontend container path']];
+    return ['other', ['generic src/app container; no specific layer evidence']];
   }
   return ['other', ['source file outside a recognized layer']];
 }
@@ -303,6 +311,7 @@ export function buildArchitecture(
   const groups: Record<string, string[]> = {};
   const evidence: Record<string, Set<string>> = {};
   const fileComponents: Record<string, string> = {};
+  const componentConfidences = new Map<string, number>();
 
   for (const file of files) {
     const [component, reasons] = classifyFile(file.path, routeFiles, symbolTypesByFile.get(file.path) ?? new Set());
@@ -311,13 +320,14 @@ export function buildArchitecture(
     groups[component].push(file.path);
     reasons.forEach((r) => evidence[component].add(r));
     fileComponents[file.path] = component;
+    componentConfidences.set(component, Math.min(componentConfidences.get(component) ?? 1, classificationConfidence(component, reasons)));
   }
 
   const components: ArchitectureComponent[] = [];
   for (const type of COMPONENT_ORDER) {
     const paths = groups[type];
     if (!paths || paths.length === 0) continue;
-    const confidence = ['api', 'database', 'tests'].includes(type) ? 0.94 : 0.82;
+    const confidence = componentConfidences.get(type) ?? 0.35;
     components.push({
       id: type,
       name: COMPONENT_NAMES[type] ?? type,
