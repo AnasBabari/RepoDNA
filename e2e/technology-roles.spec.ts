@@ -38,6 +38,7 @@ test('actual Python src/app uploads remain unclassified in the visible architect
   expect(artifact.architecture.components.find((area) => area.type === 'other')).toMatchObject({ name: 'Unclassified files', confidence: 0.35 });
   await page.locator('.sidebar button[title="Architecture"]').click();
   await expect(page.locator('.architecture-node .arch-node-title')).toContainText(['Unclassified files']);
+  await expect(page.locator('.arch-confidence-text')).toContainText(['35% heuristic']);
   await expect(page.locator('.architecture-node')).not.toContainText(['Frontend']);
 });
 test('actual React and Next-style uploads keep frontend evidence without absorbing Python files', async ({ page }) => {

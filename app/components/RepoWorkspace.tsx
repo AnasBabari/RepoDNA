@@ -1221,7 +1221,7 @@ function DetailPanel({
       <div className="detail-icon">{component.name.slice(0, 1)}</div>
       <h2>{component.name}</h2>
       <p className="muted">
-        Inferred structural cluster based on source paths, symbol definitions, and dependency directions.
+        Inferred cluster based on recorded evidence. Confidence is a heuristic, not a measured probability.
       </p>
       <dl>
         <div>
@@ -1229,8 +1229,8 @@ function DetailPanel({
           <dd>{component.type}</dd>
         </div>
         <div>
-          <dt>Confidence</dt>
-          <dd className="good">{Math.round(component.confidence * 100)}%</dd>
+          <dt>Heuristic confidence</dt>
+          <dd className={component.confidence >= 0.8 ? 'good' : 'muted'}>{Math.round(component.confidence * 100)}%</dd>
         </div>
         <div>
           <dt>Files</dt>
