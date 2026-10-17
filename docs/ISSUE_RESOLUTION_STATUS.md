@@ -21,11 +21,15 @@ local test is not evidence that production contains a fix.
    hosted CI run 38977698261 passed all jobs for commit 4b61731.
 3. `codex/graph-scope` → `codex/analysis-truthfulness`: original/retained/omitted
    counts, explicit export/analytics scope and unknown legacy totals (#5).
-   [PR #24](https://github.com/AnasBabari/RepoDNA/pull/24) is unmerged; 47 local
-   browser tests passed / one expected skip. Hosted build jobs passed; browser
-   smoke remains a separate running gate at the checkpoint.
+   [PR #24](https://github.com/AnasBabari/RepoDNA/pull/24) is unmerged;
+   hosted CI run 39048581092 passed all jobs for commit 0b3a195.
 4. `codex/unresolved-relationships` → `codex/graph-scope`: inspectable retained
    resolution-gap records, null-target filtering and actual canvas counts (#6).
+   [PR #25](https://github.com/AnasBabari/RepoDNA/pull/25) is unmerged;
+   hosted CI run 39049499842 passed all jobs for commit 7b0c683.
+5. `codex/inventory-evidence` → `codex/unresolved-relationships`: manifest-backed
+   declarations, supported-source coverage, unavailable legacy counts, bounded
+   provenance and a browser grammar-loader fix found during real upload tests.
 
 ## Issue-by-issue state
 
@@ -33,11 +37,11 @@ local test is not evidence that production contains a fix.
 | --- | --- |
 | #1 | Production dependency patches in PR #22; production audit clean, hosted CI passed. Full interactive preview/release verification pending. |
 | #2 | Cypher comment metadata inert in PR #22; adversarial fixtures and real Neo4j double import verified. |
-| #3 | Implemented in analysis-truthfulness: all five Tree-sitter languages, exact/lower-bound omitted counts, AST budgets, schema/UI/TXT/all export provenance. Local verification passed; review/hosted checks pending. |
+| #3 | Implemented in PR #23: all five Tree-sitter languages, extraction/AST bounds and schema/UI/TXT/export provenance. Local and hosted CI passed; unmerged review/interactive preview acceptance remain. |
 | #4 | Implemented in analysis-truthfulness: conservative shared quality; nanoGPT's 444 unresolved relationships and compacted/bounded fixtures have browser regressions. |
-| #5 | Implemented in graph-scope: pre-compaction/global counts, bounded-export scope and retained-subgraph analytics disclosure. Unit and targeted browser checks pass; full review checks pending. |
-| #6 | Implemented in unresolved-relationships: searchable/paginated evidence including orphan records, source inspector links, relevant-only nodes and actual rendered-edge counts. 368 unit tests and targeted browser/type checks pass; full review gates pending. |
-| #7 | Pending: source coverage/package/dependency inventory semantics. Partial/failed per-file deduplication is improved in #3, not the whole issue. |
+| #5 | Implemented in PR #24: original/retained/omitted scope and bounded-export disclosure. Hosted CI passed; review and interactive preview acceptance remain. |
+| #6 | Implemented in PR #25: searchable retained gaps, null targets, relevant-only nodes and drawable-edge counts. 368 unit / 31 Python and both local browser variants passed; hosted CI passed. Unmerged. |
+| #7 | Implemented on inventory-evidence: manifest roots/scopes, supported-source denominator, reconciled outcomes, schema/UI/TXT/all export evidence and nullable legacy counts. Local verification below; unmerged review remains. |
 | #8 | Pending: Python src-layout architecture roles and primary-language selection. |
 | #9 | Pending: honor explicit tree/blob refs during GitHub analysis. |
 | #10 | Partially addressed by visible bundled-snapshot provenance; sample short-circuit/reanalyze behavior still pending. |
@@ -52,6 +56,8 @@ local test is not evidence that production contains a fix.
 | #19 | Browser-copy drift regressions included in PR #22. |
 | #20 | Type generation fix implemented in PR #22; clean hosted CI verifies serial mixed Next/Vinext build orders. |
 | #21 | Pending: development-tool advisories need compatible patches or an explicit time-bounded, reproducible mitigation. Production audit success does not resolve this issue. |
+| #26 | Pending: aggregate file importance before rendering the projected ranked list; repeated train.py keys remain observable. |
+| #27 | Implemented on inventory-evidence: browser grammar bytes avoid unsafe Node detection; rejected parser promises retry. Real uploads parse Python/JS/TS/TSX/Go; unmerged review remains. |
 
 ## Analysis-truthfulness verification checkpoint
 
@@ -83,3 +89,25 @@ not a reason to omit acceptance tests or narrow any audit issue.
 
 The #6 cache namespace is analyzer 2.0.3 / exporter 1.0.3: dangling endpoints
 are conservatively counted as gaps even if an older artifact flags them resolved.
+
+## Inventory-evidence verification checkpoint
+
+- 391 unit tests and 31 Python tests pass; production dependency audit has zero
+  findings. The 11 development-tool findings (8 high, 3 moderate) remain #21.
+- Lint has zero errors and the same two existing authentication-navigation
+  warnings; no lint rule or CSP policy was relaxed.
+- Vinext build → typecheck → Next production build → typecheck passed, with
+  no deletion of generated outputs. New caches use analyzer 2.0.4 / exporter
+  1.0.4; see `docs/inventory-evidence.md` for count and bound definitions.
+- Full local Next production browser suite: 52 passed / one expected skip
+  with Parquet disabled. Separate enabled-Parquet export/inventory suite:
+  11 passed / one expected skip, including actual Parquet downloads. Both flags
+  were process-local; these are local production builds, not live Vercel.
+- A real Requests-like ZIP verifies 37 complete source files despite eight
+  Makefiles, four declared dependencies, provenance in UI/JSON/TXT and current
+  source accounting. Real uploaded Python/JS/TS/TSX/Go fixtures all parse.
+- JSON, CSV, Parquet and Cypher's base64 manifest retain identical inventory
+  evidence in serializer regressions. Legacy unknown totals are null, not zero.
+- Protected interactive Vercel preview acceptance remains separate: local
+  development OIDC is expired. No token was printed, env file overwritten,
+  deployment protection disabled, production deployment promoted or PR merged.
