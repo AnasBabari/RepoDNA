@@ -465,7 +465,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   if (centrality && centrality.highCoupling.length > 0) {
     for (const h of centrality.highCoupling.slice(0, MAX_LIST)) {
       const node = nodes.find((n) => n.id === h.nodeId);
-      out.push(`  ${node ? node.path + ' :: ' + node.qualifiedName : h.nodeId}: ${h.connections} dependents — treat changes as high risk`);
+      out.push(`  ${node ? node.path + ' :: ' + node.qualifiedName : h.nodeId}: ${h.connections} recorded node links (not unique dependents) — inspect relationship evidence before assessing impact`);
     }
   } else {
     const hc = metrics?.highCouplingFiles ?? [];

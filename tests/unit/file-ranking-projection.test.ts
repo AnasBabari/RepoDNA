@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { projectV2ForWorkspace } from '../../app/lib/schema/v2-viewer-projection';
+import { generateTextReport } from '../../app/lib/export/text-report';
 import { makeV2Fixture, mkNode } from './export/fixtures';
 
 it('aggregates ranked symbols by normalized full file path without changing the canonical graph', () => {
@@ -32,4 +33,7 @@ it('aggregates ranked symbols by normalized full file path without changing the 
   ]);
   expect(view.metrics.highCouplingFiles).toEqual([{ file: 'src/train.py', connections: 18 }]);
   expect(project).toEqual(original);
+  const report = generateTextReport(project);
+  expect(report).toContain('11 recorded node links (not unique dependents)');
+  expect(report).not.toContain('11 dependents');
 });

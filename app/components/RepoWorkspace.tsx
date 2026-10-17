@@ -770,7 +770,7 @@ function Overview({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Structural importance</p>
-                <h2>Highest-impact files</h2>
+                <h2>Recorded file rankings</h2>
                 {deepProject && <p className="muted">Scores sum retained node records per file, not unique inter-file dependencies. Internal links can count twice; unranked files are not assessed.</p>}
               </div>
               <span>Top {Math.min(5, project.important_files.length)}</span>

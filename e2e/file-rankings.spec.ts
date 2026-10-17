@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { RepoDNAProjectV2 } from '../app/lib/analyzer/v2/types';
+import { assertArchitectureConsistency } from '../app/lib/analysis-lifecycle';
+import { projectV2ForWorkspace } from '../app/lib/schema/v2-viewer-projection';
 
 const sample = JSON.parse(readFileSync('public/samples/nanogpt.json', 'utf8')) as RepoDNAProjectV2;
 
@@ -12,12 +14,15 @@ test('technical file rankings group symbols but preserve canonical evidence and 
   const project = structuredClone(sample);
   const symbols = project.nodes.filter((node) => node.path === 'train.py' && node.kind === 'function').slice(0, 2);
   expect(symbols).toHaveLength(2);
+  const sourceFile = project.nodes.find((node) => node.path === 'train.py' && node.kind === 'file')!;
+  project.nodes.push({ ...sourceFile, id: 'fixture-tools-file', path: 'tools/train.py', name: 'train.py', qualifiedName: 'tools/train.py' });
   project.nodes.push({ ...symbols[0], id: 'fixture-tools-train', path: 'tools/train.py', qualifiedName: 'tools/train.py::train' });
   project.centrality.mostConnected = [
     { nodeId: symbols[0].id, score: 17, inDegree: 10, outDegree: 7 },
     { nodeId: symbols[1].id, score: 11, inDegree: 6, outDegree: 5 },
     { nodeId: 'fixture-tools-train', score: 5, inDegree: 3, outDegree: 2 },
   ];
+  assertArchitectureConsistency(projectV2ForWorkspace(project));
   const duplicateWarnings: string[] = [];
   const pageErrors: string[] = [];
   page.on('console', (message) => {
@@ -26,6 +31,7 @@ test('technical file rankings group symbols but preserve canonical evidence and 
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.route('**/samples/nanogpt.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(project) }));
   await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+  await expect(page.locator('.workspace')).toBeVisible();
   await page.getByRole('button', { name: 'Technical', exact: false }).click();
   const rows = page.locator('.important-grid article');
   await expect(rows).toHaveCount(2);
@@ -48,6 +54,7 @@ test('the bundled nanoGPT technical overview has unique file rows without duplic
     if (/same key|unique.*key/i.test(message.text())) warnings.push(message.text());
   });
   await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+  await expect(page.locator('.workspace')).toBeVisible();
   await page.getByRole('button', { name: 'Technical', exact: false }).click();
   const names = await page.locator('.important-grid article strong').allTextContents();
   expect(names.length).toBeGreaterThan(0);
