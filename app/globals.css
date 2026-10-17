@@ -4146,3 +4146,9 @@ button.file-row:hover {
 .graph-scope-table-wrap { overflow-x: auto; }
 .graph-scope-summary table { width: 100%; border-collapse: collapse; text-align: left; }
 .graph-scope-summary th, .graph-scope-summary td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.unresolved-relationship-list { padding: 16px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.unresolved-relationship-list summary { cursor: pointer; }
+.unresolved-relationship-list label { display: grid; gap: 6px; }
+.unresolved-relationship-list ul { padding-left: 20px; }
+.unresolved-relationship-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.unresolved-pagination { display: flex; flex-wrap: wrap; gap: 8px; }
