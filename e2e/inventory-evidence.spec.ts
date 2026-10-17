@@ -13,6 +13,11 @@ test('real ZIP analysis excludes Makefiles from source coverage and presents man
   await expect(page.locator('.preview-warning')).toBeVisible();
   await page.locator('input[accept=".zip,application/zip,.json,application/json"]').setInputFiles({ name: 'requests-like.zip', mimeType: 'application/zip', buffer: Buffer.from(zipSync(entries)) });
   await expect(page.locator('.workspace')).toBeVisible({ timeout: 60_000 });
+  const jsonDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'JSON', exact: true }).click();
+  const artifact = JSON.parse(readFileSync((await (await jsonDownload).path())!, 'utf8'));
+  const parserProblems = artifact.diagnostics.filter((item: { code: string }) => item.code.startsWith('TREE_SITTER_')).slice(0, 1);
+  expect(artifact.metadata.sourceOutcomes.failed, JSON.stringify(parserProblems)).toBe(0);
   const evidence = page.getByRole('region', { name: 'Inventory evidence' });
   await expect(evidence).toContainText('Supported source: 37 complete + 0 partial + 0 failed + 0 skipped + 0 unprocessed = 37');
   await expect(evidence).toContainText('evidence files: 9');
@@ -37,4 +42,19 @@ test('older snapshots disclose unavailable manifest evidence instead of proxy co
   await expect(evidence).toContainText('older snapshots cannot establish these counts');
   await expect(evidence).toContainText('Legacy source accounting');
   await expect(evidence.locator('.coverage-grid > div').first()).toHaveText('Package rootsNot recorded');
+});
+test('real browser uploads load all five supported grammars without environment-shim failures', async ({ page }) => {
+  const sources = { 'module.py': 'def greet():\n    return 1\n', 'module.js': 'export function greet() { return 1; }', 'module.ts': 'export function greet(): number { return 1; }', 'view.tsx': 'export function View() { return <main>Hello</main>; }', 'main.go': 'package main\nfunc greet() int { return 1 }\n' };
+  const entries = Object.fromEntries(Object.entries(sources).map(([path, content]) => [`fixture/${path}`, strToU8(content)]));
+  await page.goto('/');
+  await expect(page.locator('.preview-warning')).toBeVisible();
+  await page.locator('input[accept=".zip,application/zip,.json,application/json"]').setInputFiles({ name: 'grammar-fixture.zip', mimeType: 'application/zip', buffer: Buffer.from(zipSync(entries)) });
+  await expect(page.locator('.workspace')).toBeVisible({ timeout: 60_000 });
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'JSON', exact: true }).click();
+  const artifact = JSON.parse(readFileSync((await (await download).path())!, 'utf8'));
+  expect(artifact.metadata.analysisMode).toBe('static-typescript-tree-sitter');
+  expect(artifact.metadata.sourceOutcomes).toEqual({ supported: 5, complete: 5, partial: 0, failed: 0, skipped: 0, unprocessed: 0 });
+  expect(artifact.diagnostics.filter((item: { code: string }) => item.code.startsWith('TREE_SITTER_'))).toEqual([]);
+  expect(artifact.symbols.filter((symbol: { name: string }) => ['greet', 'View'].includes(symbol.name))).toHaveLength(5);
 });
