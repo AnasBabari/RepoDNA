@@ -1,5 +1,6 @@
 # Unreleased — local review candidate
 
+- Compacted artifacts preserve original/retained/omitted graph and resolution-gap counts. All export formats, workflow summaries and the UI distinguish bounded findings from runtime completeness; legacy totals are explicitly unknown and analytics are labelled retained-subgraph only.
 - Per-file symbol/import/call and AST budgets now emit structured extraction-limit provenance rather than silently claiming complete extraction. Syntax validity is reported separately.
 - One conservative completeness interpretation is shared by the overview, canonical pipeline, TXT and graph exports; 100% parsed files does not imply fully resolved relationships.
 - Analyzer 2.0.1 and graph exporter 1.0.1 use versioned cache identities so earlier optimistic artifacts and old serializer bytes are not reused. Schema versions remain compatible; existing entries expire under their original retention policy.

@@ -17,6 +17,10 @@ local test is not evidence that production contains a fix.
 2. `codex/analysis-truthfulness` → `codex/launch-hardening-review`:
    extraction-limit provenance, shared completeness interpretation and cache
    versioning. This is a stacked review batch, not an independent main release.
+   [PR #23](https://github.com/AnasBabari/RepoDNA/pull/23) is unmerged;
+   hosted CI run 38977698261 passed all jobs for commit 4b61731.
+3. `codex/graph-scope` → `codex/analysis-truthfulness`: original/retained/omitted
+   counts, explicit export/analytics scope and unknown legacy totals (#5).
 
 ## Issue-by-issue state
 
@@ -26,7 +30,7 @@ local test is not evidence that production contains a fix.
 | #2 | Cypher comment metadata inert in PR #22; adversarial fixtures and real Neo4j double import verified. |
 | #3 | Implemented in analysis-truthfulness: all five Tree-sitter languages, exact/lower-bound omitted counts, AST budgets, schema/UI/TXT/all export provenance. Local verification passed; review/hosted checks pending. |
 | #4 | Implemented in analysis-truthfulness: conservative shared quality; nanoGPT's 444 unresolved relationships and compacted/bounded fixtures have browser regressions. |
-| #5 | Pending: pre-compaction/global counts, explicit bounded-export scope, reduced-graph analytics disclosure. |
+| #5 | Implemented in graph-scope: pre-compaction/global counts, bounded-export scope and retained-subgraph analytics disclosure. Unit and targeted browser checks pass; full review checks pending. |
 | #6 | Pending: inspectable null-target unresolved relationships and honest rendered-edge counts. |
 | #7 | Pending: source coverage/package/dependency inventory semantics. Partial/failed per-file deduplication is improved in #3, not the whole issue. |
 | #8 | Pending: Python src-layout architecture roles and primary-language selection. |
@@ -64,3 +68,10 @@ local test is not evidence that production contains a fix.
 Cache migration is non-destructive: analyzer 2.0.1 / exporter 1.0.1 use new keys;
 older artifacts/exports retain their original TTL and are not returned by new
 lookups. Cache schema, retention, consent and private-data policy are unchanged.
+
+## Incremental-commit policy
+
+From 17 October 2026, each new commit must change fewer than 100 total lines
+(additions + deletions, including tests/docs). Measure the staged diff before
+committing. Existing pushed history is preserved. This is a review-size rule,
+not a reason to omit acceptance tests or narrow any audit issue.

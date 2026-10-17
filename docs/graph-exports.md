@@ -143,3 +143,40 @@ npm run build:vercel
 ```
 
 The Neo4j command is environment-gated: if Docker is unavailable it reports a skip and exits successfully; when Docker is available it performs the full two-import verification.
+
+## Graph scope (review changes)
+
+An export includes **all retained artifact findings**, not necessarily all facts
+extracted before graph compaction. Canvas filters and display limits do not
+remove facts from an export; parser budgets and canonical compaction do.
+
+New canonical artifacts and every graph-format manifest include `graphScope`:
+
+- `kind`: `uncompacted` or `compacted`. Uncompacted does not imply runtime or
+  parser completeness; consult `completeness`, coverage and extraction limits.
+- `original`, `retained`, `omitted`: counts for `nodes`, `relationships`,
+  `unresolvedRelationships` (union of unresolved records and null-target,
+  unresolved or ambiguous edges), and `ambiguousRelationships` (a subset).
+- `analyticsScope`: `uncompacted-extracted-graph` or `retained-subgraph`.
+  Communities, cycles and centrality on a compacted artifact describe only the
+  retained subgraph. They cannot establish absence of cycles in omitted code.
+
+Counts are captured before and after compaction. Older compacted artifacts did
+not retain original counts: those fields and their omitted counts are `null`,
+not zero. UI/TXT render `null` as “unknown”. No totals are guessed from prose
+diagnostic messages. Negative/inconsistent originals are treated as unknown.
+
+`manifest.counts` still counts the actual exported tables, including any
+normalization placeholders. It is distinct from `graphScope.retained`, which
+counts canonical facts before export normalization. JSON carries the manifest;
+CSV and Parquet include `manifest.json`; Cypher embeds the identical manifest
+as base64 UTF-8 in an inert ASCII comment. TXT provides the same scope and
+original/retained/omitted counts in plain language.
+
+Analyzer 2.0.2 and exporter 1.0.2 invalidate earlier cache identities without
+deleting old entries or changing retention/privacy policy. Optional additive
+schema fields preserve compatibility with older artifacts.
+
+Durable workflow summaries also carry `graphScope`. Their `unresolvedCount`
+is the whole-analysis count (nullable for older compacted artifacts), while
+`retainedUnresolvedCount` is the count in the retained canonical graph.
