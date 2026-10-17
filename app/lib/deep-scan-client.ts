@@ -254,7 +254,17 @@ function mapArchiveFailure(status: number, body: { code?: string; message?: stri
   }
 }
 
-export async function analyzePrivateRepositoryInBrowser(options: {
+  async function readArchiveFailure(response: Response): Promise<{ code?: string; message?: string; installSettingsUrl?: string }> {
+    const body: unknown = await response.json().catch(() => null);
+    if (!body || typeof body !== 'object') return {};
+    const details = 'error' in body && body.error && typeof body.error === 'object' ? body.error : body;
+    return {
+      code: 'code' in details && typeof details.code === 'string' ? details.code : undefined,
+      installSettingsUrl: 'installSettingsUrl' in details && typeof details.installSettingsUrl === 'string' ? details.installSettingsUrl : undefined,
+    };
+  }
+
+  export async function analyzePrivateRepositoryInBrowser(options: {
   url: string;
   onProgress?: (p: WorkerProgress) => void;
   signal?: AbortSignal;
@@ -284,7 +294,7 @@ export async function analyzePrivateRepositoryInBrowser(options: {
   }
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
+    const body = await readArchiveFailure(res);
     if (body?.code === 'ARCHIVE_TOO_LARGE') {
       return analyzePrivateRepositoryViaTree({ url, onProgress, signal });
     }
@@ -323,7 +333,7 @@ async function analyzePrivateRepositoryViaTree(options: {
   signal?: AbortSignal;
 }): Promise<DeepScanOutcome> {
   const { url, onProgress, signal } = options;
-  onProgress?.({ stage: 'download', message: 'ZIP is over 25 MB — fetching the repository Git tree instead…', percent: 2 });
+  onProgress?.({ stage: 'download', message: parseGitHubUrl(url)?.refSegments ? 'Fetching the selected private revision via the Git tree…' : 'ZIP is over 25 MB — fetching the repository Git tree instead…', percent: 2 });
 
   let res: Response;
   try {
@@ -345,7 +355,7 @@ async function analyzePrivateRepositoryViaTree(options: {
   }
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
+    const body = await readArchiveFailure(res);
     return mapArchiveFailure(res.status, body ?? {});
   }
 
