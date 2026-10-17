@@ -3,6 +3,7 @@ import type { RepoDNAProject } from '../types';
 import type { GraphEdge, GraphNode, GraphNodeKind, RepoDNAProjectV2 } from '../analyzer/v2/types';
 import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 import { analysisQuality } from '../analysis-quality';
+import { resolveGraphScope } from '../graph-scope';
 
 export type AnyRepoDNAArtifact = RepoDNAProject | RepoDNAProjectV2;
 export type ArtifactVersion = '1.1.0' | '2.0.0' | 'unknown';
@@ -460,6 +461,7 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     external_systems: project.external_systems,
     metadata: project.metadata,
   };
+  result.graphScope = resolveGraphScope(result);
   const { status, reasons } = analysisQuality(result);
   result.completeness = { status, reasons };
   return result;

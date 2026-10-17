@@ -7,6 +7,7 @@ import type { GraphEdge, GraphNode, RepoDNAProjectV2 } from './types';
 import { detectCentrality, detectCommunities, detectDependencyCycles } from './analytics';
 import { analysisQuality } from '../../analysis-quality';
 import { V2_ANALYZER_VERSION } from './version';
+import { graphCounts, recordedGraphScope } from '../../graph-scope';
 
 const DEFAULT_GRAPH_LIMITS = {
   // The full repository inventory is retained separately. These caps keep a
@@ -271,7 +272,9 @@ export async function analyzeRepositoryV2(
     maxEdges: Math.max(1, Math.floor(options?.graphLimits?.maxEdges ?? DEFAULT_GRAPH_LIMITS.maxEdges)),
   };
   const tCompact = Date.now();
+  const originalGraphCounts = graphCounts(v2);
   const graphTruncation = compactGraph(v2, graphLimits);
+  v2.graphScope = recordedGraphScope(originalGraphCounts, graphCounts(v2));
   timings.compact = Date.now() - tCompact;
   v2.coverage.truncationReasons = [...new Set([...v2.coverage.truncationReasons, ...graphTruncation])];
 
