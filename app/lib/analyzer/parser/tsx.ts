@@ -1,4 +1,5 @@
 import { extractionNotices, retainFact, visitAstNode } from './extraction-budget';
+import { promoteComponentSymbols } from './component-evidence';
 import type { ExtractionLimit } from './types';
 import type { Node as SyntaxNode } from 'web-tree-sitter';
 import { getTreeSitterParser } from './runtime';
@@ -32,7 +33,7 @@ export class TsxSyntaxParser implements SyntaxParser {
       if (!root) return { facts: failedFacts('tsx') };
       const state: WalkState = { symbols: [], imports: [], calls: [], errorNodes: 0, extractionLimits: [], nodeCount: 0, jsxOwners: new Set() };
       for (const child of root.namedChildren) walk(child, state, [], [], 1, input.source);
-      for (const symbol of state.symbols) if (symbol.kind === 'function' && /^[A-Z]/.test(symbol.name) && state.jsxOwners.has(symbol.qualifiedName)) symbol.kind = 'component';
+      promoteComponentSymbols(state.symbols, state.jsxOwners, state.imports, state.calls);
       const hasErrors = state.errorNodes > 0 || root.hasError;
       return { facts: { language: 'tsx', symbols: state.symbols, imports: state.imports, calls: state.calls, hasMainGuard: false, parse: { success: true, hasErrors, errorNodes: state.errorNodes }, extractionLimits: extractionNotices(state), quality: hasErrors || state.extractionLimits.length > 0 ? 'partial' : 'complete' } };
     } catch { return { facts: failedFacts('tsx') }; } finally { if (tree) try { tree.delete(); } catch {} }

@@ -1,4 +1,5 @@
 import { extractionNotices, retainFact, visitAstNode } from './extraction-budget';
+import { promoteComponentSymbols } from './component-evidence';
 import type { ExtractionLimit } from './types';
 import type { Node as SyntaxNode } from 'web-tree-sitter';
 import { getTreeSitterParser } from './runtime';
@@ -61,7 +62,7 @@ export class JavaScriptSyntaxParser implements SyntaxParser {
       }
 
       const hasErrors = state.errorNodes > 0 || root.hasError;
-      for (const symbol of state.symbols) if (symbol.kind === 'function' && /^[A-Z]/.test(symbol.name) && state.jsxOwners.has(symbol.qualifiedName)) symbol.kind = 'component';
+      promoteComponentSymbols(state.symbols, state.jsxOwners, state.imports, state.calls);
       const quality = hasErrors || state.extractionLimits.length > 0 ? 'partial' as const : 'complete' as const;
 
       return {
