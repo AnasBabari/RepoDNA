@@ -496,6 +496,7 @@ function Overview({
   const extractionNotices = project.diagnostics.filter((item) => item.code === 'SOURCE_EXTRACTION_LIMIT_REACHED');
   const primaryStack = primaryTechnology(project.repository);
   const otherTechnologyCount = project.technologies.filter((name) => name !== primaryStack.name).length;
+  const snapshotCommit = deepProject?.repository.commitSha ?? project.repository.commitSha;
 
   return (
     <div className="view-stack overview-view">
@@ -543,6 +544,7 @@ function Overview({
               View request paths
             </button>
           </div>
+          {snapshotCommit && <p className="muted snapshot-provenance" aria-label="Analyzed GitHub snapshot">Full repository at commit <code>{snapshotCommit}</code>. A file or directory URL does not narrow the scan.</p>}
         </div>
         <div className="analysis-trust-card">
           <span>✓</span>
@@ -1653,7 +1655,7 @@ function WorkspaceContent() {
   ) {
     const cleanUrl = url.trim();
     const parsed = parseGitHubUrl(cleanUrl);
-    const targetUrl = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}` : cleanUrl;
+    const targetUrl = parsed?.canonicalUrl ?? cleanUrl;
     const shortKey = parsed ? `${parsed.owner.toLowerCase()}/${parsed.repo.toLowerCase()}` : '';
     const canonicalFull = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}`.toLowerCase() : '';
 
@@ -1732,10 +1734,11 @@ function WorkspaceContent() {
 
     try {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
+        if (!parsed) throw Object.assign(new Error('Invalid GitHub repository URL.'), { code: 'INVALID_GITHUB_URL' });
         if (requestedOrigin === 'github-private') return runPrivateBrowserAnalysis();
 
         // Check pre-cached sample artifacts without bypassing the shared progress lifecycle.
-        if (!forceClientOnly) {
+        if (!forceClientOnly && !parsed.refSegments) {
           const samplePath =
             SAMPLE_ARTIFACTS[targetUrl] ||
             SAMPLE_ARTIFACTS[canonicalFull] ||
@@ -1790,6 +1793,7 @@ function WorkspaceContent() {
         } catch (error) {
           if (controller.signal.aborted) throw new AnalysisCancelledError();
           if (error instanceof DurableAnalysisUnavailableError) {
+            if (error.code.startsWith('GITHUB_REF_') || error.code === 'INVALID_GITHUB_URL') throw error;
             failureCode = error.code;
             setAnalyzingRetryAfter(error.retryAfter ?? null);
             if (!error.fallbackAvailable) {
@@ -1880,7 +1884,8 @@ function WorkspaceContent() {
 
         try {
           return await runPublicBrowserFallback();
-        } catch {
+        } catch (fallbackError) {
+          if (fallbackError && typeof fallbackError === 'object' && 'code' in fallbackError && String(fallbackError.code).startsWith('GITHUB_REF_')) throw fallbackError;
           // The fallback failure is recorded via trackAnalysisFailed above the
           // throw path; the user-facing code intentionally reports the primary
           // server failure, and the fallback error may contain local file paths
