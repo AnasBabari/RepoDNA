@@ -64,7 +64,7 @@ local test is not evidence that production contains a fix.
 | #11 | Implemented on repository-pagination: upstream OAuth pages are not sliced twice, App results remain installation-scoped, OAuth first-100 search is explicitly disclosed, truncated listings cannot create endless Next pages, and stale requests are cancelled. Seven API tests and picker browser test pass; unmerged review remains. |
 | #12 | Implemented in PR #34: snapshot-scoped IDs, original IDs, lossless manifest and membershipReason. Real Neo4j 5 verified two repositories/two commits imported twice without collisions; container removed. Unmerged review remains. |
 | #13 | Implemented on graph-keyboard: Enter/Space share pointer inspection/expansion, contextual labels, detail focus and restoration on close/Escape. Two browser regressions and typecheck pass; unmerged. |
-| #14 | Pending: non-export modal focus, semantics and restoration. |
+| #14 | Implemented on modal-accessibility: shared focus lifecycle, inert background, named dialogs, Escape and trigger restoration. Desktop/mobile private reconnect, feedback, New analysis and export tests: 10 passed, one expected Parquet-gate skip; typecheck passed. Unmerged. |
 | #15 | Responsive controls verified at 320–1440px in PR #22; long names and actual 200% browser zoom still need acceptance tests. |
 | #16 | Pending: feedback delivery must not acknowledge a dropped submission. |
 | #17 | Scan-counter abort/single-flight lifecycle implemented in PR #22; unit/browser and hosted smoke pass. |
