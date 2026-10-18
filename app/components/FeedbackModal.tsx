@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { trackFeedbackSubmitted } from '../lib/analytics';
+import { useModalFocus } from './useModalFocus';
 
 const USE_CASES = [
   { id: 'onboarding', label: 'Onboarding to new codebase' },
@@ -34,6 +35,7 @@ export function FeedbackModal({
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const dialogRef = useModalFocus<HTMLDivElement>(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -79,11 +81,16 @@ export function FeedbackModal({
     <div className="dialog-backdrop" onClick={onClose}>
       <div
         className="dialog-card"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="feedback-title"
+        tabIndex={-1}
         style={{ maxWidth: '580px', width: '92%' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-header">
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>
+          <h2 id="feedback-title" style={{ fontSize: '1.25rem', fontWeight: 600 }}>
             {submitted ? 'Thank You!' : 'RepoDNA Feedback & Beta Survey'}
           </h2>
           <button className="icon-button" onClick={onClose} aria-label="Close survey">
