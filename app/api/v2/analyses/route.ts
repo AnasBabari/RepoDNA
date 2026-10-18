@@ -4,6 +4,8 @@ import { getRun, start } from 'workflow/api';
 import { createApiErrorResponse } from '../../../lib/api-error';
 import { isJsonBodyTooLarge, readBoundedJson } from '../../../lib/bounded-json';
 import { parseGitHubUrl } from '../../../lib/analyzer';
+import { resolveGitHubRevision, type GitHubRevision } from '../../../lib/github-revision';
+import { IngestionError } from '../../../lib/analyzer/types';
 import { isPublicArtifactCacheConfigured } from '../../../lib/analyzer/v2/artifact-cache';
 import { auth } from '../../../lib/auth';
 import { checkAnalysisRateLimit } from '../../../lib/ratelimit';
@@ -19,20 +21,6 @@ const NO_STORE_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
 };
 
-async function resolveCommitSha(owner: string, name: string): Promise<string | null> {
-  try {
-    const response = await fetch(`https://api.github.com/repos/${owner}/${name}/commits/HEAD`, {
-      headers: { 'User-Agent': 'RepoDNA-V2/2.0', Accept: 'application/vnd.github.v3+json' },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as { sha?: string };
-    return typeof data.sha === 'string' && data.sha.length >= 7 ? data.sha : null;
-  } catch {
-    return null;
-  }
-}
 function runEndpoints(runId: string) {
   return {
     statusEndpoint: `/api/v2/analyses/${runId}`,
@@ -124,7 +112,6 @@ export async function POST(request: NextRequest) {
   if (!parsed) {
     return createApiErrorResponse('INVALID_GITHUB_URL', 'Invalid GitHub repository URL.', 400);
   }
-  const repositoryUrl = `https://github.com/${parsed.owner}/${parsed.repo}`;
 
   if (!isPublicArtifactCacheConfigured()) {
     return createApiErrorResponse(
@@ -135,15 +122,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const commitSha = await resolveCommitSha(parsed.owner, parsed.repo);
-  if (!commitSha) {
-    return createApiErrorResponse(
-      'UPSTREAM_GITHUB_ERROR',
-      'Could not resolve the public repository HEAD commit.',
-      502,
-      { fallbackAvailable: true }
-    );
+  let revision: GitHubRevision;
+  try {
+    revision = await resolveGitHubRevision(parsed);
+  } catch (error) {
+    return error instanceof IngestionError
+      ? createApiErrorResponse(error.code, error.message, error.status, { fallbackAvailable: !error.code.startsWith('GITHUB_REF_') })
+      : createApiErrorResponse('UPSTREAM_GITHUB_ERROR', 'Could not resolve the requested repository revision.', 502, { fallbackAvailable: true });
   }
+  const { commitSha, sourceUrl: repositoryUrl } = revision;
 
   try {
     // Only public identity is serialized into the durable workflow. OAuth/App
@@ -154,6 +141,7 @@ export async function POST(request: NextRequest) {
         owner: parsed.owner,
         repo: parsed.repo,
         commitSha,
+        requestedRef: revision.requestedRef,
       },
     ]);
 

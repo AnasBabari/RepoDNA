@@ -121,6 +121,9 @@ export async function GET(request: NextRequest) {
     try {
       let rawRepos: GitHubAppRepository[];
       let listingTruncated = false;
+      let paginatedUpstream = false;
+      let upstreamHasMore = false;
+      let searchScope: string | null = null;
 
       if (isGitHubAppMode()) {
         // A GitHub App user token can enumerate only the installations and
@@ -200,6 +203,15 @@ export async function GET(request: NextRequest) {
         }
 
         rawRepos = (await ghResponse.json()) as GitHubAppRepository[];
+        const link = ghResponse.headers.get('link');
+        const next = /<[^>]+>;\s*rel="next"/.test(link ?? '');
+        if (query) {
+          listingTruncated = next || rawRepos.length === GITHUB_PAGE_SIZE;
+          searchScope = `OAuth search covers only the ${GITHUB_PAGE_SIZE} most recently updated accessible repositories. Older repositories may be omitted; clear search to browse all pages.`;
+        } else {
+          paginatedUpstream = true;
+          upstreamHasMore = link ? next : rawRepos.length === REPOSITORIES_PER_RESPONSE;
+        }
       }
 
       let filtered = rawRepos;
@@ -220,7 +232,7 @@ export async function GET(request: NextRequest) {
       });
 
       const startIndex = (page - 1) * REPOSITORIES_PER_RESPONSE;
-      const pageRepositories = filtered.slice(startIndex, startIndex + REPOSITORIES_PER_RESPONSE);
+      const pageRepositories = paginatedUpstream ? filtered : filtered.slice(startIndex, startIndex + REPOSITORIES_PER_RESPONSE);
 
       // Map strictly to safe subset (no sensitive metadata)
       const repositories: SafeRepositoryItem[] = pageRepositories.map((repository) => ({
@@ -240,7 +252,9 @@ export async function GET(request: NextRequest) {
         success: true,
         page,
         perPage: REPOSITORIES_PER_RESPONSE,
-        hasMore: listingTruncated || startIndex + repositories.length < filtered.length,
+        hasMore: paginatedUpstream ? upstreamHasMore : startIndex + repositories.length < filtered.length,
+        listingTruncated,
+        searchScope,
         repositories,
       });
     } finally {

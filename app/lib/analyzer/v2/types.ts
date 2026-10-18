@@ -84,6 +84,9 @@ export interface GraphEdge {
 }
 
 export interface Inventory {
+  manifestInventory?: import('../manifest-types').ManifestInventory;
+  sourceInventory?: import('../source-inventory').SourcePathCounts;
+  sourceOutcomes?: import('../source-inventory').SourceOutcomes;
   extractionLimits?: import('../parser/types').SourceExtractionLimit[];
   totalFileCount: number;
   totalBytes: number;
@@ -96,10 +99,10 @@ export interface Inventory {
   unsupportedSourceFileCount: number;
   ignoredFileCount: number;
   generatedFileCount: number;
-  packageCount: number;
-  declaredDependencyCount: number;
+  packageCount: number | null;
+  declaredDependencyCount: number | null;
   skippedByReason: Record<string, number>;
-  acquisitionMode?: 'archive' | 'git-tree';
+  acquisitionMode?: 'archive' | 'git-tree' | 'local-folder';
   repositorySizeKb?: number;
   languageCoverage: Record<string, number>;
   truncation?: {

@@ -180,3 +180,9 @@ schema fields preserve compatibility with older artifacts.
 Durable workflow summaries also carry `graphScope`. Their `unresolvedCount`
 is the whole-analysis count (nullable for older compacted artifacts), while
 `retainedUnresolvedCount` is the count in the retained canonical graph.
+
+The subsequent unresolved-inspector fix uses analyzer 2.0.3 / exporter 1.0.3.
+Gap counts also include dangling source/target endpoints flagged optimistically
+by older artifacts. The graph's evidence list includes orphan records even
+when their edge/evidence was not retained; it explicitly says those fields are
+unavailable rather than inventing them.

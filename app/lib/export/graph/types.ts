@@ -1,7 +1,7 @@
 import type { GraphEdgeStatus, GraphEdgeType, GraphNodeKind, GraphScope, SourceRange } from '../../analyzer/v2/types';
 
 export const GRAPH_EXPORT_SCHEMA_VERSION = '1.0.0' as const;
-export const GRAPH_EXPORTER_VERSION = '1.0.2' as const;
+export const GRAPH_EXPORTER_VERSION = '1.0.7' as const;
 
 export type GraphExportFormat = 'graph-json' | 'csv' | 'cypher' | 'parquet';
 
@@ -36,6 +36,9 @@ export class GraphExportError extends Error {
 }
 
 export interface GraphExportManifest {
+  manifestInventory?: import('../../analyzer/manifest-types').ManifestInventory;
+  sourceInventory?: import('../../analyzer/source-inventory').SourcePathCounts;
+  sourceOutcomes?: import('../../analyzer/source-inventory').SourceOutcomes;
   exportSchemaVersion: typeof GRAPH_EXPORT_SCHEMA_VERSION;
   exporterVersion: string;
   sourceSchemaVersion: '2.0.0' | '1.1.0';

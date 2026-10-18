@@ -32,12 +32,14 @@ import { readFileSync, rmSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
 const GENERATED_DIR = join(REPO_ROOT, 'tests', 'integration', 'generated');
 const CYPHER_PATH = join(GENERATED_DIR, 'cypher.txt');
 const COUNTS_PATH = join(GENERATED_DIR, 'counts.json');
+const SNAPSHOT_DIR = join(REPO_ROOT, 'test-results', 'neo4j-snapshots');
 const NEO4J_IMAGE = 'neo4j:5-community';
 const READY_CAP_MS = 120_000;
 const QUERY_BUDGET_MS = 180_000;
@@ -189,13 +191,13 @@ function regenerateFixturesViaVitest() {
   log('regenerating cypher.txt + counts.json via vitest fixture test...');
   const command =
     process.platform === 'win32'
-      ? 'npx.cmd vitest run tests/integration/graph-export-cypher.fixture.test.ts'
-      : 'npx vitest run tests/integration/graph-export-cypher.fixture.test.ts';
+      ? 'npx.cmd vitest run tests/integration/graph-export-cypher.fixture.test.ts tests/unit/export/cypher-snapshots.test.ts'
+      : 'npx vitest run tests/integration/graph-export-cypher.fixture.test.ts tests/unit/export/cypher-snapshots.test.ts';
   const result = spawnSync(command, {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     shell: true, // required on Windows so npx.cmd can execute
-    env: { ...process.env, REPODNA_KEEP_EXPORT_FIXTURES: '1' },
+    env: { ...process.env, REPODNA_KEEP_EXPORT_FIXTURES: '1', REPODNA_KEEP_SNAPSHOT_FIXTURES: '1' },
     timeout: 240_000,
     maxBuffer: 32 * 1024 * 1024,
   });
@@ -263,6 +265,34 @@ function importCypherOnce(runIndex) {
   dockerOut(['cp', CYPHER_PATH, `${containerName}:/tmp/cypher.txt`]);
   cypherShell(['--format', 'plain', '-f', '/tmp/cypher.txt']);
   log(`import #${runIndex} finished in ${((Date.now() - startedImport) / 1000).toFixed(1)}s`);
+}
+
+function verifySnapshotIsolation() {
+  const snapshots = JSON.parse(readFileSync(join(SNAPSHOT_DIR, 'snapshots.json'), 'utf8'));
+  if (snapshots.length !== 3 || new Set(snapshots.map((item) => item.key)).size !== 3) throw new Error('Expected three distinct snapshot fixtures');
+  for (const snapshot of snapshots) {
+    if (!/^[a-f0-9]{64}$/.test(snapshot.key) || !/^[0-2]\.cypher$/.test(snapshot.filename)) throw new Error('Invalid snapshot fixture identity');
+    const key = snapshot.key;
+    const counts = snapshot.manifest.counts;
+    dockerOut(['cp', join(SNAPSHOT_DIR, snapshot.filename), `${containerName}:/tmp/snapshot.cypher`]);
+    for (const pass of [1, 2]) {
+      cypherShell(['--format', 'plain', '-f', '/tmp/snapshot.cypher']);
+      for (const [label, expected] of [['RepoDNAEntity', counts.nodes], ['RepoDNAGroup', counts.groups], ['RepoDNAUnresolved', counts.unresolved]]) {
+        const actual = countOf(`MATCH (n:${label} {snapshotKey:'${key}'}) RETURN count(n);`);
+        if (actual !== expected) throw new Error(`${label} snapshot ${key} pass ${pass}: ${actual} != ${expected}`);
+      }
+      const actualEdges = countOf(`MATCH ()-[r {snapshotKey:'${key}'}]->() RETURN count(r);`);
+      if (actualEdges !== counts.relationships + counts.groupMemberships) throw new Error('Snapshot relationship count mismatch');
+    }
+    const manifestOutput = runQuery(`MATCH (s:RepoDNASnapshot {id:'${key}'}) RETURN s.manifestBase64;`);
+    const encoded = manifestOutput.match(/[A-Za-z0-9+/=]{80,}/)?.[0];
+    if (!encoded || !isDeepStrictEqual(JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')), snapshot.manifest)) throw new Error('Lossy snapshot manifest');
+    const lostReasons = countOf(`MATCH ()-[r:MEMBER_OF {snapshotKey:'${key}'}]->() WHERE r.membershipReason IS NULL RETURN count(r);`);
+    if (lostReasons) throw new Error('Lost membership provenance');
+  }
+  const crossed = countOf('MATCH (a)-[r]->(b) WHERE r.snapshotKey IS NOT NULL AND (a.snapshotKey <> r.snapshotKey OR b.snapshotKey <> r.snapshotKey) RETURN count(r);');
+  if (crossed) throw new Error('Cross-snapshot relationship endpoints');
+  log('CROSS-SNAPSHOT VERIFIED: 2 repositories / 2 commits, repeat imports, manifest and membership provenance');
 }
 
 /*
@@ -424,6 +454,7 @@ async function main() {
     }
 
     log('IDEMPOTENCY VERIFIED: re-import grew nothing; counts equal the export manifest;');
+    verifySnapshotIsolation();
     log('all 3 constraints present; hostile payloads stored strictly as escaped DATA.');
     log(`DONE in ${elapsed()} — exit 0`);
   } catch (error) {

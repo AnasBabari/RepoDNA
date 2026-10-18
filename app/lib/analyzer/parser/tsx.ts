@@ -1,4 +1,5 @@
 import { extractionNotices, retainFact, visitAstNode } from './extraction-budget';
+import { promoteComponentSymbols } from './component-evidence';
 import type { ExtractionLimit } from './types';
 import type { Node as SyntaxNode } from 'web-tree-sitter';
 import { getTreeSitterParser } from './runtime';
@@ -16,7 +17,7 @@ import type {
 } from './types';
 
 
-interface WalkState { symbols: SyntaxSymbol[]; imports: SyntaxImport[]; calls: SyntaxCall[]; errorNodes: number; extractionLimits: ExtractionLimit[]; nodeCount: number; }
+interface WalkState { symbols: SyntaxSymbol[]; imports: SyntaxImport[]; calls: SyntaxCall[]; errorNodes: number; extractionLimits: ExtractionLimit[]; nodeCount: number; jsxOwners: Set<string>; }
 interface Frame { qualifiedName: string; kind: 'class' | 'callable'; }
 
 export class TsxSyntaxParser implements SyntaxParser {
@@ -30,8 +31,9 @@ export class TsxSyntaxParser implements SyntaxParser {
       tree = parser.parse(input.source);
       const root = tree?.rootNode ?? null;
       if (!root) return { facts: failedFacts('tsx') };
-      const state: WalkState = { symbols: [], imports: [], calls: [], errorNodes: 0, extractionLimits: [], nodeCount: 0 };
+      const state: WalkState = { symbols: [], imports: [], calls: [], errorNodes: 0, extractionLimits: [], nodeCount: 0, jsxOwners: new Set() };
       for (const child of root.namedChildren) walk(child, state, [], [], 1, input.source);
+      promoteComponentSymbols(state.symbols, state.jsxOwners, state.imports, state.calls);
       const hasErrors = state.errorNodes > 0 || root.hasError;
       return { facts: { language: 'tsx', symbols: state.symbols, imports: state.imports, calls: state.calls, hasMainGuard: false, parse: { success: true, hasErrors, errorNodes: state.errorNodes }, extractionLimits: extractionNotices(state), quality: hasErrors || state.extractionLimits.length > 0 ? 'partial' : 'complete' } };
     } catch { return { facts: failedFacts('tsx') }; } finally { if (tree) try { tree.delete(); } catch {} }
@@ -42,6 +44,8 @@ function failedFacts(lang: SupportedLanguage): SyntaxFacts {
 }
 function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: SyntaxDecorator[], depth: number, source: string): void {
   if (!visitAstNode(state, depth, rangeOf(node))) return;
+  const owner = stack.at(-1);
+  if (owner?.kind === 'callable' && ['jsx_element', 'jsx_self_closing_element', 'jsx_fragment'].includes(node.type)) state.jsxOwners.add(owner.qualifiedName);
   if ((node as unknown as { isError?: boolean }).isError || (node as unknown as { isMissing?: boolean }).isMissing) state.errorNodes += 1;
   switch (node.type) {
     case 'import_statement': {
@@ -130,8 +134,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
           if (isArrow || isFuncExpr) {
             const parent = stack.length ? stack[stack.length - 1] : null;
             const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
-            const isComponent = /[A-Z]/.test(name[0]);
-            if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: isComponent ? 'component' : 'function', name, qualifiedName, range: rangeOf(child), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: valueNode?.text.includes('async') ?? false, bases: [], decorators: [] });
+            if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: 'function', name, qualifiedName, range: rangeOf(child), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: valueNode?.text.includes('async') ?? false, bases: [], decorators: [] });
             if (valueNode) { stack.push({ qualifiedName, kind: 'callable' }); walk(valueNode, state, stack, [], depth + 1, source); stack.pop(); continue; }
           } else {
             if (retainFact(state, 'symbols', rangeOf(node))) {

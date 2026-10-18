@@ -17,6 +17,7 @@ import addFormats from 'ajv-formats';
 import v1Schema from '../../../schema/repodna.schema.json';
 import v2Schema from '../../../schema/repodna-v2.schema.json';
 import type { RepoDNAProject } from '../types';
+import { checkInventoryEvidence } from './inventory-evidence-validator';
 
 export interface ValidationResult {
   valid: boolean;
@@ -219,6 +220,10 @@ function validateStructurallyV1(data: unknown): ValidationResult {
       errors.push(`repository.${k} is required`);
     }
     checkFingerprint(p.repository.fingerprint, errors, 'repository');
+    for (const key of ['commitSha', 'analyzedRef'] as const) {
+      const value = p.repository[key];
+      if (value !== undefined && value !== null && typeof value !== 'string') errors.push(`repository.${key} must be a string or null`);
+    }
   } else {
     errors.push('repository must be an object');
   }
@@ -279,6 +284,7 @@ function validateStructurallyV1(data: unknown): ValidationResult {
     errors.push('metrics must be an object');
   }
   if (isRecord(p.metadata)) {
+    checkInventoryEvidence(p.metadata, errors, 'metadata');
     checkExtractionLimits(p.metadata.extractionLimits, errors, 'metadata.extractionLimits');
     for (const k of missingKeys(p.metadata, ['analysisMode', 'executedRepositoryCode', 'limits', 'fileComponents', 'cache'])) {
       errors.push(`metadata.${k} is required`);
@@ -295,6 +301,7 @@ function validateStructurallyV1(data: unknown): ValidationResult {
 
 function validateV2GraphIntegrity(data: unknown): ValidationResult {
   const errors: string[] = [];
+  if (isRecord(data)) checkInventoryEvidence(data.inventory, errors, 'inventory');
   if (!isRecord(data)) return { valid: false, errors: ['Artifact payload must be a non-null object.'] };
 
   const nodes = data.nodes;
@@ -361,6 +368,7 @@ export function validateRepoDNAProjectV2(data: unknown): ValidationResult {
   }
 
   const inv = (data as { inventory?: unknown }).inventory;
+  checkInventoryEvidence(inv, errors, 'inventory');
   if (isRecord(inv)) checkExtractionLimits(inv.extractionLimits, errors, 'inventory.extractionLimits');
   if (isRecord(inv)) {
     for (const k of missingKeys(inv, [
