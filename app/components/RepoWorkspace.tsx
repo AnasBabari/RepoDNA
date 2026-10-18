@@ -1573,6 +1573,8 @@ function WorkspaceContent() {
         void handleAnalyzeGitHub(repoParam);
         return;
       }
+      const sampleParam = params.get('sample');
+      if (sampleParam) { void handleOpenSample(sampleParam); return; }
       const pendingRun = readPendingDurableRun();
       if (pendingRun) void handleResumeDurableRun(pendingRun);
     }
@@ -2089,7 +2091,9 @@ function WorkspaceContent() {
           requestId={analyzingRequestId}
           retryAfter={analyzingRetryAfter}
           onRetry={() => {
-            if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
+            if (analyzingErrorCode === 'SAMPLE_UNAVAILABLE') {
+              void handleOpenSample(analyzingTarget);
+            } else if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
               handleAnalyzeGitHub(analyzingTarget);
             } else {
               handleLoadDemo();
@@ -2123,6 +2127,7 @@ function WorkspaceContent() {
       <>
         <LandingView
           onAnalyzeGitHub={handleAnalyzeGitHub}
+          onOpenSample={handleOpenSample}
           onAnalyzeFolder={handleAnalyzeFolder}
           onAnalyzeZip={handleAnalyzeZipOrJson}
           onLoadDemo={handleLoadDemo}
@@ -2253,6 +2258,11 @@ function WorkspaceContent() {
       </aside>
 
       <section className="workspace">
+        {analysisOrigin === 'sample' && <section className="sample-provenance" aria-label="Bundled snapshot provenance">
+          <strong>Bundled snapshot — not a fresh scan.</strong>
+          <span>Analyzed: {project.generatedAt || 'not recorded'} · Commit: <code>{project.repository.commitSha || 'not recorded'}</code></span>
+          {bundledSample(project.repository.source) && <button className="chip-button" type="button" onClick={() => void handleAnalyzeGitHub(bundledSample(project.repository.source)!.url)}>Analyze latest</button>}
+        </section>}
         <nav className="mobile-view-nav" aria-label="Workspace views">
           {navigation.map((item) => (
             <button
