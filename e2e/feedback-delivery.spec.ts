@@ -10,6 +10,7 @@ for (const failure of ['offline', '400', '429', '503', 'unconfirmed']) test(`fee
     return route.fulfill({ status: failure === 'unconfirmed' ? 200 : Number(failure), json: { success: false } });
   });
   await page.goto('/');
+  await expect(page.locator('.preview-canvas .react-flow__node').first()).toBeVisible();
   await page.getByRole('button', { name: 'Feedback', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'RepoDNA Feedback & Beta Survey' });
   await expect(dialog.locator('textarea')).toHaveCount(0);
