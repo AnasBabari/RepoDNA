@@ -25,6 +25,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern app/.well-known/workflow --ignore-pattern tests/fixtures --ignore-pattern public/tree-sitter",
     "typecheck": "next typegen && tsc --noEmit --incremental false -p tsconfig.json",
     "audit:production": "npm audit --omit=dev --audit-level=high",
+    "audit:development": "node tests/security/development-audit.mjs",
     "test:unit": "vitest run",
     "test:python": "python -c \"import sys, unittest; sys.path.insert(0, 'core'); test_suite = unittest.defaultTestLoader.discover('tests'); runner = unittest.TextTestRunner(verbosity=2); res = runner.run(test_suite); sys.exit(0 if res.wasSuccessful() else 1)\"",
     "test:e2e": "playwright test",
