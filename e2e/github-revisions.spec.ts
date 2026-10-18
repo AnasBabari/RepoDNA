@@ -44,14 +44,18 @@ test('actual browser ambiguity is actionable and never substitutes HEAD or an ar
   await expect(page.locator('.workspace')).toHaveCount(0);
 });
 
-test('an explicit server ref error stops without silently trying another analysis path', async ({ page, baseURL }) => {
+for (const [code, message] of [
+  ['GITHUB_REF_AMBIGUOUS', 'This URL matches multiple branch/tag boundaries.'],
+  ['GITHUB_REF_NOT_FOUND', 'The requested revision was not found or is inaccessible.'],
+  ['GITHUB_REF_UNSUPPORTED', 'Use a repository root, /tree/ref, or /blob/ref/file URL.'],
+]) test(`server ${code} stops without silently trying another analysis path`, async ({ page, baseURL }) => {
   const calls = await installRevisionHarness(page, baseURL, []);
-  await page.route('**/api/v2/analyses', (route) => route.fulfill({ status: 400, json: { error: { code: 'GITHUB_REF_AMBIGUOUS', message: 'Choose the explicit ref.', fallbackAvailable: false } } }));
+  await page.route('**/api/v2/analyses', (route) => route.fulfill({ status: code === 'GITHUB_REF_NOT_FOUND' ? 404 : 400, json: { error: { code, message: 'Choose the explicit ref.', fallbackAvailable: false } } }));
   await page.goto('/');
   await expect(page.locator('.preview-warning')).toBeVisible();
   await page.getByRole('textbox', { name: 'GitHub repository URL', exact: true }).fill(`${REVISION_REPO}/tree/feature/review`);
   await page.getByRole('button', { name: 'Analyze repository', exact: true }).click();
-  await expect(page.getByText('This URL matches multiple branch/tag boundaries.', { exact: false })).toBeVisible();
+  await expect(page.getByText(message, { exact: false })).toBeVisible();
   expect(calls.submitted).toEqual([]);
   expect(calls.refs).toEqual([]);
   expect(calls.archives).toEqual([]);
