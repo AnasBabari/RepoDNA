@@ -3,6 +3,7 @@ import path from 'node:path';
 
 test('long repository names and controls reflow at actual 200% browser zoom', async ({ baseURL }, testInfo) => {
   const extension = path.resolve('e2e/fixtures/zoom-extension');
+  const longName = 'a-very-long-repository-name-with-many-components-and-shared-packages'.repeat(2);
   const context = await chromium.launchPersistentContext('', {
     channel: 'chromium', headless: true, viewport: { width: 1440, height: 1000 },
     args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
@@ -12,12 +13,13 @@ test('long repository names and controls reflow at actual 200% browser zoom', as
     await context.route('**/samples/nanogpt.json', async (route) => {
       const response = await route.fetch();
       const project = await response.json();
-      project.repository.name = 'a-very-long-repository-name-with-many-components-and-shared-packages'.repeat(2);
+      project.repository.name = longName;
       await route.fulfill({ json: project });
     });
     const page = context.pages()[0];
     await page.goto(`${baseURL}/?sample=https://github.com/karpathy/nanoGPT`);
     await expect(page.locator('.workspace')).toBeVisible();
+    await expect(page.locator('.repo-pill')).toContainText(longName);
     const initialWidth = await page.evaluate(() => innerWidth);
     const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
     const zoom = await worker.evaluate(async (origin) => {
@@ -42,7 +44,9 @@ test('long repository names and controls reflow at actual 200% browser zoom', as
         expect(bounds!.x).toBeGreaterThanOrEqual(0);
         expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(await page.evaluate(() => innerWidth));
       }
-      await page.screenshot({ path: testInfo.outputPath(`${view.replaceAll(' ', '-')}-200-percent.png`), fullPage: true });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      // Viewport capture preserves the physical 200% view; fullPage crops at CSS dimensions in Chromium.
+      await page.screenshot({ path: testInfo.outputPath(`${view.replaceAll(' ', '-')}-200-percent.png`), fullPage: false });
     }
   } finally { await context.close(); }
 });
