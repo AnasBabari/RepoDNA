@@ -1,4 +1,5 @@
 import { extractionNotices, retainFact, visitAstNode } from './extraction-budget';
+import { promoteComponentSymbols } from './component-evidence';
 import type { ExtractionLimit } from './types';
 import type { Node as SyntaxNode } from 'web-tree-sitter';
 import { getTreeSitterParser } from './runtime';
@@ -22,6 +23,7 @@ interface WalkState {
   calls: SyntaxCall[];
   errorNodes: number; extractionLimits: ExtractionLimit[];
   nodeCount: number;
+  jsxOwners: Set<string>;
 }
 
 interface Frame {
@@ -52,6 +54,7 @@ export class JavaScriptSyntaxParser implements SyntaxParser {
         errorNodes: 0,
         extractionLimits: [],
         nodeCount: 0,
+        jsxOwners: new Set(),
       };
 
       for (const child of root.namedChildren) {
@@ -59,6 +62,7 @@ export class JavaScriptSyntaxParser implements SyntaxParser {
       }
 
       const hasErrors = state.errorNodes > 0 || root.hasError;
+      promoteComponentSymbols(state.symbols, state.jsxOwners, state.imports, state.calls);
       const quality = hasErrors || state.extractionLimits.length > 0 ? 'partial' as const : 'complete' as const;
 
       return {
@@ -106,6 +110,8 @@ function walk(
   source: string
 ): void {
   if (!visitAstNode(state, depth, rangeOf(node))) return;
+  const owner = stack.at(-1);
+  if (owner?.kind === 'callable' && ['jsx_element', 'jsx_self_closing_element', 'jsx_fragment'].includes(node.type)) state.jsxOwners.add(owner.qualifiedName);
   if ((node as unknown as { isError?: boolean }).isError || (node as unknown as { isMissing?: boolean }).isMissing) {
     state.errorNodes += 1;
   }
@@ -278,10 +284,9 @@ function walk(
           if (isArrow || isFuncExpr) {
             const parent = stack.length ? stack[stack.length - 1] : null;
             const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
-            const isComponent = /[A-Z]/.test(name[0]) && (valueNode?.text.includes('jsx') || valueNode?.text.includes('React'));
             if (retainFact(state, 'symbols', rangeOf(node))) {
               state.symbols.push({
-                kind: isComponent ? 'component' : 'function',
+                kind: 'function',
                 name,
                 qualifiedName,
                 range: rangeOf(child),

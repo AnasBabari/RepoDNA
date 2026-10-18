@@ -187,6 +187,24 @@ describe('CSP-safe schema fallback', () => {
 });
 
 describe('v1→v2 adapter edge integrity', () => {
+  it('validates optional graph-scope counts without allowing unknown to become zero', async () => {
+    const globalAny = globalThis as typeof globalThis & { __repodnaAjvV2?: unknown };
+    const { makeV2Fixture } = await import('./export/fixtures');
+    const { graphCounts, recordedGraphScope } = await import('../../app/lib/graph-scope');
+    const project = makeV2Fixture();
+    project.graphScope = recordedGraphScope({ nodes: null, relationships: null, unresolvedRelationships: null, ambiguousRelationships: null }, graphCounts(project));
+    const oldValidator = globalAny.__repodnaAjvV2;
+    try {
+      globalAny.__repodnaAjvV2 = null;
+      expect(validateRepoDNAProjectV2(project).errors).toEqual([]);
+      project.graphScope.original.nodes = -1;
+      expect(validateRepoDNAProjectV2(project).valid).toBe(false);
+      project.graphScope.original.nodes = null;
+      project.graphScope.analyticsScope = 'complete' as never;
+      expect(validateRepoDNAProjectV2(project).valid).toBe(false);
+    } finally { globalAny.__repodnaAjvV2 = oldValidator; }
+  });
+
   it('normalizes import source/target to file: node IDs so edges resolve', async () => {
     const { adaptV1ToV2Viewer } = await import('../../app/lib/schema/artifact-loader');
     const { resolveImports } = await import('../../app/lib/analyzer/graph');

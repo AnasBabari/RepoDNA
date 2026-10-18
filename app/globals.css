@@ -1641,6 +1641,8 @@ code, kbd {
   grid-template-columns: repeat(5, 1fr);
 }
 
+.snapshot-provenance code { overflow-wrap: anywhere; }
+
 .important-grid article {
   min-width: 0;
   min-height: 145px;
@@ -1675,6 +1677,7 @@ code, kbd {
 
 .important-grid article p {
   margin: 7px 0;
+  overflow-wrap: anywhere;
   color: #657e93;
   font-size: 9px;
   line-height: 1.45;
@@ -4140,3 +4143,17 @@ button.file-row:hover {
 @media (prefers-reduced-motion: reduce) {
   .analyzing-dna-pulse { animation: none; }
 }
+.graph-scope-summary { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--panel); font-size: 12px; line-height: 1.6; }
+.graph-scope-summary p { margin: 6px 0; }
+.graph-scope-summary summary { cursor: pointer; }
+.graph-scope-table-wrap { overflow-x: auto; }
+.graph-scope-summary table { width: 100%; border-collapse: collapse; text-align: left; }
+.graph-scope-summary th, .graph-scope-summary td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.unresolved-relationship-list { padding: 16px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.unresolved-relationship-list summary { cursor: pointer; }
+.unresolved-relationship-list label { display: grid; gap: 6px; }
+.unresolved-relationship-list ul { padding-left: 20px; }
+.unresolved-relationship-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.unresolved-pagination { display: flex; flex-wrap: wrap; gap: 8px; }
+.sample-provenance { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:14px; margin-bottom:20px; border:1px solid var(--line); border-radius:8px; }
+.sample-provenance span { min-width:0; overflow-wrap:anywhere; }

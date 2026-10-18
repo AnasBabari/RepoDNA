@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { useModalFocus } from './useModalFocus';
 
 import { trackGraphExported } from '../lib/analytics';
 import {
@@ -13,6 +14,8 @@ import { buildGraphExportViaWorker } from '../lib/export/graph/worker-client';
 import type { AnyExportableArtifact } from '../lib/export/graph/normalize';
 import type { GraphExportFormat } from '../lib/export/graph/types';
 import { generateTextReport } from '../lib/export/text-report';
+import { resolveGraphScope } from '../lib/graph-scope';
+import { GraphScopeSummary } from './GraphScopeSummary';
 
 type ExportStatus = 'idle' | 'loading' | 'success' | 'error';
 type CacheLayer = 'vercel_blob' | 'indexeddb' | 'browser_worker';
@@ -30,7 +33,7 @@ interface FormatState {
 }
 
 const FORMAT_LABELS: Record<GraphExportFormat, { label: string; description: string }> = {
-  'graph-json': { label: 'Graph JSON', description: 'Single JSON file — complete graph with manifest' },
+  'graph-json': { label: 'Graph JSON', description: 'Single JSON file — retained graph with scope manifest' },
   csv: { label: 'CSV tables', description: 'ZIP containing five CSV tables plus manifest.json' },
   cypher: { label: 'Neo4j Cypher', description: 'cypher.txt for Neo4j 5+ — deterministic MERGE, no APOC or AI key' },
   parquet: { label: 'Parquet', description: 'ZIP containing Arrow/DuckDB-ready Parquet tables' },
@@ -124,8 +127,6 @@ export function GraphExportDialog({
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [cacheWarning, setCacheWarning] = useState<string | null>(null);
   const abortControllers = useRef<Partial<Record<GraphExportFormat, AbortController>>>({});
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   const visibleFormats = useMemo(
     () => ALL_FORMATS.filter((format) => format !== 'parquet' || process.env.NEXT_PUBLIC_REPODNA_PARQUET_EXPORT === 'true'),
@@ -138,46 +139,7 @@ export function GraphExportDialog({
     onClose();
   }, [onClose]);
 
-  useEffect(() => {
-    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const dialog = dialogRef.current;
-    const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
-    const closeButton = dialog?.querySelector<HTMLElement>('.graph-export-close');
-    const initialFocus = dialog?.querySelector<HTMLElement>('.graph-export-close') ?? focusables()[0];
-    initialFocus?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeDialog();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const items = focusables();
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      const activeIndex = active ? items.indexOf(active) : -1;
-      if (activeIndex === -1) {
-        event.preventDefault();
-        (event.shiftKey ? last : first).focus();
-      } else if (event.shiftKey && (active === closeButton || activeIndex === 0)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && activeIndex === items.length - 1) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      if (previouslyFocusedRef.current?.isConnected) previouslyFocusedRef.current.focus();
-    };
-  }, [closeDialog]);
+  const dialogRef = useModalFocus<HTMLDivElement>(true, closeDialog);
 
   const updateState = useCallback((format: GraphExportFormat, patch: Partial<FormatState>) => {
     setStates((previous) => ({ ...previous, [format]: { ...previous[format], ...patch } }));
@@ -396,25 +358,27 @@ export function GraphExportDialog({
           </button>
         </div>
 
-        <p id="graph-export-description" className="graph-export-intro">Export full dependency graph.</p>
+        <p id="graph-export-description" className="graph-export-intro">Export all retained graph findings.</p>
         <p className="graph-export-note">
-          Includes all analyzed nodes and relationships, including items hidden by filters or rendering limits.
+          Includes findings retained in this artifact, including items hidden by canvas filters. Facts omitted during analysis or compaction cannot be recovered by exporting.
         </p>
+
+        {artifact && 'nodes' in artifact ? <GraphScopeSummary scope={resolveGraphScope(artifact)} /> : null}
 
         {manifest ? (
           <div className="graph-export-stats" aria-label="Graph export summary">
             <span><strong>{manifest.counts.nodes}</strong> nodes</span>
             <span><strong>{manifest.counts.relationships}</strong> relationships</span>
             <span><strong>{manifest.counts.groups}</strong> groups</span>
-            <span><strong>{manifest.counts.unresolved}</strong> unresolved</span>
-            <span><strong>{manifest.coverage.percentage}%</strong> coverage</span>
+            <span><strong>{manifest.counts.unresolved}</strong> retained unresolved records</span>
+            <span><strong>{manifest.coverage.percentage}%</strong> source parsed</span>
             <span>{manifest.completeness.status}</span>
           </div>
         ) : null}
 
         {manifest?.adaptedFromLegacy ? (
           <p className="graph-export-warning">
-            This analysis originated from the legacy graph schema. Exported relationships are complete for the loaded artifact, but some evidence fields may be less detailed.
+            This analysis originated from the legacy graph schema. Exported relationships reflect retained findings, not guaranteed runtime completeness; some evidence fields may be less detailed.
           </p>
         ) : null}
         {browserRetention.enabled && !browserRetention.artifactKey ? (

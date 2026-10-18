@@ -21,7 +21,7 @@ The analyzer also has partial-resolution cases. Hiding those cases behind a comp
    - opt-in IndexedDB for browser-local artifacts and export blobs;
    - seven-day TTL, signed five-minute download URLs, and explicit cleanup/eviction rules.
 6. Generate exports in a browser worker. If the server cache or server serializer is unavailable, use a clearly reported browser fallback.
-7. Export the full canonical graph regardless of the current visual filter or layout. Record partial coverage and unresolved links instead of inventing completeness.
+7. Export all retained canonical findings regardless of the current visual filter or layout. Record partial coverage, compaction scope, original/retained/omitted counts and unresolved links instead of inventing completeness; exports cannot recover omitted facts.
 
 ## Alternatives considered
 

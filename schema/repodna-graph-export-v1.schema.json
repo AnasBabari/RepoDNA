@@ -26,6 +26,21 @@
       ],
       "additionalProperties": false,
       "properties": {
+        "manifestInventory": { "$ref": "#/definitions/manifestInventory" },
+        "sourceInventory": { "$ref": "#/definitions/sourceInventory" },
+        "sourceOutcomes": { "$ref": "#/definitions/sourceOutcomes" },
+        "graphScope": {
+          "type": "object",
+          "required": ["kind", "original", "retained", "omitted", "analyticsScope"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["uncompacted", "compacted"] },
+            "original": { "$ref": "#/definitions/graphScopeCounts" },
+            "retained": { "$ref": "#/definitions/graphScopeCounts" },
+            "omitted": { "$ref": "#/definitions/graphScopeCounts" },
+            "analyticsScope": { "enum": ["uncompacted-extracted-graph", "retained-subgraph"] }
+          }
+        },
         "exportSchemaVersion": { "const": "1.0.0" },
         "exporterVersion": { "type": "string", "minLength": 1 },
         "sourceSchemaVersion": { "enum": ["2.0.0", "1.1.0"] },
@@ -297,6 +312,69 @@
     }
   },
   "definitions": {
+    "manifestInventory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "packages", "declarations", "problems"],
+      "properties": {
+        "status": { "enum": ["complete", "partial", "unavailable"] },
+        "packages": { "type": "array", "maxItems": 2000, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["ecosystem", "root", "name", "workspace", "manifests"],
+          "properties": {
+            "ecosystem": { "enum": ["npm", "python", "go"] }, "root": { "type": "string", "maxLength": 4096 },
+            "name": { "type": ["string", "null"], "maxLength": 512 }, "workspace": { "type": "boolean" },
+            "manifests": { "type": "array", "maxItems": 2000, "items": { "type": "string", "maxLength": 4096 } }
+          }
+        } },
+        "declarations": { "type": "array", "maxItems": 50000, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["ecosystem", "root", "name", "scope", "group", "file"],
+          "properties": {
+            "ecosystem": { "enum": ["npm", "python", "go"] }, "root": { "type": "string", "maxLength": 4096 },
+            "name": { "type": "string", "maxLength": 512 },
+            "scope": { "enum": ["runtime", "development", "optional", "peer", "build", "unspecified"] },
+            "group": { "type": "string", "maxLength": 1024 }, "file": { "type": "string", "maxLength": 4096 }
+          }
+        } },
+        "problems": { "type": "array", "maxItems": 2000, "items": {
+          "type": "object", "additionalProperties": false, "required": ["file", "code", "message"],
+          "properties": { "file": { "type": "string", "maxLength": 4096 }, "code": { "type": "string", "maxLength": 128 }, "message": { "type": "string", "maxLength": 1024 } }
+        } }
+      }
+    },
+    "sourceInventory": {
+      "description": "Classification of observed paths only; acquisition truncation remains authoritative.",
+      "type": "object", "additionalProperties": false,
+      "required": ["classificationVersion", "totalFileCount", "firstPartySourceFileCount", "supportedSourceFileCount", "unsupportedSourceFileCount", "evidenceFileCount", "otherFileCount", "ignoredFileCount", "generatedFileCount", "candidateFileCount", "skippedSupportedSourceFileCount"],
+      "properties": {
+        "classificationVersion": { "const": 2 },
+        "totalFileCount": { "type": "integer", "minimum": 0 }, "firstPartySourceFileCount": { "type": "integer", "minimum": 0 },
+        "supportedSourceFileCount": { "type": "integer", "minimum": 0 }, "unsupportedSourceFileCount": { "type": "integer", "minimum": 0 },
+        "evidenceFileCount": { "type": "integer", "minimum": 0 }, "otherFileCount": { "type": "integer", "minimum": 0 },
+        "ignoredFileCount": { "type": "integer", "minimum": 0 }, "generatedFileCount": { "type": "integer", "minimum": 0 },
+        "candidateFileCount": { "type": "integer", "minimum": 0 }, "skippedSupportedSourceFileCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sourceOutcomes": {
+      "type": "object", "additionalProperties": false,
+      "required": ["supported", "complete", "partial", "failed", "skipped", "unprocessed"],
+      "properties": {
+        "supported": { "type": "integer", "minimum": 0 }, "complete": { "type": "integer", "minimum": 0 },
+        "partial": { "type": "integer", "minimum": 0 }, "failed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }, "unprocessed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "graphScopeCounts": {
+      "type": "object",
+      "required": ["nodes", "relationships", "unresolvedRelationships", "ambiguousRelationships"],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": { "type": ["integer", "null"], "minimum": 0 },
+        "relationships": { "type": ["integer", "null"], "minimum": 0 },
+        "unresolvedRelationships": { "type": ["integer", "null"], "minimum": 0 },
+        "ambiguousRelationships": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
     "sourceRange": {
       "type": "object",
       "required": ["startLine", "startCol", "endLine", "endCol"],

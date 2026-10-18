@@ -1,7 +1,9 @@
 import { del, get, put } from '@vercel/blob';
 
-import type { RepoDNAProjectV2 } from './types';
+import type { GraphScope, RepoDNAProjectV2 } from './types';
 import { V2_ANALYZER_VERSION } from './version';
+import { resolveGraphScope } from '../../graph-scope';
+import { analysisQuality } from '../../analysis-quality';
 import { validateRepoDNAProjectV2 } from '../../schema/safe-validator';
 
 export const PUBLIC_ARTIFACT_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -13,7 +15,9 @@ export interface PublicArtifactSummary {
   coveragePercentage: number;
   nodeCount: number;
   edgeCount: number;
-  unresolvedCount: number;
+  unresolvedCount: number | null;
+  retainedUnresolvedCount: number;
+  graphScope: GraphScope;
   completeness: RepoDNAProjectV2['completeness'];
   inventory: RepoDNAProjectV2['inventory'];
 }
@@ -29,6 +33,12 @@ export interface CachedPublicArtifact {
   project: RepoDNAProjectV2;
   summary: PublicArtifactSummary;
   pointer: PublicArtifactPointer;
+}
+
+export function matchesPublicArtifactIdentity(project: RepoDNAProjectV2, input: { owner: string; repo: string; commitSha: string }): boolean {
+  const sha = input.commitSha.toLowerCase();
+  return /^[0-9a-f]{40}$/.test(sha) && project.repository.commitSha === sha && project.repository.analyzedRef === sha &&
+    project.repository.source.toLowerCase() === `https://github.com/${input.owner}/${input.repo}/tree/${sha}`.toLowerCase();
 }
 
 function safeSegment(value: string): string {
@@ -52,13 +62,17 @@ export function publicArtifactPath(input: {
 }
 
 export function summarizePublicArtifact(project: RepoDNAProjectV2): PublicArtifactSummary {
+  const graphScope = resolveGraphScope(project);
+  const quality = analysisQuality(project);
   return {
     schemaVersion: project.schemaVersion,
     coveragePercentage: project.coverage.percentage,
     nodeCount: project.nodes.length,
     edgeCount: project.edges.length,
-    unresolvedCount: project.unresolved.length,
-    completeness: project.completeness,
+    unresolvedCount: graphScope.original.unresolvedRelationships,
+    retainedUnresolvedCount: graphScope.retained.unresolvedRelationships!,
+    graphScope,
+    completeness: { status: quality.status, reasons: quality.reasons },
     inventory: project.inventory,
   };
 }
@@ -100,7 +114,7 @@ export async function readCachedPublicArtifact(input: {
     await del(pathname).catch(() => undefined);
     return null;
   }
-  if (!validateRepoDNAProjectV2(project).valid) {
+  if (!validateRepoDNAProjectV2(project).valid || !matchesPublicArtifactIdentity(project, input)) {
     await del(pathname).catch(() => undefined);
     return null;
   }
@@ -129,6 +143,7 @@ export async function storePublicArtifact(input: {
   if (!validateRepoDNAProjectV2(input.project).valid) {
     throw new Error('PUBLIC_ARTIFACT_SCHEMA_INVALID');
   }
+  if (!matchesPublicArtifactIdentity(input.project, input)) throw new Error('PUBLIC_ARTIFACT_IDENTITY_MISMATCH');
 
   const pathname = publicArtifactPath(input);
   const serialized = JSON.stringify(input.project);

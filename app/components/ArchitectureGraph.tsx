@@ -81,11 +81,11 @@ function ArchitectureNodeCard({ data }: NodeProps<ArchitectureNode>) {
         {data.name}
       </strong>
 
-      <div className="arch-confidence-row">
+      <div className="arch-confidence-row" title="Heuristic confidence from recorded role evidence, not a measured probability.">
         <div className="arch-confidence-bar">
           <div className="arch-confidence-fill" style={{ width: `${confidencePercent}%` }} />
         </div>
-        <span className="arch-confidence-text">{confidencePercent}% match</span>
+        <span className="arch-confidence-text">{confidencePercent}% heuristic</span>
       </div>
 
       <Handle type="source" position={Position.Right} id="right" className="arch-handle" />

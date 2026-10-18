@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const discovery = await fetchGitHubRepo(
-      `https://github.com/${parsed.owner}/${parsed.repo}`,
+      parsed.canonicalUrl,
       DEFAULT_INGESTION_LIMITS,
       accessToken
     );
@@ -63,6 +63,8 @@ export async function POST(request: NextRequest) {
         skipped: discovery.skipped,
         name: discovery.name,
         source: `private:${discovery.name}`,
+        commitSha: discovery.commitSha,
+        analyzedRef: discovery.analyzedRef,
         inventory: discovery.inventory,
       },
       {

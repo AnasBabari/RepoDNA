@@ -1,5 +1,7 @@
 import { adaptV1ToV2Viewer } from '../../schema/artifact-loader';
 import { analysisQuality } from '../../analysis-quality';
+import { resolveGraphScope } from '../../graph-scope';
+import { unavailableManifests } from '../../analyzer/manifest-types';
 import type { RepoDNAProject } from '../../types';
 import type { GraphEdge, GraphNode, RepoDNAProjectV2 } from '../../analyzer/v2/types';
 import { compactStableStringify, sha256Hex } from './stable-json';
@@ -430,6 +432,10 @@ export function buildGraphExportDocument(
 
   const quality = analysisQuality(project);
   const manifest: GraphExportManifest = {
+    manifestInventory: structuredClone(project.inventory.manifestInventory ?? unavailableManifests()),
+    ...(project.inventory.sourceInventory ? { sourceInventory: structuredClone(project.inventory.sourceInventory) } : {}),
+    ...(project.inventory.sourceOutcomes ? { sourceOutcomes: structuredClone(project.inventory.sourceOutcomes) } : {}),
+    graphScope: resolveGraphScope(project),
     exportSchemaVersion: GRAPH_EXPORT_SCHEMA_VERSION,
     exporterVersion: GRAPH_EXPORTER_VERSION,
     sourceSchemaVersion: options.sourceSchemaVersion,

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const SAMPLE_URL = '/?repo=https://github.com/karpathy/nanoGPT';
+const SAMPLE_URL = '/?sample=https://github.com/karpathy/nanoGPT';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await context.route('**/*', (route) => {

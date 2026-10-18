@@ -54,7 +54,7 @@ describe('public export Blob cache', () => {
       format: 'csv',
     });
     expect(pathname).toBe(
-      `repodna/public/graphify-labs/graphify-repo/${'a'.repeat(40)}/2.0.1/exports/1.0.0/1.0.1/${'b'.repeat(64)}/expires-1800000000000/csv.zip`
+      `repodna/public/graphify-labs/graphify-repo/${'a'.repeat(40)}/2.0.7/exports/1.0.0/1.0.7/${'b'.repeat(64)}/expires-1800000000000/csv.zip`
     );
     expect(publicExportMetadataPath(pathname)).toBe(`${pathname}.metadata.json`);
   });

@@ -2,17 +2,20 @@ import type { RepoDNAProject } from '../types';
 import type { RepoDNAProjectV2, GraphNode, GraphEdge } from '../analyzer/v2/types';
 import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 import { analysisQuality } from '../analysis-quality';
+import { formatGraphCount, GRAPH_COUNT_KEYS, resolveGraphScope } from '../graph-scope';
+import { manifestCounts, unavailableManifests } from '../analyzer/manifest-types';
+import { isSupportedSource } from '../analyzer/source-policy';
 
 /**
  * Deterministic plain-text architecture report.
  * Accepts either a v1.1 artifact or a canonical v2 graph artifact and renders
  * every section without AI involvement. Very large sections are summarized
- * with bounded ranked lists followed by totals; the JSON export always
- * contains the complete machine-readable data.
+ * with bounded ranked lists followed by totals; JSON contains retained data
+ * only. Facts lost to extraction limits or compaction are not recovered.
  */
 
 const MAX_LIST = 25;
-const MAX_ITEMS_NOTE = 'Full machine-readable data is available in the JSON export (repodna.json).';
+const MAX_ITEMS_NOTE = 'All retained machine-readable data is available in the JSON export; omitted facts are not recovered.';
 
 type AnyProject = RepoDNAProject | RepoDNAProjectV2;
 
@@ -71,7 +74,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   const diagnostics = project.diagnostics ?? [];
 
   // ---- v1 / v2 normalized views -------------------------------------------
-  const files = ('files' in project ? project.files : []) ?? [];
+  const files = ('files' in project ? project.files : project.nodes.filter((node) => node.kind === 'file').map((node) => ({ path: node.path, language: node.language, lines: Math.max(0, node.range.endLine - node.range.startLine + 1), parsed: node.metadata?.parsed === true, error: typeof node.metadata?.error === 'string' ? node.metadata.error : null }))) ?? [];
   const symbols = ('symbols' in project ? project.symbols : []) ?? [];
   const imports = ('imports' in project ? project.imports : []) ?? [];
   const calls = ('calls' in project ? project.calls : []) ?? [];
@@ -95,6 +98,10 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   const parsers = v2 ? project.parsers : null;
   const security = v2 ? project.security : null;
   const completeness = analysisQuality(project);
+  const manifestInventory = inventory?.manifestInventory ?? v1Metadata?.manifestInventory ?? unavailableManifests();
+  const declarationCounts = manifestCounts(manifestInventory);
+  const sourceInventory = inventory?.sourceInventory ?? v1Metadata?.sourceInventory;
+  const scope = v2 ? resolveGraphScope(project) : null;
 
   // ---- Header --------------------------------------------------------------
   out.push(line('='));
@@ -105,10 +112,9 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   out.push(...heading(1, 'Repository identity'));
   out.push(`Name:            ${repo.name}`);
   out.push(`Source:          ${repo.source}`);
-  if (v2) {
-    const repoV2 = repo as RepoDNAProjectV2['repository'];
-    out.push(`Analyzed commit: ${repoV2.commitSha ?? '(not pinned)'}`);
-    out.push(`Analyzed ref:    ${repoV2.analyzedRef ?? '(not recorded)'}`);
+  if (v2 || repo.commitSha || repo.analyzedRef) {
+    out.push(`Analyzed commit: ${repo.commitSha ?? '(not pinned)'}`);
+    out.push(`Analyzed ref:    ${repo.analyzedRef ?? '(not recorded)'}`);
   }
   // 2. Analysis timestamp and versions
   out.push(...heading(2, 'Analysis metadata'));
@@ -158,25 +164,25 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   // 4. Inventory
   out.push(...heading(4, 'Repository inventory'));
   if (inventory) {
-    out.push(`${inventory.acquisitionMode === 'git-tree' ? 'Total tree entries' : 'Total archive entries'}:       ${inventory.totalFileCount}`);
+    out.push(`${inventory.acquisitionMode === 'git-tree' ? 'Total tree entries' : inventory.acquisitionMode === 'local-folder' ? 'Total directory files' : 'Total archive entries'}:       ${inventory.totalFileCount}`);
     out.push(`Total bytes (declared):    ${inventory.totalBytes}`);
     if (inventory.acquisitionMode) {
-      out.push(`Source acquisition:        ${inventory.acquisitionMode === 'git-tree' ? 'Git tree (large-repository mode)' : 'Repository archive'}`);
+      out.push(`Source acquisition:        ${inventory.acquisitionMode === 'git-tree' ? 'Git tree (large-repository mode)' : inventory.acquisitionMode === 'local-folder' ? 'Local directory' : 'Repository archive'}`);
     }
     if (typeof inventory.repositorySizeKb === 'number') {
       out.push(`GitHub size hint (KB):     ${inventory.repositorySizeKb}`);
     }
     out.push(`First-party source files:  ${inventory.firstPartySourceFileCount}`);
-    out.push(`First-party lines of code: ${inventory.firstPartyLoc}`);
+    out.push(`Acquired source LOC:      ${inventory.firstPartyLoc} (may exclude unsupported or unacquired files)`);
     out.push(`Parse candidates:          ${inventory.candidateFileCount}`);
     out.push(`Parsed (incl. partial):    ${inventory.parsedFileCount}`);
     out.push(`Parsed partially:          ${inventory.partiallyParsedFileCount}`);
     out.push(`Failed to parse:           ${inventory.failedFileCount}`);
-    out.push(`Unsupported source:        ${inventory.unsupportedSourceFileCount}`);
+    out.push(`Unsupported source:        ${sourceInventory?.unsupportedSourceFileCount ?? 'not recorded (legacy classification)'}`);
     out.push(`Ignored (vendor/lockfile): ${inventory.ignoredFileCount}`);
     out.push(`Generated artifacts:       ${inventory.generatedFileCount}`);
-    out.push(`Packages/workspaces:       ${inventory.packageCount}`);
-    out.push(`Declared dependencies:     ${inventory.declaredDependencyCount}`);
+    out.push(`Packages/workspaces:       ${declarationCounts.packages ?? 'not recorded'}`);
+    out.push(`Declared dependencies:     ${declarationCounts.dependencies ?? 'not recorded'}`);
     if (inventory.truncation?.maxFilesReached || inventory.truncation?.maxBytesReached) {
       out.push(`Inventory truncated:       ${inventory.truncation.hitLimits.join(', ') || 'resource limit'}`);
     }
@@ -195,7 +201,15 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
     out.push(`Source files:       ${v1?.repository.sourceFileCount ?? 'n/a'}`);
     out.push(`Parsed files:       ${v1?.repository.parsedFileCount ?? 'n/a'}`);
     out.push(`Lines of code:      ${(v1?.repository.lines ?? 0).toLocaleString('en-US')}`);
+    out.push(`Packages/workspaces:       ${declarationCounts.packages ?? 'not recorded'}`);
+    out.push(`Declared dependencies:     ${declarationCounts.dependencies ?? 'not recorded'}`);
   }
+
+  out.push(`Manifest inventory: ${manifestInventory.status}${manifestInventory.status === 'partial' ? ' (counts are lower bounds)' : ''}`);
+  out.push('Dependency totals deduplicate by ecosystem + owning root + name; scopes may overlap. Import edges are not declarations.');
+  for (const [scope, count] of Object.entries(declarationCounts.scopes)) out.push(`  Declared ${scope}: ${count ?? 'not recorded'}`);
+  const outcomes = inventory?.sourceOutcomes ?? v1Metadata?.sourceOutcomes;
+  if (outcomes) out.push(`Supported source accounting: ${outcomes.complete} complete + ${outcomes.partial} partial + ${outcomes.failed} failed + ${outcomes.skipped} skipped + ${outcomes.unprocessed} unprocessed = ${outcomes.supported}. Parsed includes complete + partial; these categories must not be double-counted.`);
 
   // 5. Size classification
   out.push(...heading(5, 'Size classification'));
@@ -211,7 +225,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   // 6. Coverage and limitations
   out.push(...heading(6, 'Scan coverage and limitations'));
   if (coverage && completeness) {
-    out.push(`Coverage: ${coverage.percentage}%`);
+    out.push(`Coverage: ${coverage.percentage}%${inventory?.sourceOutcomes ? ' of supported source files parsed (including partial)' : ' (legacy denominator; run a fresh scan for current evidence)'}`);
     out.push(`Completeness: ${completeness.status}`);
     for (const reason of completeness.reasons) out.push(`  - ${reason}`);
     if (coverage.truncationReasons.length > 0) {
@@ -233,22 +247,26 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   }
 
   // 7. Languages
+  if (scope) {
+    out.push(`Graph scope: ${scope.kind}`);
+    out.push(`Analytics scope: ${scope.analyticsScope}`);
+    out.push('Counts describe extracted facts, not proven runtime completeness.');
+    for (const key of GRAPH_COUNT_KEYS) out.push(`  ${key}: original=${formatGraphCount(scope.original[key])}; retained=${formatGraphCount(scope.retained[key])}; omitted=${formatGraphCount(scope.omitted[key])}`);
+    out.push(`Whole-analysis resolution gaps: ${formatGraphCount(scope.original.unresolvedRelationships)}`);
+    if (scope.kind === 'compacted') out.push('Cycles, communities, centrality and blast-radius findings use only the retained subgraph. Unknown original counts are not zero.');
+  }
+
   out.push(...heading(7, 'Languages'));
   const langKeys = Object.keys(languages).sort((a, b) => (languages[b] ?? 0) - (languages[a] ?? 0));
   for (const l of langKeys) out.push(`  ${l}: ${languages[l]}`);
 
   // 8. Packages/workspaces
   out.push(...heading(8, 'Packages and workspaces'));
-  if (inventory && inventory.packageCount > 0) {
-    const pkgNodes = nodes.filter((n) => n.kind === 'package' || n.kind === 'workspace');
-    const { rows, total } = takeSorted(pkgNodes, (n) => n.path);
-    for (const p of rows) out.push(`  ${p.qualifiedName} (${p.path})`);
+  if (manifestInventory.packages.length) {
+    const { rows, total } = takeSorted(manifestInventory.packages, (pkg) => `${pkg.ecosystem}:${pkg.root}`);
+    for (const pkg of rows) out.push(`  ${pkg.ecosystem}:${pkg.root} ${pkg.name ?? '(name not recorded)'} — ${pkg.manifests.join(', ')}`);
     if (total > rows.length) out.push(truncationFooter({ total, shown: rows.length }));
-  } else if (inventory) {
-    out.push('  No package/workspace manifests detected.');
-  } else {
-    out.push(`  Local dependencies (v1 metric): ${metrics?.localDependencies ?? 'n/a'}`);
-  }
+  } else out.push(manifestInventory.status === 'unavailable' ? '  Package manifest evidence was not recorded in this artifact.' : '  No package/workspace manifest roots retained.');
 
   // 9. Frameworks and infrastructure
   out.push(...heading(9, 'Frameworks and infrastructure'));
@@ -260,13 +278,12 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
 
   // 10. Declared dependencies
   out.push(...heading(10, 'Declared dependencies'));
-  const depNodes = nodes.filter((n) => n.kind === 'dependency');
-  if (depNodes.length > 0) {
-    const { rows, total } = takeSorted(depNodes, (n) => n.qualifiedName);
-    for (const d of rows) out.push(`  ${d.qualifiedName}`);
+  if (manifestInventory.declarations.length > 0) {
+    const { rows, total } = takeSorted(manifestInventory.declarations, (row) => `${row.ecosystem}:${row.root}:${row.name}:${row.scope}:${row.file}`);
+    for (const row of rows) out.push(`  ${row.ecosystem}:${row.root} ${row.name} [${row.scope}; ${row.group}] — ${row.file}`);
     if (total > rows.length) out.push(truncationFooter({ total, shown: rows.length }));
   } else {
-    out.push(`  External dependencies (v1 metric): ${metrics?.externalDependencies ?? 'n/a'}`);
+    out.push(manifestInventory.status === 'unavailable' ? '  Declared dependencies were not recorded; import counts are not a substitute.' : '  No named dependency declarations retained.');
   }
 
   // 11. Architecture areas
@@ -447,7 +464,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   if (centrality && centrality.highCoupling.length > 0) {
     for (const h of centrality.highCoupling.slice(0, MAX_LIST)) {
       const node = nodes.find((n) => n.id === h.nodeId);
-      out.push(`  ${node ? node.path + ' :: ' + node.qualifiedName : h.nodeId}: ${h.connections} dependents — treat changes as high risk`);
+      out.push(`  ${node ? node.path + ' :: ' + node.qualifiedName : h.nodeId}: ${h.connections} recorded node links (not unique dependents) — inspect relationship evidence before assessing impact`);
     }
   } else {
     const hc = metrics?.highCouplingFiles ?? [];
@@ -462,6 +479,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
 
   // 24. Unresolved and ambiguous relationships
   out.push(...heading(24, 'Unresolved and ambiguous relationships'));
+  if (scope) out.push(`Whole-analysis gaps: ${formatGraphCount(scope.original.unresolvedRelationships)}; retained gaps: ${formatGraphCount(scope.retained.unresolvedRelationships)}.`);
   const ambEdges = edges.filter((e) => e.status === 'ambiguous' || e.status === 'unresolved');
   const unresolvedList = unresolved.length > 0 ? unresolved : ambEdges.map((e) => ({ edgeId: e.id, reason: e.explanation, candidates: e.alternativeCandidates ?? [] }));
   if (unresolvedList.length > 0) {
@@ -481,9 +499,10 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
 
   // 25. Unsupported, skipped, partial, failed files
   out.push(...heading(25, 'Unsupported, skipped, partial, and failed files'));
-  const partialFiles = files.filter((f) => f.parsed && f.error);
-  const failedFiles = files.filter((f) => !f.parsed && f.error);
-  const unparsed = files.filter((f) => !f.parsed && !f.error);
+  const sourceRecords = files.filter((file) => isSupportedSource(file.path));
+  const partialFiles = sourceRecords.filter((f) => f.parsed && f.error);
+  const failedFiles = sourceRecords.filter((f) => !f.parsed && f.error);
+  const unparsed = sourceRecords.filter((f) => !f.parsed && !f.error);
   if (partialFiles.length > 0) {
     out.push(`Partial parses (${partialFiles.length}):`);
     for (const f of partialFiles.slice(0, MAX_LIST)) out.push(`  ${f.path}: ${f.error}`);
@@ -495,7 +514,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
     if (failedFiles.length > MAX_LIST) out.push(truncationFooter({ total: failedFiles.length, shown: MAX_LIST }));
   }
   if (inventory) {
-    out.push(`Unsupported source files: ${inventory.unsupportedSourceFileCount}`);
+    out.push(`Unsupported source files: ${sourceInventory?.unsupportedSourceFileCount ?? 'not recorded (legacy classification)'}`);
     out.push(`Ignored files: ${inventory.ignoredFileCount}`);
     out.push(`Generated files: ${inventory.generatedFileCount}`);
     const skipTotal = Object.values(inventory.skippedByReason).reduce((a, b) => a + b, 0);
@@ -504,11 +523,12 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
       for (const r of Object.keys(inventory.skippedByReason).sort()) out.push(`  ${r}: ${inventory.skippedByReason[r]}`);
     }
   }
-  if (partialFiles.length === 0 && failedFiles.length === 0) {
-    out.push(`No partial or failed parses among ${files.length} candidate file records.`);
+  if (outcomes) out.push(`Whole-scan supported source: complete=${outcomes.complete}, partial=${outcomes.partial}, failed=${outcomes.failed}, skipped=${outcomes.skipped}, unprocessed=${outcomes.unprocessed}. Path lists below describe retained records only.`);
+  if (partialFiles.length === 0 && failedFiles.length === 0 && (!outcomes || outcomes.partial + outcomes.failed === 0)) {
+    out.push(`No partial or failed parses among ${sourceRecords.length} retained supported-source records.`);
   }
   if (unparsed.length > 0) {
-    out.push(`Candidate files without parse records: ${unparsed.length}`);
+    out.push(`Supported-source records without parse outcomes: ${unparsed.length}`);
     for (const f of unparsed.slice(0, MAX_LIST)) out.push(`  ${f.path}`);
     if (unparsed.length > MAX_LIST) out.push(truncationFooter({ total: unparsed.length, shown: MAX_LIST }));
   }

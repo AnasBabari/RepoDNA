@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { SafeRepositoryItem } from '../api/github/repositories/route';
 import { trackAuthFlow } from '../lib/analytics';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 import { getUserFacingErrorMessage } from '../lib/user-facing-errors';
+import { useModalFocus } from './useModalFocus';
 
 export function PrivateRepoPicker({
   isOpen,
@@ -24,6 +25,7 @@ export function PrivateRepoPicker({
   const [repos, setRepos] = useState<SafeRepositoryItem[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [listingNote, setListingNote] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,8 +33,13 @@ export function PrivateRepoPicker({
   const [revoking, setRevoking] = useState(false);
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
+  const dialogRef = useModalFocus<HTMLDivElement>(isOpen, () => { setConfirmingRevoke(false); onClose(); });
 
   const fetchRepos = useCallback(async (searchQuery: string, pageNum: number) => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError(null);
     setErrorCode(null);
@@ -41,15 +48,18 @@ export function PrivateRepoPicker({
         page: String(pageNum),
         query: searchQuery,
       });
-      const res = await fetch(`/api/github/repositories?${params.toString()}`);
+      const res = await fetch(`/api/github/repositories?${params.toString()}`, { signal: controller.signal, cache: 'no-store' });
       const data = (await res.json()) as {
         success?: boolean;
         error?: { code?: string; message?: string };
         repositories?: SafeRepositoryItem[];
         hasMore?: boolean;
         page?: number;
+        searchScope?: string | null;
+        listingTruncated?: boolean;
       };
 
+      if (controller.signal.aborted) return;
       if (!res.ok || !data.success) {
         const code = data.error?.code || (res.status === 401 ? 'UNAUTHORIZED' : res.status === 403 ? 'FORBIDDEN' : res.status === 429 ? 'RATE_LIMITED' : null);
         const err = new Error(data.error?.message || 'Failed to fetch repositories') as Error & { code?: string };
@@ -60,12 +70,14 @@ export function PrivateRepoPicker({
       setRepos(data.repositories || []);
       setHasMore(Boolean(data.hasMore));
       setPage(data.page || pageNum);
+      setListingNote(data.searchScope ?? (data.listingTruncated ? 'The installation listing reached its safety limit. Some repositories may be omitted; pagination covers the available results only.' : null));
     } catch (err) {
+      if (controller.signal.aborted) return;
       const code = (err as Error & { code?: string }).code || null;
       setErrorCode(code);
       setError(getUserFacingErrorMessage(err, 'Could not load repositories.', code));
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -74,7 +86,7 @@ export function PrivateRepoPicker({
       const timeout = setTimeout(() => {
         fetchRepos(query, 1);
       }, query ? 300 : 0);
-      return () => clearTimeout(timeout);
+      return () => { clearTimeout(timeout); requestRef.current?.abort(); };
     }
   }, [isOpen, query, fetchRepos]);
 
@@ -125,12 +137,17 @@ export function PrivateRepoPicker({
     <div className="dialog-backdrop" onClick={handleClose}>
       <div
         className="dialog-card"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="private-repositories-title"
+        tabIndex={-1}
         style={{ maxWidth: '720px', width: '94%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-header">
           <div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Your GitHub Repositories (Beta)</h2>
+            <h2 id="private-repositories-title" style={{ fontSize: '1.25rem', fontWeight: 600 }}>Your GitHub Repositories (Beta)</h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '2px' }}>
               Select any private or public repository to analyze.
             </p>
@@ -185,7 +202,7 @@ export function PrivateRepoPicker({
           </div>
           {confirmingRevoke && (
             <div
-              role="alertdialog"
+              role="group"
               aria-labelledby="disconnect-github-title"
               aria-describedby="disconnect-github-description"
               style={{
@@ -241,6 +258,7 @@ export function PrivateRepoPicker({
           />
         </div>
 
+        {listingNote && <p className="muted" role="status">{listingNote}</p>}
         {/* Repository List */}
         <div style={{ flex: 1, overflowY: 'auto', minHeight: '260px', paddingRight: '4px' }}>
           {loading && repos.length === 0 ? (
