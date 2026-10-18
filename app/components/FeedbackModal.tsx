@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { trackFeedbackSubmitted } from '../lib/analytics';
 import { useModalFocus } from './useModalFocus';
 
@@ -34,6 +34,8 @@ export function FeedbackModal({
   const [selectedCaps, setSelectedCaps] = useState<string[]>([]);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const submissionRef = useRef<{ body: string; id: string } | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const dialogRef = useModalFocus<HTMLDivElement>(isOpen, onClose);
 
@@ -47,31 +49,34 @@ export function FeedbackModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     setSubmitting(true);
+    setDeliveryError(null);
 
     try {
-      await fetch('/api/feedback', {
+      const body = JSON.stringify({ usefulnessScore: rating, primaryUsecase: useCase, missingCapabilities: selectedCaps });
+      if (submissionRef.current?.body !== body) submissionRef.current = { body, id: crypto.randomUUID() };
+      const response = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          usefulnessScore: rating,
-          primaryUsecase: useCase,
-          missingCapabilities: selectedCaps,
-          comments: comment.trim().slice(0, 500),
-        }),
+        body: JSON.stringify({ ...JSON.parse(body), submissionId: submissionRef.current.id }),
       });
+      if (!response.ok) throw new Error(response.status === 429 ? 'busy' : 'delivery');
+      const acknowledgement = await response.json();
+      if (acknowledgement.success !== true) throw new Error('delivery');
 
       trackFeedbackSubmitted({
         usefulnessScore: rating,
         primaryUsecase: useCase,
         missingCapabilities: selectedCaps,
-        hasTextFeedback: comment.trim().length > 0,
+        hasTextFeedback: false,
       });
 
       setSubmitted(true);
-    } catch {
-      // Still show thank you
-      setSubmitted(true);
+    } catch (error) {
+      setDeliveryError(error instanceof Error && error.message === 'busy'
+        ? 'Feedback is busy. Your selections are preserved; retry in a minute.'
+        : 'Your feedback was not confirmed. Your selections are preserved; check your connection and retry.');
     } finally {
       setSubmitting(false);
     }
@@ -265,6 +270,7 @@ export function FeedbackModal({
             </div>
 
             {/* Actions */}
+            {deliveryError && <p role="alert">{deliveryError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
               <button className="chip-button" type="button" onClick={onClose} disabled={submitting}>
                 Cancel
