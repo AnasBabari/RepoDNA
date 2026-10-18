@@ -17,7 +17,20 @@ const manifestFields = ['exportSchemaVersion', 'exporterVersion', 'analyzedAt'] 
 const repositoryFields = ['name', 'source', 'commitSha', 'analyzedRef'] as const;
 
 function executableText(text: string) {
-  return text.split('\n').filter((line) => !line.startsWith('//')).join('\n');
+  const code = text.split('\n').filter((line) => !line.startsWith('//')).join('\n');
+  // Metadata is now also persisted as escaped DATA; compare executable shape,
+  // not legitimate differing snapshot-key/manifest string values.
+  let quoted = false, escaped = false, shape = '';
+  for (const char of code) {
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === "'") quoted = false;
+    } else if (char === "'") { quoted = true; shape += "''"; }
+    else shape += char;
+  }
+  expect(quoted).toBe(false);
+  return shape;
 }
 
 describe('Cypher manifest comments', () => {
