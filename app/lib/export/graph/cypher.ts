@@ -134,9 +134,15 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
   lines.push('CREATE CONSTRAINT repo_dna_group_id IF NOT EXISTS FOR (n:RepoDNAGroup) REQUIRE n.id IS UNIQUE;');
   lines.push('CREATE CONSTRAINT repo_dna_unresolved_id IF NOT EXISTS FOR (n:RepoDNAUnresolved) REQUIRE n.id IS UNIQUE;');
   lines.push('CREATE CONSTRAINT repo_dna_snapshot_id IF NOT EXISTS FOR (n:RepoDNASnapshot) REQUIRE n.id IS UNIQUE;');
-  lines.push(`UNWIND [{id: ${cypherValue(snapshotKey)}, manifestJson: ${cypherValue(compactStableStringify(manifest))}}] AS row`);
+  const snapshotRow = [
+    `id: ${cypherValue(snapshotKey)}`, `manifestJson: ${cypherValue(compactStableStringify(manifest))}`,
+    `manifestBase64: ${cypherValue(utf8Base64(compactStableStringify(manifest)))}`,
+    `repositorySource: ${cypherValue(manifest.repository.source)}`, `commitSha: ${cypherValue(manifest.repository.commitSha)}`,
+    `analyzedRef: ${cypherValue(manifest.repository.analyzedRef)}`, `analyzedAt: ${cypherValue(manifest.analyzedAt)}`,
+  ].join(', ');
+  lines.push('UNWIND [', `  {${snapshotRow}}`, '] AS row');
   lines.push('MERGE (n:RepoDNASnapshot {id: row.id})');
-  lines.push('SET n.manifestJson = row.manifestJson;');
+  lines.push('SET n.manifestJson = row.manifestJson, n.manifestBase64 = row.manifestBase64, n.repositorySource = row.repositorySource, n.commitSha = row.commitSha, n.analyzedRef = row.analyzedRef, n.analyzedAt = row.analyzedAt;');
   lines.push('');
 
   const nodesByKind = new Map<string, typeof document.nodes>();
