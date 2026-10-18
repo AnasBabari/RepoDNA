@@ -6,7 +6,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 
 for (const key of ['Enter', 'Space']) test(`${key} inspects and expands the focused graph node and returns focus`, async ({ page }) => {
   await page.goto('/?sample=https://github.com/karpathy/nanoGPT');
-  await page.getByRole('button', { name: 'Code Graph', exact: true }).click();
+  await page.getByRole('button', { name: '06 Code Graph', exact: true }).click();
   const node = page.locator('.code-node').first();
   await expect(node).toBeVisible();
   const name = await node.getAttribute('aria-label');
