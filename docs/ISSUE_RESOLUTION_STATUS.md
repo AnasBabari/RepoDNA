@@ -66,7 +66,7 @@ local test is not evidence that production contains a fix.
 | #13 | Implemented on graph-keyboard: Enter/Space share pointer inspection/expansion, contextual labels, detail focus and restoration on close/Escape. Two browser regressions and typecheck pass; unmerged. |
 | #14 | Implemented on modal-accessibility: shared focus lifecycle, inert background, named dialogs, Escape and trigger restoration. Desktop/mobile private reconnect, feedback, New analysis and export tests: 10 passed, one expected Parquet-gate skip; typecheck passed. Unmerged. |
 | #15 | Responsive controls verified at 320–1440px in PR #22. zoom-acceptance adds long-name fixtures and real Chromium tabs.setZoom(2), verifies getZoom=2 plus layout-viewport shrink, control bounds and Architecture/Code Graph screenshots. Browser regression passes; unmerged. |
-| #16 | Pending: feedback delivery must not acknowledge a dropped submission. |
+| #16 | Implemented on feedback-delivery: fixed-choice daily Redis aggregates expire within 30 days; no free text/identity fields, 24h retry receipts, explicit 400/429/503 failures. Typecheck, 22 focused unit/API tests, seven browser tests and real disposable Redis integration pass. Unmerged. |
 | #17 | Scan-counter abort/single-flight lifecycle implemented in PR #22; unit/browser and hosted smoke pass. |
 | #18 | Capability/privacy copy corrected in PR #22. |
 | #19 | Browser-copy drift regressions included in PR #22. |

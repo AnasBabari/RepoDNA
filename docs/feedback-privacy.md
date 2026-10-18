@@ -25,5 +25,7 @@ after both HTTP success and `{ success: true }`. Existing analytics consent
 still governs optional PostHog events. No survey values enter raw server logs.
 
 Tests use mocked Redis or a disposable local Redis instance, never production
-survey counters. Local development without Redis intentionally cannot confirm
+survey counters (`node tests/integration/feedback-redis.mjs` verifies real Lua,
+TTL, throttling and duplicate retries in an owned Redis 7 container, removed in
+finally). Local development without Redis intentionally cannot confirm
 delivery; it does not fabricate success or fall back to console logging.
