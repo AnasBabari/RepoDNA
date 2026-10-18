@@ -112,10 +112,9 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   out.push(...heading(1, 'Repository identity'));
   out.push(`Name:            ${repo.name}`);
   out.push(`Source:          ${repo.source}`);
-  if (v2) {
-    const repoV2 = repo as RepoDNAProjectV2['repository'];
-    out.push(`Analyzed commit: ${repoV2.commitSha ?? '(not pinned)'}`);
-    out.push(`Analyzed ref:    ${repoV2.analyzedRef ?? '(not recorded)'}`);
+  if (v2 || repo.commitSha || repo.analyzedRef) {
+    out.push(`Analyzed commit: ${repo.commitSha ?? '(not pinned)'}`);
+    out.push(`Analyzed ref:    ${repo.analyzedRef ?? '(not recorded)'}`);
   }
   // 2. Analysis timestamp and versions
   out.push(...heading(2, 'Analysis metadata'));
@@ -465,7 +464,7 @@ export function generateTextReport(project: AnyProject, meta?: TextReportMeta): 
   if (centrality && centrality.highCoupling.length > 0) {
     for (const h of centrality.highCoupling.slice(0, MAX_LIST)) {
       const node = nodes.find((n) => n.id === h.nodeId);
-      out.push(`  ${node ? node.path + ' :: ' + node.qualifiedName : h.nodeId}: ${h.connections} dependents — treat changes as high risk`);
+      out.push(`  ${node ? node.path + ' :: ' + node.qualifiedName : h.nodeId}: ${h.connections} recorded node links (not unique dependents) — inspect relationship evidence before assessing impact`);
     }
   } else {
     const hc = metrics?.highCouplingFiles ?? [];

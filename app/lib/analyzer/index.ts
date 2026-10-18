@@ -19,7 +19,8 @@ import {
 } from './graph';
 import { extractFromFileList, extractFromZip, fetchGitHubRepo, parseGitHubUrl, type ParsedGitHubUrl } from './ingestion';
 export { parseGitHubUrl, type ParsedGitHubUrl };
-import { DEFAULT_INGESTION_LIMITS, type IngestionLimits } from './types';
+import { DEFAULT_INGESTION_LIMITS, IngestionError, type IngestionLimits } from './types';
+import { resolveGitHubRevision } from '../github-revision';
 import type {
   Diagnostic,
   DiscoveredFile,
@@ -456,8 +457,16 @@ export async function analyzeGitHubUrl(
   accessToken?: string,
   options?: AnalyzeOptions
 ): Promise<RepoDNAProject> {
-  const discovery = await fetchGitHubRepo(url, limits, accessToken);
-  return analyzeRepositoryFiles(discovery, options);
+  const parsed = parseGitHubUrl(url);
+  if (!parsed) throw new IngestionError('INVALID_GITHUB_URL', 'Enter a supported GitHub repository URL.', 400);
+  const revision = await resolveGitHubRevision(parsed, { accessToken });
+  const discovery = await fetchGitHubRepo(url, limits, accessToken, { commitSha: revision.commitSha });
+  const project = await analyzeRepositoryFiles(discovery, options);
+  if (discovery.commitSha) {
+    project.repository.commitSha = discovery.commitSha;
+    project.repository.analyzedRef = discovery.analyzedRef;
+  }
+  return project;
 }
 
 export async function analyzeUploadedFiles(

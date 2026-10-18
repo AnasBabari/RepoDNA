@@ -128,9 +128,10 @@ function SamplePreview({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-export function LandingView({ onAnalyzeGitHub, onAnalyzeFolder, onAnalyzeZip, onLoadDemo, onOpenPrivatePicker,
+export function LandingView({ onAnalyzeGitHub, onOpenSample, onAnalyzeFolder, onAnalyzeZip, onLoadDemo, onOpenPrivatePicker,
   onOpenFeedback, session, recentArtifacts, onOpenRecent, onRemoveRecent, onClearRecent }: {
   onAnalyzeGitHub: (url: string) => void;
+  onOpenSample: (url: string) => void;
   onAnalyzeFolder: (files: FileList) => void;
   onAnalyzeZip: (file: File) => void;
   onLoadDemo: () => void;
@@ -174,7 +175,7 @@ export function LandingView({ onAnalyzeGitHub, onAnalyzeFolder, onAnalyzeZip, on
             </form>
             <p className="landing-support">Supports Python, JavaScript, TypeScript; Go (experimental).</p>
           </div>
-          <SamplePreview onOpen={() => onAnalyzeGitHub(SAMPLE_URL)} />
+          <SamplePreview onOpen={() => onOpenSample(SAMPLE_URL)} />
         </section>
         <div className="landing-resource-grid">
           <section aria-labelledby="import-title"><h2 id="import-title">Import a repository</h2><p>Analyze a public repository, or upload your own code.</p>
@@ -184,7 +185,7 @@ export function LandingView({ onAnalyzeGitHub, onAnalyzeFolder, onAnalyzeZip, on
             <button className="landing-private-link" type="button" onClick={onOpenPrivatePicker}>Connect a private repository <span>GitHub access required →</span></button>
           </section>
           <section aria-labelledby="sample-title"><h2 id="sample-title">Try a sample repository</h2><p>Explore bundled snapshots. These are not fresh scans.</p>
-            {samples.map(([name, description]) => <button className="landing-resource-row" key={name} type="button" onClick={() => onAnalyzeGitHub(`https://github.com/${name}`)}><FileCode size={19} aria-hidden="true" /><span><strong>{name}</strong><small>{description}</small></span><span aria-hidden="true">›</span></button>)}
+            {samples.map(([name, description]) => <button className="landing-resource-row" key={name} type="button" onClick={() => onOpenSample(`https://github.com/${name}`)}><FileCode size={19} aria-hidden="true" /><span><strong>{name}</strong><small>{description} · Bundled snapshot</small></span><span aria-hidden="true">›</span></button>)}
             <button className="landing-resource-row" type="button" onClick={onLoadDemo}><FileCode size={19} aria-hidden="true" /><span><strong>mixed-basic (demo)</strong><small>Small demonstration repository.</small></span><span aria-hidden="true">›</span></button>
           </section>
         </div>

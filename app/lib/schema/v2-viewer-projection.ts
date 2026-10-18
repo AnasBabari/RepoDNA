@@ -1,6 +1,7 @@
 import type { RepoDNAProjectV2 } from '../analyzer/v2/types';
 import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 import { orderTechnologies } from '../technology-evidence';
+import { aggregateFileRankings } from './file-rankings';
 import type {
   CallRecord,
   FileRecord,
@@ -138,14 +139,10 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     for (const file of component.files) fileComponents[file] = component.id;
   }
 
-  const importantFiles = project.centrality.mostConnected
-    .map((item) => {
-      const node = nodesById.get(item.nodeId);
-      return node?.path
-        ? { file: node.path, score: item.score, reasons: [`${item.inDegree} inbound and ${item.outDegree} outbound graph links`] }
-        : null;
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
+  const importantFiles = aggregateFileRankings(nodesById, project.centrality.mostConnected.map((item) => ({
+    nodeId: item.nodeId, score: item.score,
+    reasons: [`${item.inDegree} inbound and ${item.outDegree} outbound recorded node links`],
+  })));
 
   const onboarding = (project.entrypoints ?? []).slice(0, 5).map((entrypoint, index) => ({
     step: index + 1,
@@ -177,6 +174,8 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     repository: {
       name: project.repository.name,
       source: project.repository.source,
+      commitSha: project.repository.commitSha,
+      analyzedRef: project.repository.analyzedRef,
       languages: project.repository.languages,
       fileCount: files.length,
       // Inventory counts include source files intentionally left out by a
@@ -217,12 +216,9 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
       externalDependencies: imports.filter((record) => record.external).length,
       dependencyCycles,
       mostConnectedFiles: importantFiles.map((file) => ({ file: file.file, connections: file.score })),
-      highCouplingFiles: project.centrality.highCoupling
-        .map((item) => {
-          const node = nodesById.get(item.nodeId);
-          return node?.path ? { file: node.path, connections: item.connections } : null;
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null),
+      highCouplingFiles: aggregateFileRankings(nodesById, project.centrality.highCoupling.map((item) => ({
+        nodeId: item.nodeId, score: item.connections, reasons: [`${item.connections} recorded node links`],
+      }))).map((item) => ({ file: item.file, connections: item.score })),
       symbols: symbols.length,
       routes: routes.length,
       components: architecture.components.length,

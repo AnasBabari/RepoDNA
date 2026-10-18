@@ -17,6 +17,8 @@ export interface DeepScanDiscovery {
   skipped: { path: string; reason: string }[];
   name: string;
   source: string;
+  commitSha?: string;
+  analyzedRef?: string;
   inventory?: IngestionInventory;
 }
 

@@ -115,6 +115,8 @@ export type RepoDNAProject = {
   repository: {
     name: string;
     source: string;
+    commitSha?: string | null;
+    analyzedRef?: string | null;
     languages: Record<string, number>;
     fileCount: number;
     sourceFileCount: number;

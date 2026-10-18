@@ -2,6 +2,7 @@ import * as fflate from 'fflate';
 import { DEFAULT_INGESTION_LIMITS, IngestionError, type DiscoveredFile, type IngestionInventory, type IngestionLimits, type IngestionErrorCode } from './types';
 import { isCandidate, isGeneratedPath, isIgnored } from './source-policy';
 import { classifySourcePaths } from './source-inventory';
+import { pinGitHubDiscovery, resolveGitHubRevision } from '../github-revision';
 export { DEFAULT_IGNORES, SOURCE_EXTENSIONS, SUPPORTED_SOURCE_EXTENSIONS, SPECIAL_FILES } from './source-policy';
 
 const MAX_INGESTION_PATH_LENGTH = 4096;
@@ -24,6 +25,8 @@ export interface ParsedGitHubUrl {
   owner: string;
   repo: string;
   canonicalUrl: string;
+  view?: 'tree' | 'blob' | 'commit';
+  refSegments?: string[];
 }
 
 export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
@@ -31,11 +34,15 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
   let trimmed = url.trim();
 
   // Strip wrapping quotes
-  trimmed = trimmed.replace(/^["']|["']$/g, '').trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
   if (!trimmed) return null;
+  // Reject normalization hazards before WHATWG URL parsing erases them.
+  if (/[\x00-\x1f\x7f\\]/.test(trimmed) || /\/(?:\.|%2e){1,2}(?:\/|[?#]|$)/i.test(trimmed)) return null;
 
   // Reject credential-bearing URLs (e.g. https://user:pass@github.com)
-  if (/@/.test(trimmed) && /^https?:\/\//i.test(trimmed)) {
+  if (/^https?:\/\/[^/?#]*@/i.test(trimmed)) {
     return null;
   }
 
@@ -72,7 +79,7 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
       }
 
       // Reject non-standard ports or username/password in URL object
-      if (parsed.username || parsed.password) {
+      if (parsed.username || parsed.password || parsed.port) {
         return null;
       }
 
@@ -82,6 +89,16 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
         const repo = segments[1].replace(/\.git$/i, '');
 
         if (isValidOwnerRepo(owner, repo)) {
+          if (segments.length > 2) {
+            const view = segments[2];
+            if (view !== 'tree' && view !== 'blob' && view !== 'commit') return null;
+            const refSegments = segments.slice(3).map(decodeURIComponent);
+            if (!refSegments.length || (view === 'blob' && refSegments.length < 2)) return null;
+            if (view === 'commit' && (refSegments.length !== 1 || !/^[a-f0-9]{40}$/i.test(refSegments[0]))) return null;
+            if (refSegments.some((part) => !part || /[\x00-\x1f\x7f\\]/.test(part) || part === '.' || part === '..')) return null;
+            if (parsed.pathname.length > 4096 || refSegments.length > 32) return null;
+            return { owner, repo, view, refSegments, canonicalUrl: `https://github.com/${owner}/${repo}/${view}/${refSegments.map(encodeURIComponent).join('/')}` };
+          }
           return { owner, repo, canonicalUrl: `https://github.com/${owner}/${repo}` };
         }
       }
@@ -1037,7 +1054,7 @@ export async function fetchGitHubRepo(
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS,
   accessToken?: string,
   options: GitHubFetchOptions = {}
-): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory?: import('./types').IngestionInventory }> {
+): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; commitSha?: string; analyzedRef?: string; inventory?: import('./types').IngestionInventory }> {
   const parsed = parseGitHubUrl(urlOrOwnerRepo);
   if (!parsed) {
     throw new IngestionError(
@@ -1048,6 +1065,11 @@ export async function fetchGitHubRepo(
   }
 
   const { owner, repo } = parsed;
+  if (parsed.refSegments && !options.commitSha) {
+    const revision = await resolveGitHubRevision(parsed, { accessToken });
+    options = { ...options, commitSha: revision.commitSha };
+  }
+  const pin = <T extends { source: string }>(discovery: T) => pinGitHubDiscovery(discovery, owner, repo, options.commitSha);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), limits.fetchTimeoutMs);
@@ -1080,7 +1102,7 @@ export async function fetchGitHubRepo(
       );
       if (typeof metadata.size === 'number' && metadata.size >= limits.treeFirstSizeKb) {
         clearTimeout(timeoutId);
-        return fetchGitHubTreeRepo(owner, repo, limits, accessToken, metadata, options.commitSha);
+        return fetchGitHubTreeRepo(owner, repo, limits, accessToken, metadata, options.commitSha).then(pin);
       }
     } catch {
       // The archive path remains a useful fallback when the metadata request
@@ -1276,19 +1298,19 @@ export async function fetchGitHubRepo(
 
   const contentLength = response.headers.get('content-length');
   if (contentLength && parseInt(contentLength, 10) > limits.maxArchiveBytes) {
-    return fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha);
+    return pin(await fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha));
   }
 
   try {
     const zipBuffer = await streamBoundedArrayBuffer(response, limits.maxArchiveBytes);
     const result = await extractFromZip(zipBuffer, repo, limits);
-    return {
+    return pin({
       ...result,
       source: `https://github.com/${owner}/${repo}`,
-    };
+    });
   } catch (error) {
     if (error instanceof IngestionError && error.code === 'ARCHIVE_TOO_LARGE') {
-      return fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha);
+      return pin(await fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha));
     }
     throw error;
   }

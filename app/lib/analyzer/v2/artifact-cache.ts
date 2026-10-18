@@ -35,6 +35,12 @@ export interface CachedPublicArtifact {
   pointer: PublicArtifactPointer;
 }
 
+export function matchesPublicArtifactIdentity(project: RepoDNAProjectV2, input: { owner: string; repo: string; commitSha: string }): boolean {
+  const sha = input.commitSha.toLowerCase();
+  return /^[0-9a-f]{40}$/.test(sha) && project.repository.commitSha === sha && project.repository.analyzedRef === sha &&
+    project.repository.source.toLowerCase() === `https://github.com/${input.owner}/${input.repo}/tree/${sha}`.toLowerCase();
+}
+
 function safeSegment(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
 }
@@ -108,7 +114,7 @@ export async function readCachedPublicArtifact(input: {
     await del(pathname).catch(() => undefined);
     return null;
   }
-  if (!validateRepoDNAProjectV2(project).valid) {
+  if (!validateRepoDNAProjectV2(project).valid || !matchesPublicArtifactIdentity(project, input)) {
     await del(pathname).catch(() => undefined);
     return null;
   }
@@ -137,6 +143,7 @@ export async function storePublicArtifact(input: {
   if (!validateRepoDNAProjectV2(input.project).valid) {
     throw new Error('PUBLIC_ARTIFACT_SCHEMA_INVALID');
   }
+  if (!matchesPublicArtifactIdentity(input.project, input)) throw new Error('PUBLIC_ARTIFACT_IDENTITY_MISMATCH');
 
   const pathname = publicArtifactPath(input);
   const serialized = JSON.stringify(input.project);

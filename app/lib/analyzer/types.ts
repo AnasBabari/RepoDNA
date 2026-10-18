@@ -78,6 +78,9 @@ export const PUBLIC_REPOSITORY_INGESTION_LIMITS: IngestionLimits = {
 };
 
 export type IngestionErrorCode =
+  | 'GITHUB_REF_AMBIGUOUS'
+  | 'GITHUB_REF_NOT_FOUND'
+  | 'GITHUB_REF_UNSUPPORTED'
   | 'INVALID_GITHUB_URL'
   | 'REPO_NOT_FOUND'
   | 'UPSTREAM_GITHUB_ERROR'

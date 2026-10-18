@@ -37,7 +37,7 @@ test('real ZIP analysis excludes Makefiles from source coverage and presents man
   expect(report).toContain('37 complete + 0 partial + 0 failed + 0 skipped + 0 unprocessed = 37');
 });
 test('older snapshots disclose unavailable manifest evidence instead of proxy counts', async ({ page }) => {
-  await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+  await page.goto('/?sample=https://github.com/karpathy/nanoGPT');
   const evidence = page.getByRole('region', { name: 'Inventory evidence' });
   await expect(evidence).toContainText('older snapshots cannot establish these counts');
   await expect(evidence).toContainText('Legacy source accounting');
