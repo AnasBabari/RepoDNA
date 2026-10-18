@@ -41,6 +41,10 @@ local test is not evidence that production contains a fix.
    is READY; protected interactive acceptance remains unverified.
 7. `codex/file-ranking-evidence` → `codex/evidence-based-roles`: unique full-path
    file summaries, merged per-symbol evidence and honest recorded-score scope (#26).
+   PR #30 remains draft and unmerged; hosted CI run 39074742394 passed all jobs.
+8. `codex/github-ref-identity` → `codex/file-ranking-evidence`: immutable revision
+   identity across durable, legacy-server, browser-worker and private paths (#9).
+   Shared URL resolution rejects ambiguity rather than substituting HEAD.
 
 ## Issue-by-issue state
 
@@ -54,7 +58,7 @@ local test is not evidence that production contains a fix.
 | #6 | Implemented in PR #25: searchable retained gaps, null targets, relevant-only nodes and drawable-edge counts. 368 unit / 31 Python and both local browser variants passed; hosted CI passed. Unmerged. |
 | #7 | Implemented on inventory-evidence: manifest roots/scopes, supported-source denominator, reconciled outcomes, schema/UI/TXT/all export evidence and nullable legacy counts. Local verification below; unmerged review remains. |
 | #8 | Implemented on evidence-based-roles: quantitative language ranking, syntax-backed UI roles and neutral Python src/app files. Local verification below; unmerged review remains. |
-| #9 | Pending: honor explicit tree/blob refs during GitHub analysis. |
+| #9 | Implemented on github-ref-identity: bounded tag/branch/commit resolution, pinned acquisition, portable identity and actionable failures. 466 unit / 34 Python tests, both builds/typechecks pass; full production-mode browser run and hosted acceptance are pending. Unmerged review remains. |
 | #10 | Partially addressed by visible bundled-snapshot provenance; sample short-circuit/reanalyze behavior still pending. |
 | #11 | Pending: GitHub repository pagination and search beyond first page. |
 | #12 | Pending: Neo4j multi-snapshot isolation/membership provenance. Existing same-snapshot idempotency is not sufficient. |
