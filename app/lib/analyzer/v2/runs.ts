@@ -47,7 +47,9 @@ export interface AnalysisRun {
     coveragePercentage: number;
     nodeCount: number;
     edgeCount: number;
-    unresolvedCount: number;
+    unresolvedCount: number | null;
+    retainedUnresolvedCount?: number;
+    graphScope?: import('./types').GraphScope;
     completeness: { status: string; reasons: string[] };
     project: unknown;
   } | null;

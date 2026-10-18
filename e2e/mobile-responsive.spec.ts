@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const SAMPLE_URL = '/?repo=https://github.com/karpathy/nanoGPT';
+const SAMPLE_URL = '/?sample=https://github.com/karpathy/nanoGPT';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await context.route('**/*', (route) => {
@@ -67,3 +67,26 @@ test.describe('tablet workspace', () => {
     await expect(page.locator('.detail-panel:visible')).toHaveCount(1);
   });
 });
+
+for (const width of [320, 390, 480, 768, 1440]) {
+  test(`graph and architecture heading controls stay inside the ${width}px viewport`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await loadWorkspace(page);
+    for (const view of ['Code Graph', 'Architecture']) {
+      const button = width <= 820
+        ? page.getByRole('navigation', { name: 'Workspace views' }).getByRole('button', { name: view, exact: true })
+        : page.locator(`.sidebar button[title="${view}"]`);
+      await button.click();
+      const heading = page.locator('.view-heading');
+      const titleBounds = await heading.locator('h1').boundingBox();
+      expect(titleBounds!.width).toBeGreaterThan(200);
+      for (const control of await heading.locator('button').all()) {
+        await expect(control).toBeVisible();
+        const bounds = await control.boundingBox();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+        if (width <= 480) expect(bounds!.height).toBeGreaterThanOrEqual(44);
+      }
+    }
+  });
+}

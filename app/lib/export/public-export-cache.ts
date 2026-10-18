@@ -1,7 +1,8 @@
 import { del, get, head, issueSignedToken, list, presignUrl, put } from '@vercel/blob';
+import { Buffer } from 'node:buffer';
 
 import { PUBLIC_ARTIFACT_TTL_SECONDS, V2_ANALYZER_VERSION, isPublicArtifactCacheConfigured } from '../analyzer/v2/artifact-cache';
-import { GRAPH_EXPORT_EXTENSIONS, type GraphExportFormat } from './graph/types';
+import { GRAPH_EXPORTER_VERSION, GRAPH_EXPORT_SCHEMA_VERSION, GRAPH_EXPORT_EXTENSIONS, type GraphExportFormat } from './graph/types';
 import { sha256Hex } from './graph/stable-json';
 
 const SIGNED_URL_TTL_MS = 5 * 60 * 1000;
@@ -32,7 +33,8 @@ export function publicExportBlobPath(input: {
     safeSegment(input.commitSha),
     analyzer,
     'exports',
-    '1.0.0',
+    GRAPH_EXPORT_SCHEMA_VERSION,
+    GRAPH_EXPORTER_VERSION,
     input.sourceDigest,
     `expires-${input.expiresEpoch}`,
     `${formatSegment}.${extension}`,
@@ -135,7 +137,9 @@ export async function storePublicExport(input: {
   if (input.bytes.byteLength > MAX_PUBLIC_EXPORT_BYTES) {
     throw new Error('PUBLIC_EXPORT_TOO_LARGE');
   }
-  const result = await put(input.pathname, input.bytes, {
+  // Pass a zero-copy Node Buffer view: the SDK's PutBody excludes Uint8Array.
+  const body = Buffer.from(input.bytes.buffer, input.bytes.byteOffset, input.bytes.byteLength);
+  const result = await put(input.pathname, body, {
     access: 'private',
     addRandomSuffix: false,
     allowOverwrite: true,

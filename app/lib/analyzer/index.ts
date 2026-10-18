@@ -3,6 +3,9 @@ import { analyzePython } from './analyzers/python';
 import { analyzePythonTreeSitter } from './analyzers/python-treesitter';
 import { analyzeTreeSitter } from './analyzers/tree-sitter';
 import { environmentEvidence, fingerprint, languageFor, parseTsconfigPaths } from './detection';
+import { collectManifestInventory } from './manifest-inventory';
+import { acquisitionSourceCounts, reconcileSourceOutcomes } from './source-inventory';
+import type { IngestionInventory } from './types';
 import { resolveExpressRouteMounts } from './express';
 import {
   buildArchitecture,
@@ -16,7 +19,8 @@ import {
 } from './graph';
 import { extractFromFileList, extractFromZip, fetchGitHubRepo, parseGitHubUrl, type ParsedGitHubUrl } from './ingestion';
 export { parseGitHubUrl, type ParsedGitHubUrl };
-import { DEFAULT_INGESTION_LIMITS, type IngestionLimits } from './types';
+import { DEFAULT_INGESTION_LIMITS, IngestionError, type IngestionLimits } from './types';
+import { resolveGitHubRevision } from '../github-revision';
 import type {
   Diagnostic,
   DiscoveredFile,
@@ -60,6 +64,7 @@ export async function analyzeRepositoryFiles(
     skipped: { path: string; reason: string }[];
     name: string;
     source: string;
+    inventory?: IngestionInventory;
   },
   options?: AnalyzeOptions
 ): Promise<RepoDNAProject> {
@@ -85,6 +90,11 @@ export async function analyzeRepositoryFiles(
   });
 
   const fingerprintData = fingerprint(discoveredFiles);
+  const manifestInventory = collectManifestInventory(discoveredFiles, skipped);
+  if (discovery.inventory?.truncation?.hitLimits.length && manifestInventory.status === 'complete') {
+    manifestInventory.status = 'partial';
+    manifestInventory.problems.push({ file: '*', code: 'MANIFEST_ACQUISITION_INCOMPLETE', message: 'Repository acquisition was limited; manifest counts are lower bounds.' });
+  }
   const pathAliases = parseTsconfigPaths(discoveredFiles);
 
   const files: FileRecord[] = [];
@@ -95,6 +105,7 @@ export async function analyzeRepositoryFiles(
     message: `Skipped ${item.path}: ${item.reason}`,
     file: item.path === '*' ? null : item.path,
   }));
+  diagnostics.push(...manifestInventory.problems.map((problem) => ({ code: problem.code, file: problem.file === '*' ? null : problem.file, severity: 'warning' as const, message: problem.message })));
 
   for (let index = 0; index < discoveredFiles.length; index += 1) {
     const discovered = discoveredFiles[index];
@@ -149,6 +160,12 @@ export async function analyzeRepositoryFiles(
     }
 
     partials.push(partial);
+    const extractionLimits = partial.parseMeta?.extractionLimits ?? [];
+    if (partial.parseMeta?.quality === 'partial') {
+      partial.file.error = extractionLimits.length && !partial.parseMeta.hasSyntaxErrors
+        ? 'SOURCE_EXTRACTION_LIMIT_REACHED'
+        : 'SOURCE_PARSE_PARTIAL';
+    }
     fileRec.parsed = partial.file.parsed;
     fileRec.error = partial.file.error;
     if (partial.parserNotice) {
@@ -158,22 +175,28 @@ export async function analyzeRepositoryFiles(
         message: partial.parserNotice.message,
         file: partial.file.path,
       });
-    } else if (partial.parseMeta?.quality === 'partial') {
+    } else if (partial.parseMeta?.quality === 'partial' && (partial.parseMeta.hasSyntaxErrors || !extractionLimits.length)) {
       diagnostics.push({
         severity: 'warning',
         code: 'SOURCE_PARSE_PARTIAL',
-        message: `Python source contained syntax errors and was partially analyzed.`,
+        message: `${partial.file.language} source contained syntax errors and was partially analyzed.`,
         file: partial.file.path,
       });
     } else if (partial.parseMeta?.quality === 'failed') {
       diagnostics.push({
         severity: 'warning',
         code: 'SOURCE_PARSE_FAILED',
-        message: `Python source could not be parsed and was skipped from syntax analysis.`,
+        message: `${partial.file.language} source could not be parsed and was skipped from syntax analysis.`,
         file: partial.file.path,
       });
     }
-    if (partial.file.error && !partial.parserNotice) {
+    for (const notice of extractionLimits) {
+      diagnostics.push({
+        severity: 'warning', code: 'SOURCE_EXTRACTION_LIMIT_REACHED', file: partial.file.path,
+        message: `${partial.file.path}:${notice.range.startLine}: ${notice.category} extraction limit ${notice.limit}; omitted ${notice.omittedCount === null ? 'unknown (unvisited subtree)' : `${notice.countIsLowerBound ? 'at least ' : ''}${notice.omittedCount}`} ${notice.category} facts. Syntax validity is reported separately.`,
+      });
+    }
+    if (partial.file.error && !partial.parserNotice && partial.parseMeta?.quality !== 'partial') {
       diagnostics.push({
         severity: 'warning',
         code: 'parse_error',
@@ -296,8 +319,10 @@ export async function analyzeRepositoryFiles(
     ...fingerprintData.buildTools,
   ])).sort();
 
-  const parsedCount = files.filter((f) => f.parsed).length;
-  const sourceCount = files.filter((f) => ['Python', 'JavaScript', 'TypeScript', 'Go'].includes(f.language)).length;
+  const sourceInventory = acquisitionSourceCounts(discovery.inventory, [...files.map((file) => file.path), ...skipped.filter((item) => item.path !== '*').map((item) => item.path)], skipped);
+  const sourceOutcomes = reconcileSourceOutcomes(files, sourceInventory);
+  const parsedCount = sourceOutcomes.complete + sourceOutcomes.partial;
+  const sourceCount = sourceInventory.firstPartySourceFileCount;
 
   const dbRecords: TechnologyBoundary[] = Array.from(databases).sort().map((dName) => ({
     name: dName,
@@ -346,10 +371,14 @@ export async function analyzeRepositoryFiles(
       symbols: symbols.length,
       routes: routes.length,
       components: architecture.components.length,
-      parseSuccessRate: sourceCount ? Math.round((parsedCount / sourceCount) * 1000) / 10 : 100.0,
+      parseSuccessRate: sourceOutcomes.supported ? Math.round((parsedCount / sourceOutcomes.supported) * 1000) / 10 : 100.0,
     },
     diagnostics,
     metadata: {
+      manifestInventory,
+      sourceInventory,
+      sourceOutcomes,
+      extractionLimits: partials.flatMap((partial) => (partial.parseMeta?.extractionLimits ?? []).map((notice) => ({ ...notice, file: partial.file.path }))),
       analysisMode: parserMode === 'tree-sitter' ? 'static-typescript-tree-sitter' : 'static-typescript',
       executedRepositoryCode: false,
       analyzerVersion: '1.2.0',
@@ -428,8 +457,16 @@ export async function analyzeGitHubUrl(
   accessToken?: string,
   options?: AnalyzeOptions
 ): Promise<RepoDNAProject> {
-  const discovery = await fetchGitHubRepo(url, limits, accessToken);
-  return analyzeRepositoryFiles(discovery, options);
+  const parsed = parseGitHubUrl(url);
+  if (!parsed) throw new IngestionError('INVALID_GITHUB_URL', 'Enter a supported GitHub repository URL.', 400);
+  const revision = await resolveGitHubRevision(parsed, { accessToken });
+  const discovery = await fetchGitHubRepo(url, limits, accessToken, { commitSha: revision.commitSha });
+  const project = await analyzeRepositoryFiles(discovery, options);
+  if (discovery.commitSha) {
+    project.repository.commitSha = discovery.commitSha;
+    project.repository.analyzedRef = discovery.analyzedRef;
+  }
+  return project;
 }
 
 export async function analyzeUploadedFiles(

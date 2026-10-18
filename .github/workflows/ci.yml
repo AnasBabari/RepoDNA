@@ -29,6 +29,10 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Audit production dependencies (high and critical)
+        run: npm run audit:production
+      - name: Check bounded development advisory mitigation and reachability
+        run: npm run audit:development
       - run: npm run lint
       - run: npm run typecheck
       # The dedicated `parity` job enforces cross-engine parity fail-hard with
@@ -37,8 +41,13 @@ jobs:
         run: npm run test:unit
         env:
           REPODNA_ALLOW_PYTHON_PARITY_SKIP: '1'
-      - run: npm run build
       - run: npm run build:vercel
+      - run: npm run build
+      - name: Typecheck after Next then Vinext
+        run: npm run typecheck
+      - run: npm run build:vercel
+      - name: Typecheck after Vinext then Next
+        run: npm run typecheck
 
   parity:
     name: Cross-engine parity (TS + Python)

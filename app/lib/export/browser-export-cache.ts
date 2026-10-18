@@ -1,4 +1,6 @@
 import type { RepoDNAProjectV2 } from '../analyzer/v2/types';
+import { V2_ANALYZER_VERSION } from '../analyzer/v2/version';
+import { graphExportCacheIdentity } from './graph/types';
 
 export const BROWSER_EXPORT_CACHE_DB = 'repodna-export-cache';
 export const BROWSER_EXPORT_CACHE_VERSION = 1;
@@ -144,11 +146,11 @@ export async function createBrowserArtifactKey(
   sourceType: BrowserCacheSourceType,
   sourceDigest: string
 ): Promise<string> {
-  return hashCacheKey(`${sourceType}:${sourceDigest}`);
+  return hashCacheKey(`${V2_ANALYZER_VERSION}:${sourceType}:${sourceDigest}`);
 }
 
 export function createBrowserExportId(artifactKey: string, format: string): string {
-  return `${artifactKey}:1.0.0:${format}`;
+  return graphExportCacheIdentity(artifactKey, format);
 }
 
 export async function saveBrowserArtifact(entry: BrowserCachedArtifact): Promise<void> {

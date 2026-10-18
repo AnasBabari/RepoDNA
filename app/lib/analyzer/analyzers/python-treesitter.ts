@@ -74,7 +74,7 @@ function buildPartialAnalysis(file: DiscoveredFile, facts: import('../parser/typ
     databases: new Set<string>(),
     externals: new Set<string>(),
     entrypointEvidence: [],
-    parseMeta: { quality: facts.quality, errorNodes: facts.parse.errorNodes },
+    parseMeta: { quality: facts.quality, errorNodes: facts.parse.errorNodes, hasSyntaxErrors: facts.parse.hasErrors, extractionLimits: facts.extractionLimits ?? [] },
   };
 
   extractSymbols(file, facts, result);

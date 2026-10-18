@@ -1,3 +1,6 @@
+import { extractionNotices, retainFact, visitAstNode } from './extraction-budget';
+import { promoteComponentSymbols } from './component-evidence';
+import type { ExtractionLimit } from './types';
 import type { Node as SyntaxNode } from 'web-tree-sitter';
 import { getTreeSitterParser } from './runtime';
 import type {
@@ -13,13 +16,8 @@ import type {
   SyntaxSymbol,
 } from './types';
 
-const MAX_AST_NODES = 25000;
-const MAX_AST_DEPTH = 128;
-const MAX_SYMBOLS_PER_FILE = 1000;
-const MAX_IMPORTS_PER_FILE = 500;
-const MAX_CALLS_PER_FILE = 2000;
 
-interface WalkState { symbols: SyntaxSymbol[]; imports: SyntaxImport[]; calls: SyntaxCall[]; errorNodes: number; nodeCount: number; }
+interface WalkState { symbols: SyntaxSymbol[]; imports: SyntaxImport[]; calls: SyntaxCall[]; errorNodes: number; extractionLimits: ExtractionLimit[]; nodeCount: number; jsxOwners: Set<string>; }
 interface Frame { qualifiedName: string; kind: 'class' | 'callable'; }
 
 export class TsxSyntaxParser implements SyntaxParser {
@@ -33,10 +31,11 @@ export class TsxSyntaxParser implements SyntaxParser {
       tree = parser.parse(input.source);
       const root = tree?.rootNode ?? null;
       if (!root) return { facts: failedFacts('tsx') };
-      const state: WalkState = { symbols: [], imports: [], calls: [], errorNodes: 0, nodeCount: 0 };
+      const state: WalkState = { symbols: [], imports: [], calls: [], errorNodes: 0, extractionLimits: [], nodeCount: 0, jsxOwners: new Set() };
       for (const child of root.namedChildren) walk(child, state, [], [], 1, input.source);
+      promoteComponentSymbols(state.symbols, state.jsxOwners, state.imports, state.calls);
       const hasErrors = state.errorNodes > 0 || root.hasError;
-      return { facts: { language: 'tsx', symbols: state.symbols, imports: state.imports, calls: state.calls, hasMainGuard: false, parse: { success: true, hasErrors, errorNodes: state.errorNodes }, quality: hasErrors ? 'partial' : 'complete' } };
+      return { facts: { language: 'tsx', symbols: state.symbols, imports: state.imports, calls: state.calls, hasMainGuard: false, parse: { success: true, hasErrors, errorNodes: state.errorNodes }, extractionLimits: extractionNotices(state), quality: hasErrors || state.extractionLimits.length > 0 ? 'partial' : 'complete' } };
     } catch { return { facts: failedFacts('tsx') }; } finally { if (tree) try { tree.delete(); } catch {} }
   }
 }
@@ -44,12 +43,13 @@ function failedFacts(lang: SupportedLanguage): SyntaxFacts {
   return { language: lang, symbols: [], imports: [], calls: [], hasMainGuard: false, parse: { success: false, hasErrors: true, errorNodes: 0 }, quality: 'failed' };
 }
 function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: SyntaxDecorator[], depth: number, source: string): void {
-  state.nodeCount += 1;
-  if (state.nodeCount > MAX_AST_NODES || depth > MAX_AST_DEPTH) { state.errorNodes += 1; return; }
+  if (!visitAstNode(state, depth, rangeOf(node))) return;
+  const owner = stack.at(-1);
+  if (owner?.kind === 'callable' && ['jsx_element', 'jsx_self_closing_element', 'jsx_fragment'].includes(node.type)) state.jsxOwners.add(owner.qualifiedName);
   if ((node as unknown as { isError?: boolean }).isError || (node as unknown as { isMissing?: boolean }).isMissing) state.errorNodes += 1;
   switch (node.type) {
     case 'import_statement': {
-      if (state.imports.length < MAX_IMPORTS_PER_FILE) {
+      if (retainFact(state, 'imports', rangeOf(node))) {
         const imp = extractImport(node);
         if (imp) state.imports.push(imp);
       }
@@ -61,7 +61,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
       const name = nameNode?.text ?? '<anonymous>';
       const parent = stack.length ? stack[stack.length - 1] : null;
       const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
-      if (state.symbols.length < MAX_SYMBOLS_PER_FILE) state.symbols.push({ kind: 'class', name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: false, bases: extractHeritage(node), decorators });
+      if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: 'class', name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: false, bases: extractHeritage(node), decorators });
       stack.push({ qualifiedName, kind: 'class' });
       for (const child of node.namedChildren) walk(child, state, stack, [], depth + 1, source);
       stack.pop(); return;
@@ -71,7 +71,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
       const name = nameNode?.text ?? '<anonymous>';
       const parent = stack.length ? stack[stack.length - 1] : null;
       const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
-      if (state.symbols.length < MAX_SYMBOLS_PER_FILE) state.symbols.push({ kind: 'interface', name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: false, bases: extractHeritage(node), decorators });
+      if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: 'interface', name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: false, bases: extractHeritage(node), decorators });
       for (const child of node.namedChildren) walk(child, state, stack, [], depth + 1, source);
       return;
     }
@@ -80,7 +80,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
       const name = nameNode?.text ?? '<anonymous>';
       const parent = stack.length ? stack[stack.length - 1] : null;
       const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
-      if (state.symbols.length < MAX_SYMBOLS_PER_FILE) state.symbols.push({ kind: 'type', name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: false, bases: [], decorators });
+      if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: 'type', name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: false, bases: [], decorators });
       return;
     }
     case 'function_declaration':
@@ -91,7 +91,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
       const parent = stack.length ? stack[stack.length - 1] : null;
       const kind = parent?.kind === 'class' ? 'method' : 'function';
       const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
-      if (state.symbols.length < MAX_SYMBOLS_PER_FILE) state.symbols.push({ kind, name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: node.text.startsWith('async'), bases: [], decorators });
+      if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind, name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: node.text.startsWith('async'), bases: [], decorators });
       stack.push({ qualifiedName, kind: 'callable' });
       for (const child of node.namedChildren) walk(child, state, stack, [], depth + 1, source);
       stack.pop(); return;
@@ -101,7 +101,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
       const name = nameNode?.text ?? '<anonymous>';
       const parent = stack.length ? stack[stack.length - 1] : null;
       const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
-      if (state.symbols.length < MAX_SYMBOLS_PER_FILE) state.symbols.push({ kind: 'method', name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: false, isAsync: node.text.trimStart().startsWith('async'), bases: [], decorators: extractMethodDecorators(node) });
+      if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: 'method', name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: false, isAsync: node.text.trimStart().startsWith('async'), bases: [], decorators: extractMethodDecorators(node) });
       stack.push({ qualifiedName, kind: 'callable' });
       for (const child of node.namedChildren) walk(child, state, stack, [], depth + 1, source);
       stack.pop(); return;
@@ -115,7 +115,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
           const name = nameNode?.text ?? null;
           if (!name) continue;
           const isRequireCall = valueNode?.type === 'call_expression' && valueNode.childForFieldName('function')?.text === 'require';
-          if (isRequireCall && state.imports.length < MAX_IMPORTS_PER_FILE) {
+          if (isRequireCall && retainFact(state, 'imports', rangeOf(node))) {
             const argsNode = valueNode.childForFieldName('arguments');
             const modArg = argsNode?.namedChildren[0];
             let mod = modArg?.text ? modArg.text.replace(/^["']|["']$/g, '') : null;
@@ -134,11 +134,10 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
           if (isArrow || isFuncExpr) {
             const parent = stack.length ? stack[stack.length - 1] : null;
             const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
-            const isComponent = /[A-Z]/.test(name[0]);
-            if (state.symbols.length < MAX_SYMBOLS_PER_FILE) state.symbols.push({ kind: isComponent ? 'component' : 'function', name, qualifiedName, range: rangeOf(child), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: valueNode?.text.includes('async') ?? false, bases: [], decorators: [] });
+            if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: 'function', name, qualifiedName, range: rangeOf(child), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: valueNode?.text.includes('async') ?? false, bases: [], decorators: [] });
             if (valueNode) { stack.push({ qualifiedName, kind: 'callable' }); walk(valueNode, state, stack, [], depth + 1, source); stack.pop(); continue; }
           } else {
-            if (state.symbols.length < MAX_SYMBOLS_PER_FILE) {
+            if (retainFact(state, 'symbols', rangeOf(node))) {
               const parent = stack.length ? stack[stack.length - 1] : null;
               const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
               state.symbols.push({ kind: 'variable', name, qualifiedName, range: rangeOf(child), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: false, bases: [], decorators: [] });
@@ -150,7 +149,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
       return;
     }
     case 'call_expression': {
-      if (state.calls.length < MAX_CALLS_PER_FILE) {
+      if (retainFact(state, 'calls', rangeOf(node))) {
         const fnNode = node.childForFieldName('function');
         if (fnNode) {
           const callee = fnNode.text;

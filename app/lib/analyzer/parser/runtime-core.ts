@@ -14,6 +14,7 @@ const GRAMMAR_WASM_FILES: Partial<Record<SupportedLanguage, string>> = {
 export interface PlatformRuntime {
   loadGlue(): Promise<TreeSitterModule>;
   assetUrl(file: string): string;
+  grammarInput?(file: string): Promise<Uint8Array>;
 }
 
 export interface TreeSitterServices {
@@ -68,7 +69,8 @@ export function createTreeSitterServices(platform: PlatformRuntime): TreeSitterS
           }
           const mod = await loadGlueOnce();
           try {
-            return await mod.Language.load(platform.assetUrl(wasmFile));
+            const input = platform.grammarInput ? await platform.grammarInput(wasmFile) : platform.assetUrl(wasmFile);
+            return await mod.Language.load(input);
           } catch (error) {
             grammarCache.delete(language);
             throw new ParserError(
@@ -92,6 +94,7 @@ export function createTreeSitterServices(platform: PlatformRuntime): TreeSitterS
           return instance;
         })();
         parserCache.set(language, parser);
+        parser.catch(() => parserCache.delete(language));
       }
       return parser;
     },

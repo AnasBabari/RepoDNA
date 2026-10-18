@@ -1,3 +1,5 @@
+import { extractionNotices, retainFact, visitAstNode } from './extraction-budget';
+import type { ExtractionLimit } from './types';
 import type { Node as SyntaxNode } from 'web-tree-sitter';
 import { getTreeSitterParser } from './runtime';
 import {
@@ -15,17 +17,12 @@ import {
 
 const MAIN_GUARD_RE = /__name__\s*(?:==|is)\s*["']__main__["']/;
 
-const MAX_AST_NODES = 25000;
-const MAX_AST_DEPTH = 128;
-const MAX_SYMBOLS_PER_FILE = 1000;
-const MAX_IMPORTS_PER_FILE = 500;
-const MAX_CALLS_PER_FILE = 2000;
 
 interface WalkState {
   symbols: SyntaxSymbol[];
   imports: SyntaxImport[];
   calls: SyntaxCall[];
-  errorNodes: number;
+  errorNodes: number; extractionLimits: ExtractionLimit[];
   nodeCount: number;
   hasMainGuard: boolean;
 }
@@ -60,6 +57,7 @@ export class PythonSyntaxParser implements SyntaxParser {
         imports: [],
         calls: [],
         errorNodes: 0,
+        extractionLimits: [],
         nodeCount: 0,
         hasMainGuard: false,
       };
@@ -69,7 +67,7 @@ export class PythonSyntaxParser implements SyntaxParser {
       }
 
       const hasErrors = state.errorNodes > 0 || root.hasError;
-      const quality = hasErrors ? 'partial' : 'complete';
+      const quality = hasErrors || state.extractionLimits.length > 0 ? 'partial' : 'complete';
 
       const facts: SyntaxFacts = {
         language: 'python',
@@ -78,6 +76,7 @@ export class PythonSyntaxParser implements SyntaxParser {
         calls: state.calls,
         hasMainGuard: state.hasMainGuard,
         parse: { success: true, hasErrors, errorNodes: state.errorNodes },
+        extractionLimits: extractionNotices(state),
         quality,
       };
       return { facts };
@@ -113,11 +112,7 @@ function walk(
   assignmentTarget: string | null,
   depth: number
 ): void {
-  state.nodeCount += 1;
-  if (state.nodeCount > MAX_AST_NODES || depth > MAX_AST_DEPTH) {
-    state.errorNodes += 1;
-    return;
-  }
+  if (!visitAstNode(state, depth, rangeOf(node))) return;
 
   if (node.isError || node.isMissing) state.errorNodes += 1;
 
@@ -144,7 +139,7 @@ function walk(
       const kind = isClass ? 'class' : parentFrame?.kind === 'class' ? 'method' : 'function';
       const qualifiedName = parentFrame ? `${parentFrame.qualifiedName}::${name}` : name;
 
-      if (state.symbols.length < MAX_SYMBOLS_PER_FILE) {
+      if (retainFact(state, 'symbols', rangeOf(node))) {
         const symbol: SyntaxSymbol = {
           kind,
           name,
@@ -168,15 +163,14 @@ function walk(
     }
 
     case 'import_statement': {
-      if (state.imports.length < MAX_IMPORTS_PER_FILE) {
-        const plain = extractPlainImports(node);
-        state.imports.push(...plain.slice(0, MAX_IMPORTS_PER_FILE - state.imports.length));
+      for (const imported of extractPlainImports(node)) {
+        if (retainFact(state, 'imports', imported.range)) state.imports.push(imported);
       }
       return;
     }
 
     case 'import_from_statement': {
-      if (state.imports.length < MAX_IMPORTS_PER_FILE) {
+      if (retainFact(state, 'imports', rangeOf(node))) {
         const extracted = extractFromImport(node);
         if (extracted) state.imports.push(extracted);
       }
@@ -196,7 +190,7 @@ function walk(
 
     case 'call': {
       const fn = node.childForFieldName('function');
-      if (fn && (fn.type === 'identifier' || fn.type === 'attribute') && state.calls.length < MAX_CALLS_PER_FILE) {
+      if (fn && (fn.type === 'identifier' || fn.type === 'attribute') && retainFact(state, 'calls', rangeOf(node))) {
         const args = node.childForFieldName('arguments');
         state.calls.push({
           callee: fn.text,

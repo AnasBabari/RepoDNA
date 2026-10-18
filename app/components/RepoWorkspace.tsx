@@ -6,16 +6,22 @@ import Link from 'next/link';
 import packageMetadata from '../../package.json';
 
 import { ArchitectureGraph } from './ArchitectureGraph';
+import { useModalFocus } from './useModalFocus';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 import { CodeGraph } from './CodeGraph';
+import { GraphScopeSummary } from './GraphScopeSummary';
+import { ManifestInventoryPanel } from './ManifestInventoryPanel';
+import { formatGraphCount, resolveGraphScope } from '../lib/graph-scope';
 import { ConsentBanner } from './ConsentBanner';
 import { FeedbackModal } from './FeedbackModal';
 import { PrivateRepoPicker } from './PrivateRepoPicker';
-import { ScannedRepositoryCounter } from './ScannedRepositoryCounter';
+import { LandingView } from './LandingView';
 import { MobileDetailSheet } from './MobileDetailSheet';
-import { Activity, Download, FileCode, FileText, Github, LayoutDashboard, Map, MessageCircle, Network, Route, Sparkles } from './icons';
+import { Activity, Dna, Download, FileCode, FileText, LayoutDashboard, Map, MessageCircle, Network, Route } from './icons';
 import { analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import { filterMeaningfulDependencyCycles } from '../lib/analyzer/cycles';
+import { analysisQuality } from '../lib/analysis-quality';
+import { primaryTechnology } from '../lib/technology-evidence';
 import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
 import {
   analyzePublicRepositoryDurably,
@@ -61,6 +67,7 @@ import {
 } from '../lib/export/browser-export-cache';
 import { computeSourceArtifactDigest } from '../lib/export/graph/normalize';
 import { getUserFacingErrorMessage } from '../lib/user-facing-errors';
+import { bundledSample } from '../lib/bundled-samples';
 import type {
   ArchitectureComponent,
   FileRecord,
@@ -104,19 +111,6 @@ const methodTone: Record<string, string> = {
 
 function formatNumber(value: number) {
   return Intl.NumberFormat('en-GB', { notation: value > 9999 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value);
-}
-
-function sourceTypeLabel(sourceType: BrowserCacheSourceType): string {
-  const labels: Record<BrowserCacheSourceType, string> = {
-    'public-durable': 'Public GitHub',
-    'public-browser': 'Public GitHub · browser',
-    'github-private': 'Private GitHub',
-    'local-folder': 'Local folder',
-    'zip-upload': 'ZIP upload',
-    'imported-json': 'Imported JSON',
-    sample: 'Sample',
-  };
-  return labels[sourceType];
 }
 
 function generateTextReport(project: RepoDNAProject | RepoDNAProjectV2): string {
@@ -204,279 +198,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 }
 
-// Landing View when no project is loaded
-function LandingView({
-  onAnalyzeGitHub,
-  onAnalyzeFolder,
-  onAnalyzeZip,
-  onLoadDemo,
-  onOpenPrivatePicker,
-  onOpenFeedback,
-  session,
-  recentArtifacts,
-  onOpenRecent,
-  onRemoveRecent,
-  onClearRecent,
-}: {
-  onAnalyzeGitHub: (url: string) => void;
-  onAnalyzeFolder: (files: FileList) => void;
-  onAnalyzeZip: (file: File) => void;
-  onLoadDemo: () => void;
-  onOpenPrivatePicker: () => void;
-  onOpenFeedback: () => void;
-  session: { user?: { name?: string; image?: string } } | null;
-  recentArtifacts: BrowserCachedArtifact[];
-  onOpenRecent: (entry: BrowserCachedArtifact) => void;
-  onRemoveRecent: (entry: BrowserCachedArtifact) => void;
-  onClearRecent: () => void;
-}) {
-  const [url, setUrl] = useState('');
-  const folderInputRef = useRef<HTMLInputElement>(null);
-  const zipInputRef = useRef<HTMLInputElement>(null);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (url.trim()) {
-      onAnalyzeGitHub(url.trim());
-    }
-  }
-
-  return (
-    <main className="landing-shell">
-      <header className="landing-topbar">
-        <Link className="brand" href="/" aria-label="RepoDNA">
-          <span className="brand-mark">R</span>
-          <span className="brand-title">RepoDNA</span>
-          <span className="version">v{APP_VERSION} BETA</span>
-        </Link>
-        <div className="landing-nav-center">
-          <button className="chip-button" onClick={onLoadDemo} type="button">
-            <Sparkles size={14} aria-hidden="true" /> Try Demo Project
-          </button>
-          <button
-            className="chip-button"
-            onClick={onOpenFeedback}
-            type="button"
-            style={{ fontSize: '0.8rem', padding: '5px 12px', color: '#fbbf24', borderColor: 'rgba(251, 191, 36, 0.4)' }}
-          >
-            <MessageCircle size={14} aria-hidden="true" /> Feedback
-          </button>
-          <a
-            href="https://github.com/AnasBabari/RepoDNA"
-            target="_blank"
-            rel="noreferrer"
-            className="chip-button"
-            style={{ fontSize: '0.8rem', padding: '5px 12px', textDecoration: 'none' }}
-          >
-            <Github size={14} aria-hidden="true" /> GitHub
-          </a>
-        </div>
-
-        <div className="landing-auth-right">
-          {session?.user ? (
-            <div className="flex items-center gap-2">
-              {session.user.image && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={session.user.image}
-                  alt={session.user.name || 'User avatar'}
-                  style={{ width: '26px', height: '26px', borderRadius: '50%', border: '1px solid var(--cyan-border)' }}
-                />
-              )}
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-bright)' }}>
-                {session.user.name || 'Developer'}
-              </span>
-              <button
-                className="chip-button"
-                onClick={onOpenPrivatePicker}
-                type="button"
-                style={{ fontSize: '0.8rem', padding: '5px 12px' }}
-              >
-                🔒 Your Repos
-              </button>
-            </div>
-          ) : (
-            <Link
-              href="/api/auth/signin?callbackUrl=/"
-              className="chip-button"
-              style={{ fontSize: '0.8rem', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <span>GitHub</span> Sign In (Beta)
-            </Link>
-          )}
-        </div>
-      </header>
-
-      <section className="landing-hero">
-        <div className="landing-badge">
-          <span>◆</span> Deterministic Codebase Analysis · Zero Code Execution
-        </div>
-        <h1>
-          Decode any repository<br />
-          <span>visually in seconds.</span>
-        </h1>
-        <p className="subtitle">
-          Statically analyze Python, JavaScript, and TypeScript repositories, with experimental Go analysis. Discover architecture layers, execution traces, dependencies, data models, and entry points.
-        </p>
-
-        <ScannedRepositoryCounter />
-
-        <form className="landing-input-box" onSubmit={handleSubmit} aria-label="Analyze public GitHub repository">
-          <span className="landing-input-glyph" aria-hidden="true">⌕</span>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://github.com/owner/repository"
-            aria-label="GitHub repository URL"
-            autoComplete="off"
-            spellCheck={false}
-            autoFocus
-          />
-          <button className="analyse-button" type="submit" aria-label="Analyze repository">
-            Analyze Repository <span aria-hidden="true">→</span>
-          </button>
-        </form>
-
-        <div className="landing-chips-row">
-          <span className="label">Featured repos:</span>
-          <button
-            className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/usestrix/strix')}
-            type="button"
-          >
-            usestrix/strix
-          </button>
-          <button
-            className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/karpathy/nanoGPT')}
-            type="button"
-          >
-            karpathy/nanoGPT
-          </button>
-          <button
-            className="chip-button"
-            onClick={() => onAnalyzeGitHub('https://github.com/tiangolo/full-stack-fastapi-template')}
-            type="button"
-          >
-            tiangolo/full-stack-fastapi-template
-          </button>
-          <button
-            className="chip-button"
-            onClick={onLoadDemo}
-            type="button"
-          >
-            mixed-basic (demo)
-          </button>
-        </div>
-
-        <div className="landing-dropzones-grid">
-          <button
-            className="dropzone-card"
-            onClick={onOpenPrivatePicker}
-            type="button"
-          >
-            <span className="icon" aria-hidden="true">🔒</span>
-            <strong>Private Repositories (Beta)</strong>
-            <p>Select from your authorized GitHub private & public repositories</p>
-          </button>
-
-          <button
-            className="dropzone-card"
-            onClick={() => folderInputRef.current?.click()}
-            type="button"
-          >
-            <span className="icon" aria-hidden="true">📁</span>
-            <strong>Select Local Directory</strong>
-            <p>Analyze a local project folder directly in your browser tab</p>
-          </button>
-          <input
-            ref={folderInputRef}
-            hidden
-            type="file"
-            // @ts-expect-error webkitdirectory is standard for folder picker
-            webkitdirectory="true"
-            directory="true"
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                onAnalyzeFolder(e.target.files);
-              }
-            }}
-          />
-
-          <button
-            className="dropzone-card"
-            onClick={() => zipInputRef.current?.click()}
-            type="button"
-          >
-            <span className="icon" aria-hidden="true">📦</span>
-            <strong>Upload Repository .zip or .json</strong>
-            <p>Load a zipped source archive or existing RepoDNA JSON file</p>
-          </button>
-          <input
-            ref={zipInputRef}
-            hidden
-            type="file"
-            accept=".zip,application/zip,.json,application/json"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                onAnalyzeZip(file);
-              }
-            }}
-          />
-        </div>
-
-        {recentArtifacts.length > 0 ? (
-          <section className="recent-analyses" aria-labelledby="recent-analyses-title">
-            <div className="recent-analyses-heading">
-              <div>
-                <p className="eyebrow cyan-text">On-device cache</p>
-                <h2 id="recent-analyses-title">Recent on this device</h2>
-              </div>
-              <button className="chip-button" type="button" onClick={onClearRecent}>Clear all</button>
-            </div>
-            <div className="recent-analyses-grid">
-              {recentArtifacts.map((entry) => (
-                <article className="recent-analysis-card" key={entry.key}>
-                  <div>
-                    <span className="graph-export-badge">{sourceTypeLabel(entry.sourceType)}</span>
-                    <h3>{entry.project.repository.name}</h3>
-                    <p>
-                      {entry.project.nodes.length} nodes · {entry.project.edges.length} relationships · expires{' '}
-                      {new Date(entry.expiresAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="recent-analysis-actions">
-                    <button className="chip-button" type="button" onClick={() => onOpenRecent(entry)}>Open</button>
-                    <button className="chip-button danger" type="button" onClick={() => onRemoveRecent(entry)}>Remove</button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <div className="landing-features-grid">
-          <div className="feature-box">
-            <span className="glyph">01 / SAFE</span>
-            <strong>Zero Code Execution</strong>
-            <p>The parser analyzes abstract source code syntax as text. It never runs scripts or executes packages.</p>
-          </div>
-          <div className="feature-box">
-            <span className="glyph">02 / DEEP</span>
-            <strong>Multi-Tier Execution Traces</strong>
-            <p>Follow full execution paths from HTTP routes through controllers, services, repositories, and ORM models.</p>
-          </div>
-          <div className="feature-box">
-            <span className="glyph">03 / EXPORT</span>
-            <strong>Mermaid & Portable Artifacts</strong>
-            <p>Export interactive architecture maps as Mermaid diagrams or standardized JSON for documentation and PRs.</p>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
 
 const APP_BUILD_VERSION = `v${APP_VERSION}`;
 
@@ -529,9 +250,11 @@ function AnalyzingView({
 
   return (
     <main className="landing-shell">
-      <div className="analyzing-container">
-        <div className="analyzing-mark">R</div>
-        <h2>{error ? 'Analysis Failed' : 'Decoding Repository'}</h2>
+      <div className="analyzing-container" data-testid="analysis-progress">
+        <div className="analyzing-mark">
+          <Dna size={28} className="analyzing-dna-pulse" aria-hidden="true" />
+        </div>
+        <h2>{error ? 'Analysis Failed' : 'Analyzing repository'}</h2>
         <p className="target-url">{target}</p>
 
         {error ? (
@@ -619,7 +342,7 @@ function AnalyzingView({
                 : `Stage ${Math.min(step + 1, ANALYSIS_PROGRESS_STEPS.length)} of ${ANALYSIS_PROGRESS_STEPS.length}`)}
             </p>
             <p className="privacy-note">
-              <span>◆</span> Local-first & serverless analysis. Your source is never persisted.
+              <span aria-hidden="true">◆</span> Repository code is read statically, not executed.
             </p>
           </div>
         )}
@@ -753,21 +476,29 @@ function Overview({
   const coveragePercentage = coverage?.percentage ?? project.metrics.parseSuccessRate;
   const parsedCount = coverage?.parsed ?? inventory?.parsedFileCount ?? project.repository.sourceFileCount;
   const partialCount = coverage?.partial ?? inventory?.partiallyParsedFileCount ?? 0;
-  const failedCount = inventory?.failedFileCount ?? project.files.filter((f) => f.error).length;
+  const failedCount = inventory?.failedFileCount ?? project.files.filter((f) => !f.parsed && f.error).length;
   const skippedCount = coverage?.skipped ?? (inventory ? Object.values(inventory.skippedByReason).reduce((a, b) => a + b, 0) : 0);
   const ignoredCount = coverage?.ignored ?? inventory?.ignoredFileCount ?? 0;
-  const unsupportedCount = coverage?.unsupported ?? inventory?.unsupportedSourceFileCount ?? 0;
-  const unresolvedRelationships = deepProject?.unresolved.length ?? project.diagnostics.filter((d) => d.code.includes('UNRESOLVED')).length;
+  const sourceInventory = inventory?.sourceInventory ?? project.metadata.sourceInventory;
+  const sourceOutcomes = inventory?.sourceOutcomes ?? project.metadata.sourceOutcomes;
+  const unsupportedCount = sourceInventory?.unsupportedSourceFileCount;
+  const coverageBasis = sourceOutcomes ? 'supported source parsed (including partial)' : 'source parsed (legacy denominator)';
+  const quality = analysisQuality(deepProject ?? project);
+  const unresolvedRelationships = quality.unresolvedCount;
+  const graphScope = deepProject ? resolveGraphScope(deepProject) : null;
+  const unresolvedLabel = unresolvedRelationships === null ? `Unknown (${formatGraphCount(quality.retainedUnresolvedCount)} retained)` : formatNumber(unresolvedRelationships);
   const dependencyCycleCount = filterMeaningfulDependencyCycles(project.metrics.dependencyCycles).length;
   const truncationReasons = coverage?.truncationReasons ?? inventory?.truncation?.hitLimits ?? [];
   // Never display "Fully mapped" unless all supported first-party files parsed and no limits/truncation
   const hasSkippedDiagnostics = project.diagnostics.some(
     (d) => d.code.startsWith('skipped_') || ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_PARSE_PARTIAL', 'SOURCE_PARSE_FAILED', 'GRAPH_NODES_COMPACTED', 'GRAPH_EDGES_COMPACTED', 'GITHUB_TREE_TRUNCATED'].includes(d.code)
   ) || truncationReasons.length > 0 || skippedCount > 0;
-  const hasUnresolvedRoutes = incompletePaths > 0;
-  const isFullyMapped = project.metrics.parseSuccessRate === 100 && !hasSkippedDiagnostics && !hasUnresolvedRoutes;
-  const mapQualityLabel = isFullyMapped ? 'Fully mapped' : hasUnresolvedRoutes || hasSkippedDiagnostics ? (project.metrics.parseSuccessRate < 70 ? 'Coverage limited' : 'Mostly mapped') : 'Mostly mapped';
-  const primaryTechnology = project.technologies[0] ?? Object.keys(project.repository.languages)[0] ?? 'Custom application';
+  const isFullyMapped = quality.status === 'FULLY_MAPPED';
+  const mapQualityLabel = quality.label;
+  const extractionNotices = project.diagnostics.filter((item) => item.code === 'SOURCE_EXTRACTION_LIMIT_REACHED');
+  const primaryStack = primaryTechnology(project.repository);
+  const otherTechnologyCount = project.technologies.filter((name) => name !== primaryStack.name).length;
+  const snapshotCommit = deepProject?.repository.commitSha ?? project.repository.commitSha;
 
   return (
     <div className="view-stack overview-view">
@@ -815,6 +546,7 @@ function Overview({
               View request paths
             </button>
           </div>
+          {snapshotCommit && <p className="muted snapshot-provenance" aria-label="Analyzed GitHub snapshot">Full repository at commit <code>{snapshotCommit}</code>. A file or directory URL does not narrow the scan.</p>}
         </div>
         <div className="analysis-trust-card">
           <span>✓</span>
@@ -824,6 +556,20 @@ function Overview({
           </div>
         </div>
       </section>
+
+      {extractionNotices.length > 0 && (
+        <section className="panel coverage-panel" aria-label="Extraction limits">
+          <details className="coverage-skipped-details">
+            <summary>{extractionNotices.length} extraction limits reached — valid source was only partially analyzed</summary>
+            <p>These are resource bounds, not necessarily syntax errors. Omitted-count lower bounds are explicitly labeled.</p>
+            <ul>{extractionNotices.slice(0, 50).map((notice, index) => <li key={`${notice.file}-${index}`}><code>{notice.file}</code><span>{notice.message}</span></li>)}</ul>
+            {extractionNotices.length > 50 && <p>Showing 50 of {extractionNotices.length}; all notices are retained in the machine-readable export.</p>}
+          </details>
+        </section>
+      )}
+
+      {graphScope?.kind === 'compacted' ? <GraphScopeSummary scope={graphScope} /> : null}
+      <ManifestInventoryPanel manifests={inventory?.manifestInventory ?? project.metadata.manifestInventory} sources={sourceInventory} outcomes={sourceOutcomes} />
 
       {audience === 'plain' ? (
         <>
@@ -835,8 +581,8 @@ function Overview({
             </article>
             <article>
               <span>Built with</span>
-              <strong>{primaryTechnology}</strong>
-              <p>{project.technologies.length > 1 ? `Plus ${project.technologies.length - 1} other detected technologies.` : 'Primary detected technology.'}</p>
+              <strong>{primaryStack.name}</strong>
+              <p>{primaryStack.evidence}{otherTechnologyCount > 0 ? ` Plus ${otherTechnologyCount} other detected technologies.` : ''}</p>
             </article>
             <article>
               <span>Map quality</span>
@@ -844,6 +590,10 @@ function Overview({
               <p>
                 {isFullyMapped
                   ? 'No unresolved relationships; all supported first-party files parsed.'
+                  : unresolvedRelationships === null
+                    ? 'Whole-analysis relationship gaps are unknown; retained findings do not establish a complete map.'
+                  : unresolvedRelationships
+                    ? `${formatNumber(unresolvedRelationships)} relationships could not be proven statically.`
                   : incompletePaths
                     ? `${incompletePaths} request path${incompletePaths === 1 ? '' : 's'} need verification.`
                     : hasSkippedDiagnostics
@@ -859,15 +609,15 @@ function Overview({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Scan coverage</p>
-                <h2>{coveragePercentage}% · {mapQualityLabel}</h2>
+                <h2>{coveragePercentage}% {coverageBasis} · {mapQualityLabel}</h2>
               </div>
               <span>{formatNumber(parsedCount)} parsed</span>
             </div>
             <div className="coverage-grid">
-              <div><span>Parsed</span><strong>{formatNumber(parsedCount)}</strong></div>
+              <div><span>Parsed (includes partial)</span><strong>{formatNumber(parsedCount)}</strong></div>
               <div><span>Skipped</span><strong>{formatNumber(skippedCount)}</strong></div>
               <div><span>Partial</span><strong>{formatNumber(partialCount)}</strong></div>
-              <div><span>Unresolved relationships</span><strong>{formatNumber(unresolvedRelationships)}</strong></div>
+              <div><span>Unresolved relationships</span><strong>{unresolvedLabel}</strong></div>
             </div>
             {truncationReasons.length > 0 && (
               <div className="coverage-truncation">
@@ -906,10 +656,10 @@ function Overview({
             <article>
               <span>First-party source</span>
               <strong>{formatNumber(firstPartyFileCount)}</strong>
-              <i>{formatNumber(firstPartyLoc)} LOC · {project.metrics.parseSuccessRate}% parsed · {formatNumber(project.repository.fileCount)} total files</i>
+              <i>{formatNumber(firstPartyLoc)} acquired-source LOC · {coveragePercentage}% parsed · {formatNumber(inventory?.totalFileCount ?? project.repository.fileCount)} observed files</i>
             </article>
             <article>
-              <span>Dependencies</span>
+              <span>Import relationships</span>
               <strong>{formatNumber(project.metrics.localDependencies)}</strong>
               <i>{project.metrics.externalDependencies} external · {dependencyCycleCount} cycles</i>
             </article>
@@ -929,19 +679,19 @@ function Overview({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Scan coverage</p>
-                <h2>{coveragePercentage}% parsed · {formatNumber(parsedCount)}/{formatNumber(firstPartyFileCount)} files</h2>
+                <h2>{coveragePercentage}% {coverageBasis} · {mapQualityLabel}</h2>
               </div>
               <span>{truncationReasons.length ? truncationReasons.join(', ') : 'No truncation'}</span>
             </div>
             <div className="coverage-grid technical">
-              <div><span>Parsed</span><strong>{formatNumber(parsedCount)}</strong></div>
+              <div><span>Parsed (includes partial)</span><strong>{formatNumber(parsedCount)}</strong></div>
               <div><span>Partial</span><strong>{formatNumber(partialCount)}</strong></div>
               <div><span>Failed</span><strong>{formatNumber(failedCount)}</strong></div>
               <div><span>Skipped</span><strong>{formatNumber(skippedCount)}</strong></div>
               <div><span>Ignored</span><strong>{formatNumber(ignoredCount)}</strong></div>
-              <div><span>Unsupported</span><strong>{formatNumber(unsupportedCount)}</strong></div>
+              <div><span>Unsupported source</span><strong>{unsupportedCount === undefined ? 'Not recorded' : formatNumber(unsupportedCount)}</strong></div>
               <div><span>Unresolved routes</span><strong>{formatNumber(incompletePaths)}</strong></div>
-              <div><span>Unresolved relationships</span><strong>{formatNumber(unresolvedRelationships)}</strong></div>
+              <div><span>Unresolved relationships</span><strong>{unresolvedLabel}</strong></div>
             </div>
             {inventory && (
               <div className="coverage-inventory">
@@ -1024,7 +774,8 @@ function Overview({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Structural importance</p>
-                <h2>Highest-impact files</h2>
+                <h2>Recorded file rankings</h2>
+                {deepProject && <p className="muted">Scores sum retained node records per file, not unique inter-file dependencies. Internal links can count twice; unranked files are not assessed.</p>}
               </div>
               <span>Top {Math.min(5, project.important_files.length)}</span>
             </div>
@@ -1033,7 +784,7 @@ function Overview({
                 <article key={file.file}>
                   <span>0{index + 1}</span>
                   <strong>{file.file}</strong>
-                  <p>{file.reasons.slice(0, 2).join(' · ')}</p>
+                  <p>{file.reasons.slice(0, 2).join(' · ')}{file.reasons.length > 2 ? ` · +${file.reasons.length - 2} more recorded node summaries` : ''}</p>
                   <i>{file.score} pts</i>
                 </article>
               ))}
@@ -1475,7 +1226,7 @@ function DetailPanel({
       <div className="detail-icon">{component.name.slice(0, 1)}</div>
       <h2>{component.name}</h2>
       <p className="muted">
-        Inferred structural cluster based on source paths, symbol definitions, and dependency directions.
+        Inferred cluster based on recorded evidence. Confidence is a heuristic, not a measured probability.
       </p>
       <dl>
         <div>
@@ -1483,8 +1234,8 @@ function DetailPanel({
           <dd>{component.type}</dd>
         </div>
         <div>
-          <dt>Confidence</dt>
-          <dd className="good">{Math.round(component.confidence * 100)}%</dd>
+          <dt>Heuristic confidence</dt>
+          <dd className={component.confidence >= 0.8 ? 'good' : 'muted'}>{Math.round(component.confidence * 100)}%</dd>
         </div>
         <div>
           <dt>Files</dt>
@@ -1524,6 +1275,7 @@ function AnalyseDialog({
 }) {
   const [githubUrl, setGithubUrl] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useModalFocus<HTMLElement>(open, onClose);
 
   if (!open) return null;
 
@@ -1539,6 +1291,8 @@ function AnalyseDialog({
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
         className="analyse-dialog"
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="analyse-title"
@@ -1564,7 +1318,6 @@ function AnalyseDialog({
               value={githubUrl}
               onChange={(event) => setGithubUrl(event.target.value)}
               placeholder="https://github.com/owner/repository"
-              autoFocus
             />
           </label>
           <button className="analyse-button" style={{ width: '100%', marginTop: '14px' }} type="submit">
@@ -1809,6 +1562,8 @@ function WorkspaceContent() {
 
   function showAnalysisError(controller: AbortController, error: unknown, fallbackMessage: string) {
     if (!isActiveAnalysis(controller) || error instanceof AnalysisCancelledError) return;
+    const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' ? error.code : null;
+    setAnalyzingErrorCode(code);
     setAnalyzingError(getUserFacingErrorMessage(error, fallbackMessage));
   }
 
@@ -1821,6 +1576,8 @@ function WorkspaceContent() {
         void handleAnalyzeGitHub(repoParam);
         return;
       }
+      const sampleParam = params.get('sample');
+      if (sampleParam) { void handleOpenSample(sampleParam); return; }
       const pendingRun = readPendingDurableRun();
       if (pendingRun) void handleResumeDurableRun(pendingRun);
     }
@@ -1864,11 +1621,6 @@ function WorkspaceContent() {
         event.preventDefault();
         searchInputRef.current?.focus();
       }
-      if (event.key === 'Escape') {
-        if (dialogOpen) setDialogOpen(false);
-        if (privatePickerOpen) setPrivatePickerOpen(false);
-        if (feedbackModalOpen) setFeedbackModalOpen(false);
-      }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -1880,38 +1632,21 @@ function WorkspaceContent() {
     trackViewChanged(newView);
   }
 
-  const SAMPLE_ARTIFACTS: Record<string, string> = {
-    'https://github.com/usestrix/strix': '/samples/strix.json',
-    'https://github.com/karpathy/nanoGPT': '/samples/nanogpt.json',
-    'https://github.com/karpathy/nanogpt': '/samples/nanogpt.json',
-    'https://github.com/tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
-    'https://github.com/pytorch/pytorch': '/samples/pytorch.json',
-    'https://github.com/fastapi/fastapi': '/samples/fastapi.json',
-    'https://github.com/expressjs/express': '/samples/express.json',
-    'https://github.com/yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
-    'usestrix/strix': '/samples/strix.json',
-    'karpathy/nanoGPT': '/samples/nanogpt.json',
-    'karpathy/nanogpt': '/samples/nanogpt.json',
-    'tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
-    'pytorch/pytorch': '/samples/pytorch.json',
-    'fastapi/fastapi': '/samples/fastapi.json',
-    'expressjs/express': '/samples/express.json',
-    'yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
-  };
+  function handleOpenSample(url: string) { return handleAnalyzeGitHub(url, false, null, true); }
 
   async function handleAnalyzeGitHub(
     url: string,
     forceClientOnly = false,
-    requestedOrigin: 'github-private' | null = null
+    requestedOrigin: 'github-private' | null = null,
+    bundledSnapshot = false
   ) {
     const cleanUrl = url.trim();
     const parsed = parseGitHubUrl(cleanUrl);
-    const targetUrl = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}` : cleanUrl;
-    const shortKey = parsed ? `${parsed.owner.toLowerCase()}/${parsed.repo.toLowerCase()}` : '';
-    const canonicalFull = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}`.toLowerCase() : '';
+    const targetUrl = parsed?.canonicalUrl ?? cleanUrl;
 
     const startTime = Date.now();
     const controller = beginAnalysis(targetUrl);
+    if (parsed?.refSegments) setAnalyzingMessage('Resolving the selected revision; scanning the full repository, not only the URL subpath.');
     let failureCode = 'CLIENT_ERROR';
     let loadedSample = false;
     let canonicalProject: RepoDNAProjectV2 | null = null;
@@ -1985,16 +1720,13 @@ function WorkspaceContent() {
 
     try {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
+        if (!parsed) throw Object.assign(new Error('Invalid GitHub repository URL.'), { code: 'INVALID_GITHUB_URL' });
         if (requestedOrigin === 'github-private') return runPrivateBrowserAnalysis();
 
-        // Check pre-cached sample artifacts without bypassing the shared progress lifecycle.
-        if (!forceClientOnly) {
-          const samplePath =
-            SAMPLE_ARTIFACTS[targetUrl] ||
-            SAMPLE_ARTIFACTS[canonicalFull] ||
-            (shortKey ? SAMPLE_ARTIFACTS[shortKey] : undefined) ||
-            SAMPLE_ARTIFACTS[cleanUrl] ||
-            SAMPLE_ARTIFACTS[cleanUrl.replace(/\/$/, '')];
+        // Only an explicit snapshot action may load bundled data, never normal URL input.
+        if (bundledSnapshot) {
+          const samplePath = bundledSample(targetUrl)?.path;
+          if (!samplePath) throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
 
           if (samplePath) {
             try {
@@ -2013,9 +1745,10 @@ function WorkspaceContent() {
               }
             } catch {
               if (controller.signal.aborted) throw new AnalysisCancelledError();
-              // Continue with standard fetch if a sample artifact is unavailable.
+              throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
             }
           }
+          throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
         }
 
         if (forceClientOnly) return runPublicBrowserFallback();
@@ -2043,6 +1776,8 @@ function WorkspaceContent() {
         } catch (error) {
           if (controller.signal.aborted) throw new AnalysisCancelledError();
           if (error instanceof DurableAnalysisUnavailableError) {
+            if (error.code === 'GITHUB_REF_NOT_FOUND' && session?.user && !forceClientOnly) return runPrivateBrowserAnalysis();
+            if (error.code.startsWith('GITHUB_REF_') || error.code === 'INVALID_GITHUB_URL') throw error;
             failureCode = error.code;
             setAnalyzingRetryAfter(error.retryAfter ?? null);
             if (!error.fallbackAvailable) {
@@ -2133,7 +1868,8 @@ function WorkspaceContent() {
 
         try {
           return await runPublicBrowserFallback();
-        } catch {
+        } catch (fallbackError) {
+          if (fallbackError && typeof fallbackError === 'object' && 'code' in fallbackError && String(fallbackError.code).startsWith('GITHUB_REF_')) throw fallbackError;
           // The fallback failure is recorded via trackAnalysisFailed above the
           // throw path; the user-facing code intentionally reports the primary
           // server failure, and the fallback error may contain local file paths
@@ -2353,7 +2089,9 @@ function WorkspaceContent() {
           requestId={analyzingRequestId}
           retryAfter={analyzingRetryAfter}
           onRetry={() => {
-            if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
+            if (analyzingErrorCode === 'SAMPLE_UNAVAILABLE') {
+              void handleOpenSample(analyzingTarget);
+            } else if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
               handleAnalyzeGitHub(analyzingTarget);
             } else {
               handleLoadDemo();
@@ -2387,6 +2125,7 @@ function WorkspaceContent() {
       <>
         <LandingView
           onAnalyzeGitHub={handleAnalyzeGitHub}
+          onOpenSample={handleOpenSample}
           onAnalyzeFolder={handleAnalyzeFolder}
           onAnalyzeZip={handleAnalyzeZipOrJson}
           onLoadDemo={handleLoadDemo}
@@ -2427,7 +2166,7 @@ function WorkspaceContent() {
       <header className="topbar">
         <div className="topbar-left">
           <Link className="brand" href="/" onClick={(e) => { e.preventDefault(); returnToLanding(); }} aria-label="RepoDNA overview">
-            <span className="brand-mark">R</span>
+            <span className="brand-mark"><Dna size={16} aria-hidden="true" /></span>
             <span className="brand-title">RepoDNA</span>
             <span className="version">v{APP_VERSION}</span>
           </Link>
@@ -2469,7 +2208,8 @@ function WorkspaceContent() {
             <FileText size={14} aria-hidden="true" /> TXT
           </button>
           <button className="analyse-button" onClick={() => setDialogOpen(true)} type="button">
-            New analysis
+            <Dna size={14} aria-hidden="true" />
+            <span>New Analysis</span>
           </button>
         </div>
       </header>
@@ -2516,6 +2256,11 @@ function WorkspaceContent() {
       </aside>
 
       <section className="workspace">
+        {analysisOrigin === 'sample' && <section className="sample-provenance" aria-label="Bundled snapshot provenance">
+          <strong>Bundled snapshot — not a fresh scan.</strong>
+          <span>Analyzed: {project.generatedAt || 'not recorded'} · Commit: <code>{project.repository.commitSha || 'not recorded'}</code></span>
+          {bundledSample(project.repository.source) && <button className="chip-button" type="button" onClick={() => void handleAnalyzeGitHub(bundledSample(project.repository.source)!.url)}>Analyze latest</button>}
+        </section>}
         <nav className="mobile-view-nav" aria-label="Workspace views">
           {navigation.map((item) => (
             <button

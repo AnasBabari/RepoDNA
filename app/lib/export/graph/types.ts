@@ -1,9 +1,14 @@
-import type { GraphEdgeStatus, GraphEdgeType, GraphNodeKind, SourceRange } from '../../analyzer/v2/types';
+import type { GraphEdgeStatus, GraphEdgeType, GraphNodeKind, GraphScope, SourceRange } from '../../analyzer/v2/types';
 
 export const GRAPH_EXPORT_SCHEMA_VERSION = '1.0.0' as const;
-export const GRAPH_EXPORTER_VERSION = '1.0.0' as const;
+export const GRAPH_EXPORTER_VERSION = '1.0.7' as const;
 
 export type GraphExportFormat = 'graph-json' | 'csv' | 'cypher' | 'parquet';
+
+// Schema compatibility does not imply byte-for-byte exporter compatibility.
+export function graphExportCacheIdentity(artifactKey: string, format: string): string {
+  return `${artifactKey}:${GRAPH_EXPORT_SCHEMA_VERSION}:${GRAPH_EXPORTER_VERSION}:${format}`;
+}
 
 export type GraphExportErrorCode =
   | 'INVALID_EXPORT_REQUEST'
@@ -31,6 +36,9 @@ export class GraphExportError extends Error {
 }
 
 export interface GraphExportManifest {
+  manifestInventory?: import('../../analyzer/manifest-types').ManifestInventory;
+  sourceInventory?: import('../../analyzer/source-inventory').SourcePathCounts;
+  sourceOutcomes?: import('../../analyzer/source-inventory').SourceOutcomes;
   exportSchemaVersion: typeof GRAPH_EXPORT_SCHEMA_VERSION;
   exporterVersion: string;
   sourceSchemaVersion: '2.0.0' | '1.1.0';
@@ -46,11 +54,13 @@ export interface GraphExportManifest {
   coverage: {
     percentage: number;
     truncationReasons: string[];
+    extractionLimits?: import('../../analyzer/parser/types').SourceExtractionLimit[];
   };
   completeness: {
     status: string;
     reasons: string[];
   };
+  graphScope?: GraphScope;
   executedRepositoryCode: false;
   adaptedFromLegacy: boolean;
   ordering: 'stable-id-ascending';

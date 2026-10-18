@@ -38,6 +38,11 @@ import { adaptV1ToV2Viewer } from '../lib/schema/artifact-loader';
 import type { RepoDNAProject } from '../lib/types';
 import type { GraphEdge, RepoDNAProjectV2, GraphNode } from '../lib/analyzer/v2/types';
 import { GraphExportDialog } from './GraphExportDialog';
+import { analysisQuality } from '../lib/analysis-quality';
+import { resolveGraphScope } from '../lib/graph-scope';
+import { GraphScopeSummary } from './GraphScopeSummary';
+import { isDrawableGraphEdge, resolutionGaps, resolutionGapNodeIds } from '../lib/resolution-gaps';
+import { UnresolvedRelationshipList } from './UnresolvedRelationshipList';
 import type { BrowserCacheSourceType } from '../lib/export/browser-export-cache';
 
 const INITIAL_NODE_LIMIT = 80;
@@ -88,6 +93,7 @@ const edgeTypeTone: Record<string, string> = {
 };
 
 type CodeGraphNodeData = {
+  accessibleLabel: string;
   label: string;
   kind: string;
   path: string;
@@ -433,7 +439,9 @@ function buildCodeNode(
     position: { x: position.x, y: position.y },
     initialWidth: 48,
     initialHeight: 48,
+    focusable: false, // The inner node control owns keyboard activation/focus.
     data: {
+      accessibleLabel: `${node.kind}: ${node.qualifiedName || node.name} — ${node.path || 'no source path'}:${node.range.startLine}`,
       label: shortLabel(node),
       kind: node.kind,
       path: node.path,
@@ -450,6 +458,7 @@ function buildCodeNode(
 function nodeDataEqual(a: CodeGraphNodeData, b: CodeGraphNodeData): boolean {
   return (
     a.label === b.label &&
+    a.accessibleLabel === b.accessibleLabel &&
     a.kind === b.kind &&
     a.path === b.path &&
     a.language === b.language &&
@@ -470,6 +479,10 @@ export function CodeGraph({
   exportBrowserRetention?: { enabled: boolean; artifactKey: string | null; expiresAt: number | null };
 }) {
   const graph = useMemo(() => normalizeProject(project), [project]);
+  const scope = useMemo(() => resolveGraphScope(graph), [graph]);
+  const gaps = useMemo(() => resolutionGaps(graph), [graph]);
+  const gapIds = useMemo(() => new Set(gaps.map((gap) => gap.id)), [gaps]);
+  const [gapSourceId, setGapSourceId] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const [layoutSeed, setLayoutSeed] = useState(0);
   const sig = `${resetKey}:${layoutSeed}`;
@@ -484,7 +497,7 @@ export function CodeGraph({
         unresolved: graph.unresolved.length,
       },
       coverage: { percentage: graph.coverage.percentage },
-      completeness: { status: graph.completeness.status },
+      completeness: { status: analysisQuality(graph).status },
       adaptedFromLegacy: (project as RepoDNAProjectV2).schemaVersion !== '2.0.0',
     }),
     [graph, project]
@@ -514,7 +527,7 @@ export function CodeGraph({
 
   const filteredEdges = useMemo(() => {
     let edges = graph.edges;
-    if (unresolvedOnly) edges = edges.filter((e) => e.status === 'unresolved' || e.status === 'ambiguous');
+    if (unresolvedOnly) edges = edges.filter((e) => gapIds.has(e.id));
     if (relationFilter !== 'all') {
       const groups: Record<string, Set<string>> = {
         imports_calls: new Set(['IMPORTS', 'CALLS', 'INVOKES', 'DEPENDS_ON']),
@@ -525,7 +538,7 @@ export function CodeGraph({
       edges = edges.filter((e) => allowed.has(e.type));
     }
     return edges;
-  }, [graph.edges, unresolvedOnly, relationFilter]);
+  }, [graph.edges, unresolvedOnly, relationFilter, gapIds]);
 
   const degreeById = useMemo(() => {
     const deg = new Map<string, number>();
@@ -540,10 +553,13 @@ export function CodeGraph({
    * Deterministic visible-node selection:
    * seed = top-degree nodes matching filters/search; plus expanded neighborhoods.
    */
-  const visibleNodes = useMemo(() => {
-    let candidates = graph.nodes.filter((n) =>
-      granularity === 'structure' ? structureKinds.has(n.kind) : symbolKinds.has(n.kind)
-    );
+  const relevantGapNodes = useMemo(() => {
+    const ids = new Set(filteredEdges.map((edge) => edge.id));
+    return resolutionGapNodeIds(gaps.filter((gap) => gap.edge ? ids.has(gap.id) : relationFilter === 'all'));
+  }, [gaps, filteredEdges, relationFilter]);
+  const candidateNodes = useMemo(() => {
+    let candidates = graph.nodes.filter((n) => unresolvedOnly ? relevantGapNodes.has(n.id) :
+      (granularity === 'structure' ? structureKinds.has(n.kind) : symbolKinds.has(n.kind)));
     const q = search.trim().toLowerCase();
     if (q) {
       candidates = candidates.filter(
@@ -551,7 +567,10 @@ export function CodeGraph({
       );
     }
 
-    const ranked = [...candidates].sort((a, b) => {
+    return candidates;
+  }, [graph.nodes, unresolvedOnly, relevantGapNodes, granularity, structureKinds, symbolKinds, search]);
+  const visibleNodes = useMemo(() => {
+    const ranked = [...candidateNodes].sort((a, b) => {
       const da = degreeById.get(a.id) ?? 0;
       const dbv = degreeById.get(b.id) ?? 0;
       return dbv - da || a.id.localeCompare(b.id);
@@ -580,10 +599,10 @@ export function CodeGraph({
 
     if (selectedNodeId && !selected.has(selectedNodeId)) {
       const n = graph.nodes.find((x) => x.id === selectedNodeId);
-      if (n) selected.set(n.id, n);
+      if (n && (!unresolvedOnly || relevantGapNodes.has(n.id))) selected.set(n.id, n);
     }
     return Array.from(selected.values());
-  }, [graph.nodes, filteredEdges, granularity, structureKinds, symbolKinds, search, degreeById, expandedIds, selectedNodeId, nodeById]);
+  }, [graph.nodes, filteredEdges, candidateNodes, unresolvedOnly, relevantGapNodes, degreeById, expandedIds, selectedNodeId, nodeById]);
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
 
@@ -593,7 +612,7 @@ export function CodeGraph({
   );
 
   const renderedEdges = useMemo(
-    () => selectRenderedEdges(candidateEdges, MAX_RENDERED_EDGE_LIMIT, degreeById),
+    () => selectRenderedEdges(candidateEdges.filter(isDrawableGraphEdge), MAX_RENDERED_EDGE_LIMIT, degreeById),
     [candidateEdges, degreeById]
   );
 
@@ -851,9 +870,13 @@ export function CodeGraph({
   }, [renderedEdges, visibleNodeIds, focusIds, rfNodes]);
 
   const selectedNode = graph.nodes.find((n) => n.id === selectedNodeId) ?? null;
+  const nodeTriggerRef = useRef<HTMLElement | null>(null);
   const selectedEdge = graph.edges.find((e) => e.id === selectedEdgeId) ?? null;
+  const selectedGap = useMemo(() => gaps.find((gap) => gap.id === selectedEdgeId), [gaps, selectedEdgeId]);
+  const incidentGapCount = useMemo(() => selectedNode ? gaps.filter((gap) => gap.edge?.source === selectedNode.id).length : 0, [gaps, selectedNode]);
 
   const onNodeClick = useCallback((_: unknown, node: Node<CodeGraphNodeData>) => {
+    nodeTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSelectedEdgeId(null);
     setSelectedNodeId((prev) => (prev === node.id ? prev : node.id));
     setExpandedIds((prev) => {
@@ -877,6 +900,7 @@ export function CodeGraph({
     setExpandedIds(new Set());
     setSearch('');
     setUnresolvedOnly(false);
+    setGapSourceId(null);
     setRelationFilter('all');
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
@@ -886,9 +910,14 @@ export function CodeGraph({
     setLayoutSeed((k) => k + 1);
   }
 
-  const candidateNodeCount = graph.nodes.filter((n) => (granularity === 'structure' ? structureKinds : symbolKinds).has(n.kind)).length;
+  const candidateNodeCount = candidateNodes.length;
   const nodesTruncated = visibleNodes.length < candidateNodeCount;
-  const edgesTruncated = renderedEdges.length < candidateEdges.length;
+  const drawableCandidateCount = candidateEdges.filter(isDrawableGraphEdge).length;
+  const edgesTruncated = rfEdges.length < drawableCandidateCount;
+  const undrawnGapCount = useMemo(() => {
+    const drawnIds = new Set(renderedEdges.map((edge) => edge.id));
+    return gaps.filter((gap) => !drawnIds.has(gap.id)).length;
+  }, [gaps, renderedEdges]);
 
   return (
     <div className="code-graph-container">
@@ -899,13 +928,14 @@ export function CodeGraph({
           <p>Explore the repository as a living constellation. Drag nodes to pull the web around, hover to trace neighborhoods, click to expand.</p>
         </div>
         <div className="view-heading-actions">
-          <span>{graph.nodes.length} entities · {graph.edges.length} relationships</span>
+          <span>{graph.nodes.length} retained entities · {graph.edges.length} retained relationships</span>
           <button className="export-pill-btn" onClick={() => setExportOpen(true)} type="button">
             <Download size={14} aria-hidden="true" /> Export
           </button>
           <button className="export-pill-btn" onClick={() => setLayoutSeed((k) => k + 1)} type="button"><RefreshCw size={14} aria-hidden="true" /> Re-layout</button>
         </div>
       </section>
+      {scope.kind === 'compacted' ? <GraphScopeSummary scope={scope} /> : null}
       <div className="code-graph-controls">
         <input
           className="search-input"
@@ -925,12 +955,12 @@ export function CodeGraph({
           <option value="data">Reads / writes</option>
           <option value="routes">Routes</option>
         </select>
-        <button className={`chip-button ${unresolvedOnly ? 'active' : ''}`} onClick={() => setUnresolvedOnly((v) => !v)} type="button">
+        <button className={`chip-button ${unresolvedOnly ? 'active' : ''}`} aria-pressed={unresolvedOnly} onClick={() => { setUnresolvedOnly((v) => !v); setSelectedNodeId(null); setSelectedEdgeId(null); setHoveredNodeId(null); setGapSourceId(null); }} type="button">
           Unresolved only
         </button>
         <button className="chip-button" onClick={resetView} type="button">Reset view</button>
         <span className="code-graph-status" role="status">
-          {visibleNodes.length}{nodesTruncated ? ` of ${candidateNodeCount}` : ''} nodes · {renderedEdges.length}{edgesTruncated ? ` of ${candidateEdges.length}` : ''} edges shown · drag nodes, click to expand
+          {visibleNodes.length}{nodesTruncated ? ` of ${candidateNodeCount}` : ''} nodes · {rfEdges.length}{edgesTruncated ? ` of ${drawableCandidateCount}` : ''} {rfEdges.length === 1 ? 'edge' : 'edges'} shown · {undrawnGapCount} retained unresolved records not drawn
         </span>
       </div>
 
@@ -999,12 +1029,14 @@ export function CodeGraph({
         <span>— dashed = unresolved/ambiguous</span>
       </div>
 
+      <UnresolvedRelationshipList key={`${gapSourceId ?? 'all'}:${unresolvedOnly}`} gaps={gaps} sourceId={gapSourceId} onClearSource={() => setGapSourceId(null)} onInspect={setSelectedEdgeId} autoOpen={unresolvedOnly} />
+
       {selectedEdge && (
-        <CodeGraphEvidenceDrawer edge={selectedEdge} onClose={() => setSelectedEdgeId(null)} />
+        <CodeGraphEvidenceDrawer edge={selectedEdge} gap={selectedGap} onClose={() => setSelectedEdgeId(null)} />
       )}
 
       {selectedNode && !selectedEdge && (
-        <CodeGraphNodeDetail node={selectedNode} degree={degreeById.get(selectedNode.id) ?? 0} />
+        <CodeGraphNodeDetail node={selectedNode} degree={degreeById.get(selectedNode.id) ?? 0} unresolvedCount={incidentGapCount} onShowUnresolved={() => setGapSourceId(selectedNode.id)} onClose={() => { setSelectedNodeId(null); nodeTriggerRef.current?.focus({ preventScroll: true }); }} />
       )}
 
       {exportOpen && (
@@ -1031,7 +1063,15 @@ const CodeGraphNode = memo(function CodeGraphNode({ data }: { data: CodeGraphNod
       className={classes.join(' ')}
       tabIndex={0}
       role="button"
-      aria-label={data.path || data.label}
+      aria-label={data.accessibleLabel}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        const root = event.currentTarget.closest('.code-graph-container');
+        event.currentTarget.click(); // Use exactly the pointer selection/expansion path.
+        requestAnimationFrame(() => root?.querySelector<HTMLElement>('aside[aria-label="Node details"]')?.focus({ preventScroll: true }));
+      }}
       style={{
         ['--node-color' as string]: data.color,
         ['--node-glow' as string]: `${data.color}66`,

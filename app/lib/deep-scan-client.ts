@@ -1,5 +1,7 @@
 import { PUBLIC_REPOSITORY_INGESTION_LIMITS, type DiscoveredFile, type IngestionInventory, type IngestionLimits } from './analyzer/types';
 import { getUserFacingErrorMessage } from './user-facing-errors';
+import { parseGitHubUrl } from './analyzer/ingestion';
+import { resolveGitHubRevision } from './github-revision';
 
 /**
  * Browser deep-scan client for private repositories.
@@ -47,6 +49,8 @@ interface DiscoveryPayload {
   skipped: { path: string; reason: string }[];
   name: string;
   source: string;
+  commitSha?: string;
+  analyzedRef?: string;
   inventory?: IngestionInventory;
 }
 
@@ -175,7 +179,11 @@ export async function analyzePublicRepositoryInBrowser(options: {
   let discovery: DiscoveryPayload;
   try {
     const { fetchGitHubRepo } = await import('./analyzer/ingestion');
-    discovery = await fetchGitHubRepo(url, PUBLIC_REPOSITORY_INGESTION_LIMITS);
+    const parsed = parseGitHubUrl(url);
+    if (!parsed) throw Object.assign(new Error('Invalid GitHub URL.'), { code: 'INVALID_GITHUB_URL' });
+    const revision = await resolveGitHubRevision(parsed, { signal });
+    onProgress?.({ stage: 'resolve', message: `Resolved ${revision.requestedRef} → ${revision.commitSha}; scanning the full repository`, percent: 2 });
+    discovery = await fetchGitHubRepo(url, PUBLIC_REPOSITORY_INGESTION_LIMITS, undefined, { commitSha: revision.commitSha });
   } catch (error) {
     if ((error as Error).name === 'AbortError') throw error;
     return mapBrowserAnalysisFailure(error);
@@ -246,12 +254,23 @@ function mapArchiveFailure(status: number, body: { code?: string; message?: stri
   }
 }
 
+async function readArchiveFailure(response: Response): Promise<{ code?: string; installSettingsUrl?: string }> {
+  const body: unknown = await response.json().catch(() => null);
+  if (!body || typeof body !== 'object') return {};
+  const details = 'error' in body && body.error && typeof body.error === 'object' ? body.error : body;
+  return {
+    code: 'code' in details && typeof details.code === 'string' ? details.code : undefined,
+    installSettingsUrl: 'installSettingsUrl' in details && typeof details.installSettingsUrl === 'string' ? details.installSettingsUrl : undefined,
+  };
+}
+
 export async function analyzePrivateRepositoryInBrowser(options: {
   url: string;
   onProgress?: (p: WorkerProgress) => void;
   signal?: AbortSignal;
 }): Promise<DeepScanOutcome> {
   const { url, onProgress, signal } = options;
+  if (parseGitHubUrl(url)?.refSegments) return analyzePrivateRepositoryViaTree(options);
 
   onProgress?.({ stage: 'download', message: 'Fetching private repository source…', percent: 2 });
 
@@ -275,7 +294,7 @@ export async function analyzePrivateRepositoryInBrowser(options: {
   }
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
+    const body = await readArchiveFailure(res);
     if (body?.code === 'ARCHIVE_TOO_LARGE') {
       return analyzePrivateRepositoryViaTree({ url, onProgress, signal });
     }
@@ -314,7 +333,7 @@ async function analyzePrivateRepositoryViaTree(options: {
   signal?: AbortSignal;
 }): Promise<DeepScanOutcome> {
   const { url, onProgress, signal } = options;
-  onProgress?.({ stage: 'download', message: 'ZIP is over 25 MB — fetching the repository Git tree instead…', percent: 2 });
+  onProgress?.({ stage: 'download', message: parseGitHubUrl(url)?.refSegments ? 'Fetching the selected private revision via the Git tree…' : 'ZIP is over 25 MB — fetching the repository Git tree instead…', percent: 2 });
 
   let res: Response;
   try {
@@ -336,7 +355,7 @@ async function analyzePrivateRepositoryViaTree(options: {
   }
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
+    const body = await readArchiveFailure(res);
     return mapArchiveFailure(res.status, body ?? {});
   }
 

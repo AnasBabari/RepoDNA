@@ -54,7 +54,7 @@ describe('public export Blob cache', () => {
       format: 'csv',
     });
     expect(pathname).toBe(
-      `repodna/public/graphify-labs/graphify-repo/${'a'.repeat(40)}/2.0.0/exports/1.0.0/${'b'.repeat(64)}/expires-1800000000000/csv.zip`
+      `repodna/public/graphify-labs/graphify-repo/${'a'.repeat(40)}/2.0.7/exports/1.0.0/1.0.7/${'b'.repeat(64)}/expires-1800000000000/csv.zip`
     );
     expect(publicExportMetadataPath(pathname)).toBe(`${pathname}.metadata.json`);
   });
@@ -97,7 +97,7 @@ describe('public export Blob cache', () => {
     expect(blobMocks.put).toHaveBeenNthCalledWith(
       1,
       'repodna/public/export.graph.json',
-      bytes,
+      expect.any(Buffer),
       expect.objectContaining({ access: 'private', addRandomSuffix: false, allowOverwrite: true })
     );
     const metadataBody = blobMocks.put.mock.calls[1][1] as string;
@@ -106,6 +106,19 @@ describe('public export Blob cache', () => {
       sha256: 'c'.repeat(64),
       mediaType: 'application/json',
     });
+  });
+
+  it('uploads exactly the subarray range without copying or leaking adjacent bytes', async () => {
+    const backing = new Uint8Array([99, 10, 20, 30, 88]);
+    const bytes = backing.subarray(1, 4);
+    await storePublicExport({ pathname: 'repodna/public/slice.json', bytes,
+      contentType: 'application/json', cacheControlMaxAge: 3600, sha256: 'd'.repeat(64) });
+    const uploaded = blobMocks.put.mock.calls[0][1] as Buffer;
+    expect(Buffer.isBuffer(uploaded)).toBe(true);
+    expect([...uploaded]).toEqual([10, 20, 30]);
+    expect(uploaded.buffer).toBe(bytes.buffer);
+    expect(uploaded.byteOffset).toBe(bytes.byteOffset);
+    expect(JSON.parse(blobMocks.put.mock.calls[1][1]).byteSize).toBe(3);
   });
 
   it('repairs a missing sidecar from cached bytes and returns complete metadata', async () => {

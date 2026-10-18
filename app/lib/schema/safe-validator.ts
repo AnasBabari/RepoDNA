@@ -17,6 +17,7 @@ import addFormats from 'ajv-formats';
 import v1Schema from '../../../schema/repodna.schema.json';
 import v2Schema from '../../../schema/repodna-v2.schema.json';
 import type { RepoDNAProject } from '../types';
+import { checkInventoryEvidence } from './inventory-evidence-validator';
 
 export interface ValidationResult {
   valid: boolean;
@@ -116,6 +117,38 @@ function isConfidence(value: unknown): value is number {
   return isFiniteNumber(value) && value >= 0 && value <= 1;
 }
 
+function checkExtractionLimits(value: unknown, errors: string[], label: string): void {
+  if (value === undefined) return; // additive metadata: older artifacts remain valid
+  if (!Array.isArray(value)) return addError(errors, `${label} must be an array`);
+  if (value.length > 100000) return addError(errors, `${label} exceeds the 100000-notice bound`);
+  const categories = new Set(['symbols', 'imports', 'calls', 'ast_nodes', 'ast_depth']);
+  for (let index = 0; index < value.length && errors.length < MAX_STRUCTURAL_ERRORS; index++) {
+    const notice = value[index];
+    const path = `${label}[${index}]`;
+    if (!isRecord(notice)) { addError(errors, `${path} must be an object`); continue; }
+    if (typeof notice.file !== 'string') addError(errors, `${path}.file must be a string`);
+    if (typeof notice.category !== 'string' || !categories.has(notice.category)) addError(errors, `${path}.category is invalid`);
+    if (!isPositiveInteger(notice.limit)) addError(errors, `${path}.limit must be a positive integer`);
+    if (notice.omittedCount !== null && !isNonNegativeInteger(notice.omittedCount)) addError(errors, `${path}.omittedCount must be a non-negative integer or null`);
+    if (typeof notice.countIsLowerBound !== 'boolean') addError(errors, `${path}.countIsLowerBound must be boolean`);
+    if (!isRecord(notice.range) || !isPositiveInteger(notice.range.startLine) || !isPositiveInteger(notice.range.endLine) || !isNonNegativeInteger(notice.range.startColumn) || !isNonNegativeInteger(notice.range.endColumn)) addError(errors, `${path}.range must contain valid lines and columns`);
+  }
+}
+
+function checkGraphScope(value: unknown, errors: string[]): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) return addError(errors, 'graphScope must be an object');
+  if (!['uncompacted', 'compacted'].includes(value.kind as string)) addError(errors, 'graphScope.kind is invalid');
+  if (!['uncompacted-extracted-graph', 'retained-subgraph'].includes(value.analyticsScope as string)) addError(errors, 'graphScope.analyticsScope is invalid');
+  for (const group of ['original', 'retained', 'omitted']) {
+    const counts = value[group];
+    if (!isRecord(counts)) { addError(errors, `graphScope.${group} must be an object`); continue; }
+    for (const key of ['nodes', 'relationships', 'unresolvedRelationships', 'ambiguousRelationships']) {
+      if (counts[key] !== null && !isNonNegativeInteger(counts[key])) addError(errors, `graphScope.${group}.${key} must be a non-negative integer or null`);
+    }
+  }
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
@@ -187,6 +220,10 @@ function validateStructurallyV1(data: unknown): ValidationResult {
       errors.push(`repository.${k} is required`);
     }
     checkFingerprint(p.repository.fingerprint, errors, 'repository');
+    for (const key of ['commitSha', 'analyzedRef'] as const) {
+      const value = p.repository[key];
+      if (value !== undefined && value !== null && typeof value !== 'string') errors.push(`repository.${key} must be a string or null`);
+    }
   } else {
     errors.push('repository must be an object');
   }
@@ -247,6 +284,8 @@ function validateStructurallyV1(data: unknown): ValidationResult {
     errors.push('metrics must be an object');
   }
   if (isRecord(p.metadata)) {
+    checkInventoryEvidence(p.metadata, errors, 'metadata');
+    checkExtractionLimits(p.metadata.extractionLimits, errors, 'metadata.extractionLimits');
     for (const k of missingKeys(p.metadata, ['analysisMode', 'executedRepositoryCode', 'limits', 'fileComponents', 'cache'])) {
       errors.push(`metadata.${k} is required`);
     }
@@ -262,6 +301,7 @@ function validateStructurallyV1(data: unknown): ValidationResult {
 
 function validateV2GraphIntegrity(data: unknown): ValidationResult {
   const errors: string[] = [];
+  if (isRecord(data)) checkInventoryEvidence(data.inventory, errors, 'inventory');
   if (!isRecord(data)) return { valid: false, errors: ['Artifact payload must be a non-null object.'] };
 
   const nodes = data.nodes;
@@ -312,6 +352,7 @@ export function validateRepoDNAProjectV2(data: unknown): ValidationResult {
   if ((data as { schemaVersion?: unknown }).schemaVersion !== '2.0.0') {
     errors.push('schemaVersion must be "2.0.0"');
   }
+  checkGraphScope(data.graphScope, errors);
   for (const k of missingKeys(data, ['generatedAt', 'repository', 'inventory', 'coverage', 'nodes', 'edges', 'architecture', 'flows', 'communities', 'dependencyCycles', 'centrality', 'unresolved', 'diagnostics', 'timings', 'parsers', 'security', 'completeness'])) {
     errors.push(`${k} is required`);
   }
@@ -327,6 +368,8 @@ export function validateRepoDNAProjectV2(data: unknown): ValidationResult {
   }
 
   const inv = (data as { inventory?: unknown }).inventory;
+  checkInventoryEvidence(inv, errors, 'inventory');
+  if (isRecord(inv)) checkExtractionLimits(inv.extractionLimits, errors, 'inventory.extractionLimits');
   if (isRecord(inv)) {
     for (const k of missingKeys(inv, [
       'totalFileCount', 'totalBytes', 'firstPartySourceFileCount', 'firstPartyLoc',

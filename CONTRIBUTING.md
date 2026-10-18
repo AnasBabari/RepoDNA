@@ -55,6 +55,19 @@ npm run test:e2e                    # browser contracts; set REPODNA_E2E_PORT if
 
 Full local validation is expected before pushing non-trivial changes. Docs-only changes need `git diff --check` and a careful read; CI covers the rest.
 
+### Route types when switching builders
+
+`npm run typecheck` runs the installed `next typegen` command before `tsc`.
+Next and Vinext both generate files under `.next/types`, but their generated
+route interfaces differ. Regenerating Next's definitions prevents stale
+Vinext definitions from breaking Next's validator; no generated directories
+need to be deleted, and route/component validation remains enabled.
+
+Run builds serially, with the development server stopped. CI verifies both
+`build:vercel → build → typecheck` and `build → build:vercel → typecheck`.
+For generation alone, use `npx next typegen`. Do not replace the typecheck
+script with a source-only configuration that excludes generated validators.
+
 ## Repository layout
 
 - `app/` — the web application (components, API routes, durable workflows)

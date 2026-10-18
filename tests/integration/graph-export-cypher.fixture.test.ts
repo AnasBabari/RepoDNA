@@ -42,6 +42,7 @@ const HOSTILE_NAME = [
 ].join('|');
 /** Delete-only variant (variety over the DETACH DELETE payload above). */
 const PAYLOAD_DELETE = "'); MATCH (x:RepoDNAEntity) DELETE x; //";
+const HEADER_PAYLOAD = "header'\"/* */;\\u000A\r\n\u0085\u2028\u2029CREATE (:RepoDNAHeaderInjectionProbe); //";
 
 function makeNode(
   id: string,
@@ -187,17 +188,17 @@ function buildFixtureDocument(): GraphExportDocumentV1 {
 
   const manifest: GraphExportDocumentV1['manifest'] = {
     exportSchemaVersion: GRAPH_EXPORT_SCHEMA_VERSION,
-    exporterVersion: '1.0.0',
+    exporterVersion: HEADER_PAYLOAD,
     sourceSchemaVersion: '2.0.0',
     analyzerVersion: 'integration-fixture',
     sourceArtifactSha256: createHash('sha256')
       .update('repodna-neo4j-idempotency-fixture')
       .digest('hex'),
     repository: {
-      name: 'RepoDNA integration fixture',
-      source: 'local://tests/integration',
-      commitSha: null,
-      analyzedRef: 'refs/heads/main',
+      name: HEADER_PAYLOAD,
+      source: HEADER_PAYLOAD,
+      commitSha: HEADER_PAYLOAD,
+      analyzedRef: HEADER_PAYLOAD,
     },
     analyzedAt: '2026-08-26T00:00:00.000Z',
     coverage: { percentage: 100, truncationReasons: [] },
@@ -224,6 +225,7 @@ function buildFixtureDocument(): GraphExportDocumentV1 {
  * ------------------------------------------------------------------ */
 interface StringScan {
   mask: Uint8Array;
+  commentMask: Uint8Array;
   /** false if EOF reached while still inside a literal (unterminated). */
   terminated: boolean;
   /** Characters seen OUTSIDE literals (structural-code channel only). */
@@ -232,12 +234,21 @@ interface StringScan {
 
 function scanCypherStringLiterals(text: string): StringScan {
   const mask = new Uint8Array(text.length);
+  const commentMask = new Uint8Array(text.length);
   const outsideChars: string[] = [];
   let inString = false;
   let i = 0;
   while (i < text.length) {
     const ch = text[i];
     if (!inString) {
+      if (ch === '/' && text[i + 1] === '/') {
+        while (i < text.length && text[i] !== '\n') {
+          commentMask[i] = 1;
+          outsideChars.push(text[i]);
+          i += 1;
+        }
+        continue;
+      }
       if (ch === "'") {
         inString = true;
         mask[i] = 1;
@@ -262,7 +273,7 @@ function scanCypherStringLiterals(text: string): StringScan {
       }
     }
   }
-  return { mask, terminated: !inString, outsideChars };
+  return { mask, commentMask, terminated: !inString, outsideChars };
 }
 
 /** Splits on ';' characters that sit OUTSIDE any string literal. */
@@ -270,7 +281,7 @@ function topLevelSegments(text: string, scan: StringScan): string[] {
   const segments: string[] = [];
   let current = '';
   for (let i = 0; i < text.length; i++) {
-    if (text[i] === ';' && scan.mask[i] === 0) {
+    if (text[i] === ';' && scan.mask[i] === 0 && scan.commentMask[i] === 0) {
       segments.push(current);
       current = '';
     } else {
@@ -293,7 +304,8 @@ function skeleton(segment: string, startOffset: number, scan: StringScan): strin
 const SKELETON_LINE_PATTERNS: RegExp[] = [
   /^$/, // blank separator lines
   /^\/\/($|\s)/, // header comment lines
-  /^CREATE CONSTRAINT repo_dna_(entity|group|unresolved)_id IF NOT EXISTS FOR \(n:(RepoDNAEntity|RepoDNAGroup|RepoDNAUnresolved)\) REQUIRE n\.id IS UNIQUE$/,
+  /^CREATE CONSTRAINT repo_dna_(entity|group|unresolved|snapshot)_id IF NOT EXISTS FOR \(n:(RepoDNAEntity|RepoDNAGroup|RepoDNAUnresolved|RepoDNASnapshot)\) REQUIRE n\.id IS UNIQUE$/,
+  /^UNWIND \[\{id: \s*, manifestJson: \s*\}\] AS row$/,
   /^UNWIND \[$/,
   /^\] AS row$/,
   /^MATCH \(source:RepoDNAEntity \{id: row\.sourceId\}\)$/,
@@ -304,9 +316,10 @@ const SKELETON_LINE_PATTERNS: RegExp[] = [
   /^MERGE \(n:RepoDNAEntity:`.+?` \{id: row\.id\}\)$/,
   /^MERGE \(n:RepoDNAGroup \{id: row\.id\}\)$/,
   /^MERGE \(n:RepoDNAUnresolved \{id: row\.id\}\)$/,
+  /^MERGE \(n:RepoDNASnapshot \{id: row\.id\}\)$/,
   /^MERGE \(source\)-\[r:`.+?` \{id: row\.id\}\]->\(target\)$/,
-  /^MERGE \(member\)-\[:MEMBER_OF\]->\(group\)$/,
-  /^SET [nr]\.[A-Za-z]+ = (?:row\.[A-Za-z]+|true|false)(?:, [nr]\.[A-Za-z]+ = (?:row\.[A-Za-z]+|true|false))*$/,
+  /^MERGE \(member\)-\[r:MEMBER_OF\]->\(group\)$/,
+  /^SET [nr]\.[A-Za-z][A-Za-z0-9]* = (?:row\.[A-Za-z][A-Za-z0-9]*|true|false)(?:, [nr]\.[A-Za-z][A-Za-z0-9]* = (?:row\.[A-Za-z][A-Za-z0-9]*|true|false))*$/,
   // UNWIND row shells: string values are stripped as literals, leaving only
   // field names and any numeric/null/true/false values on each line.
   /^\s*\{[a-zA-Z_][a-zA-Z0-9_]*: \s*(?:[0-9]+(?:\.[0-9]+)?|null|true|false)?(?:, [a-zA-Z_][a-zA-Z0-9_]*: \s*(?:[0-9]+(?:\.[0-9]+)?|null|true|false)?)*\},?\s*$/,
@@ -383,7 +396,7 @@ describe('Neo4j cypher export fixture (static, environment-independent)', () => 
     expect(text).toContain('MERGE (n:RepoDNAEntity:');
     expect(text).toContain('MERGE (n:RepoDNAGroup {id: row.id})');
     expect(text).toContain('MERGE (n:RepoDNAUnresolved {id: row.id})');
-    expect(text).toContain('MERGE (member)-[:MEMBER_OF]->(group);');
+    expect(text).toContain('MERGE (member)-[r:MEMBER_OF]->(group)');
     expect(text).toContain(
       'CREATE CONSTRAINT repo_dna_unresolved_id IF NOT EXISTS FOR (n:RepoDNAUnresolved) REQUIRE n.id IS UNIQUE;',
     );
@@ -480,14 +493,14 @@ describe('Neo4j cypher export fixture (static, environment-independent)', () => 
     const segments = topLevelSegments(text, scan);
 
     // Fixture-static math mirroring cypher.ts batcher:
-    //   3 constraints
+    //   4 constraints + 1 snapshot manifest
     // + 3 entity batches (kind buckets present: class, file, function)
     // + 1 group batch
     // + 1 unresolved-placeholder-node batch
     // + 2 resolved-relationship batches (CONTAINS, IMPORTS)
     // + 1 synthetic-unresolved-relationship batch (CALLS)
-    // + 1 membership batch = 12 statements (+1 trailing empty segment).
-    const EXPECTED_STATEMENTS = 12;
+    // + 1 membership batch = 14 statements (+1 trailing empty segment).
+    const EXPECTED_STATEMENTS = 14;
     expect(segments.length - 1).toBe(EXPECTED_STATEMENTS);
 
     // The leading comment header is NOT its own segment: the first
@@ -510,7 +523,7 @@ describe('Neo4j cypher export fixture (static, environment-independent)', () => 
     }
 
     // The hostile id literal opened escaped; payload quotes never close it.
-    expect(text).toContain("id: '1-evil\\']");
+    expect(text).toContain("originalId: '1-evil\\']");
     // Proof of no injected destructive statement: a MASK-AWARE splitter (the
     // same one the skeleton whitelist uses) must find no top-level segment
     // whose non-literal skeleton is a destructive statement. (A naive ';'
