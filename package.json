@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "dev": "vinext dev",
+    "dev": "vinext dev --host 127.0.0.1",
     "postinstall": "node scripts/copy-tree-sitter-wasm.mjs",
     "copy:wasm": "node scripts/copy-tree-sitter-wasm.mjs",
     "prebuild": "node scripts/copy-tree-sitter-wasm.mjs",
@@ -79,6 +79,9 @@
     "wrangler": "^4.125.0"
   },
   "overrides": {
+    "satori": {
+      "fflate": "0.7.5"
+    },
     "@workflow/core": {
       "nanoid": "5.1.16",
       "devalue": "5.9.4"
