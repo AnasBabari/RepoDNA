@@ -73,6 +73,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json(
+      { success: false, error: 'A survey object is required.', requestId },
+      { status: 400, headers: NO_STORE_HEADERS }
+    );
     const usefulnessScore =
       typeof body.usefulnessScore === 'number' &&
       Number.isInteger(body.usefulnessScore) &&
