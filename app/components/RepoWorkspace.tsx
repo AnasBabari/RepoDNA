@@ -6,6 +6,7 @@ import Link from 'next/link';
 import packageMetadata from '../../package.json';
 
 import { ArchitectureGraph } from './ArchitectureGraph';
+import { useModalFocus } from './useModalFocus';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 import { CodeGraph } from './CodeGraph';
 import { GraphScopeSummary } from './GraphScopeSummary';
@@ -1274,6 +1275,7 @@ function AnalyseDialog({
 }) {
   const [githubUrl, setGithubUrl] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useModalFocus<HTMLElement>(open, onClose);
 
   if (!open) return null;
 
@@ -1289,6 +1291,8 @@ function AnalyseDialog({
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
         className="analyse-dialog"
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="analyse-title"
@@ -1314,7 +1318,6 @@ function AnalyseDialog({
               value={githubUrl}
               onChange={(event) => setGithubUrl(event.target.value)}
               placeholder="https://github.com/owner/repository"
-              autoFocus
             />
           </label>
           <button className="analyse-button" style={{ width: '100%', marginTop: '14px' }} type="submit">
@@ -1617,11 +1620,6 @@ function WorkspaceContent() {
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
         event.preventDefault();
         searchInputRef.current?.focus();
-      }
-      if (event.key === 'Escape') {
-        if (dialogOpen) setDialogOpen(false);
-        if (privatePickerOpen) setPrivatePickerOpen(false);
-        if (feedbackModalOpen) setFeedbackModalOpen(false);
       }
     }
     window.addEventListener('keydown', handleKeyDown);

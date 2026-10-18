@@ -93,6 +93,7 @@ const edgeTypeTone: Record<string, string> = {
 };
 
 type CodeGraphNodeData = {
+  accessibleLabel: string;
   label: string;
   kind: string;
   path: string;
@@ -438,7 +439,9 @@ function buildCodeNode(
     position: { x: position.x, y: position.y },
     initialWidth: 48,
     initialHeight: 48,
+    focusable: false, // The inner node control owns keyboard activation/focus.
     data: {
+      accessibleLabel: `${node.kind}: ${node.qualifiedName || node.name} — ${node.path || 'no source path'}:${node.range.startLine}`,
       label: shortLabel(node),
       kind: node.kind,
       path: node.path,
@@ -455,6 +458,7 @@ function buildCodeNode(
 function nodeDataEqual(a: CodeGraphNodeData, b: CodeGraphNodeData): boolean {
   return (
     a.label === b.label &&
+    a.accessibleLabel === b.accessibleLabel &&
     a.kind === b.kind &&
     a.path === b.path &&
     a.language === b.language &&
@@ -866,11 +870,13 @@ export function CodeGraph({
   }, [renderedEdges, visibleNodeIds, focusIds, rfNodes]);
 
   const selectedNode = graph.nodes.find((n) => n.id === selectedNodeId) ?? null;
+  const nodeTriggerRef = useRef<HTMLElement | null>(null);
   const selectedEdge = graph.edges.find((e) => e.id === selectedEdgeId) ?? null;
   const selectedGap = useMemo(() => gaps.find((gap) => gap.id === selectedEdgeId), [gaps, selectedEdgeId]);
   const incidentGapCount = useMemo(() => selectedNode ? gaps.filter((gap) => gap.edge?.source === selectedNode.id).length : 0, [gaps, selectedNode]);
 
   const onNodeClick = useCallback((_: unknown, node: Node<CodeGraphNodeData>) => {
+    nodeTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSelectedEdgeId(null);
     setSelectedNodeId((prev) => (prev === node.id ? prev : node.id));
     setExpandedIds((prev) => {
@@ -1030,7 +1036,7 @@ export function CodeGraph({
       )}
 
       {selectedNode && !selectedEdge && (
-        <CodeGraphNodeDetail node={selectedNode} degree={degreeById.get(selectedNode.id) ?? 0} unresolvedCount={incidentGapCount} onShowUnresolved={() => setGapSourceId(selectedNode.id)} />
+        <CodeGraphNodeDetail node={selectedNode} degree={degreeById.get(selectedNode.id) ?? 0} unresolvedCount={incidentGapCount} onShowUnresolved={() => setGapSourceId(selectedNode.id)} onClose={() => { setSelectedNodeId(null); nodeTriggerRef.current?.focus({ preventScroll: true }); }} />
       )}
 
       {exportOpen && (
@@ -1057,7 +1063,15 @@ const CodeGraphNode = memo(function CodeGraphNode({ data }: { data: CodeGraphNod
       className={classes.join(' ')}
       tabIndex={0}
       role="button"
-      aria-label={data.path || data.label}
+      aria-label={data.accessibleLabel}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        const root = event.currentTarget.closest('.code-graph-container');
+        event.currentTarget.click(); // Use exactly the pointer selection/expansion path.
+        requestAnimationFrame(() => root?.querySelector<HTMLElement>('aside[aria-label="Node details"]')?.focus({ preventScroll: true }));
+      }}
       style={{
         ['--node-color' as string]: data.color,
         ['--node-glow' as string]: `${data.color}66`,
