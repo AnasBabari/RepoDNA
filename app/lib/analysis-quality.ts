@@ -23,6 +23,9 @@ export function analysisQuality(project: RepoDNAProject | RepoDNAProjectV2) {
   const incompleteRoutes = project.diagnostics.some((item) => item.code.includes('UNRESOLVED') || item.code === 'EXPRESS_ROUTE_PATH_INCOMPLETE');
   const parsePercentage = isV2 ? project.coverage.percentage : project.metrics.parseSuccessRate;
   const stored = isV2 ? project.completeness : undefined;
+  const manifestStatus = isV2 ? project.inventory.manifestInventory?.status : project.metadata.manifestInventory?.status;
+  const unsupported = isV2 ? project.inventory.sourceInventory?.unsupportedSourceFileCount ?? 0 : project.metadata.sourceInventory?.unsupportedSourceFileCount ?? 0;
+  const unprocessed = isV2 ? project.inventory.sourceOutcomes?.unprocessed ?? 0 : project.metadata.sourceOutcomes?.unprocessed ?? 0;
   const reasons = [...new Set([
     ...(stored?.reasons ?? []), ...truncation, ...limitDiagnostics.map((item) => item.code),
     ...(limitNotices.length ? ['SOURCE_EXTRACTION_LIMIT_REACHED'] : []),
@@ -32,10 +35,13 @@ export function analysisQuality(project: RepoDNAProject | RepoDNAProjectV2) {
     ...(failed ? [`${failed} failed files`] : []),
     ...(parsePercentage < 100 ? [`parse coverage ${parsePercentage}%`] : []),
     ...(incompleteRoutes ? ['unresolved routes or mounts'] : []),
+    ...(manifestStatus === 'partial' ? ['manifest dependency inventory is partial'] : []),
+    ...(unsupported ? [`${unsupported} unsupported source files`] : []),
+    ...(unprocessed ? [`${unprocessed} supported source files were not processed`] : []),
   ])];
   let status: CompletenessStatus;
   if (scope?.kind === 'compacted' || stored?.status === 'COVERAGE_LIMITED' || truncation.length || limitNotices.length || limitDiagnostics.length) status = 'COVERAGE_LIMITED';
-  else if (stored?.status === 'PARTIAL' || partial || failed || parsePercentage < 100) status = 'PARTIAL';
+  else if (stored?.status === 'PARTIAL' || partial || failed || unsupported || unprocessed || manifestStatus === 'partial' || parsePercentage < 100) status = 'PARTIAL';
   else if (stored?.status === 'MOSTLY_MAPPED' || unresolved || incompleteRoutes || reasons.length) status = 'MOSTLY_MAPPED';
   else status = 'FULLY_MAPPED';
   return { status, reasons, unresolvedCount: unresolved, retainedUnresolvedCount: scope?.retained.unresolvedRelationships ?? unresolved, partialFileCount: partial, failedFileCount: failed, label: COMPLETENESS_LABELS[status] };

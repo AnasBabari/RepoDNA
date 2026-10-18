@@ -4,6 +4,9 @@ import type { GraphEdge, GraphNode, GraphNodeKind, RepoDNAProjectV2 } from '../a
 import { filterMeaningfulDependencyCycles } from '../analyzer/cycles';
 import { analysisQuality } from '../analysis-quality';
 import { resolveGraphScope } from '../graph-scope';
+import { manifestCounts, unavailableManifests } from '../analyzer/manifest-types';
+import { classifySourcePaths, reconcileSourceOutcomes } from '../analyzer/source-inventory';
+import { isSourcePath } from '../analyzer/source-policy';
 
 export type AnyRepoDNAArtifact = RepoDNAProject | RepoDNAProjectV2;
 export type ArtifactVersion = '1.1.0' | '2.0.0' | 'unknown';
@@ -63,7 +66,10 @@ export function loadRepoDNAArtifact(data: unknown): LoadedArtifact {
   if (version === '2.0.0') {
     const err = validationErrorText(data, '2.0.0', 'v2');
     if (err) throw new Error(err);
-    return { version: '2.0.0', project: data as RepoDNAProjectV2, isV2: true, isV1: false };
+    const project = data as RepoDNAProjectV2;
+    const manifestInventory = project.inventory.manifestInventory ?? unavailableManifests();
+    const counts = manifestCounts(manifestInventory);
+    return { version: '2.0.0', project: { ...project, inventory: { ...project.inventory, manifestInventory, packageCount: counts.packages, declaredDependencyCount: counts.dependencies } }, isV2: true, isV1: false };
   }
   if (version === '1.1.0') {
     const err = validationErrorText(data, '1.1.0', 'v1');
@@ -119,12 +125,15 @@ function externalDependencyName(moduleSpecifier: string): string | null {
 export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
   const now = new Date().toISOString();
   const totalFiles = project.files.length;
-  const sourceFiles = project.files.filter(
-    (f) => ['Python', 'JavaScript', 'TypeScript', 'Go'].includes(f.language)
-  );
+  const sourceFiles = project.files.filter((file) => isSourcePath(file.path));
   const firstPartyLoc = sourceFiles.reduce((a, f) => a + f.lines, 0);
-  const parsed = project.files.filter((f) => f.parsed).length;
-  const coveragePct = project.metrics.parseSuccessRate ?? (totalFiles ? Math.round((parsed / totalFiles) * 1000) / 10 : 100);
+  const skipped = project.diagnostics.filter((item) => item.code.startsWith('skipped_') && item.file).map((item) => ({ path: item.file! }));
+  const sourceInventory = project.metadata.sourceInventory ?? classifySourcePaths([...project.files.map((file) => file.path), ...skipped.map((item) => item.path)], skipped);
+  const sourceOutcomes = project.metadata.sourceOutcomes ?? reconcileSourceOutcomes(project.files, sourceInventory);
+  const parsed = sourceOutcomes.complete + sourceOutcomes.partial;
+  const coveragePct = sourceOutcomes.supported ? Math.round((parsed / sourceOutcomes.supported) * 1000) / 10 : 100;
+  const manifestInventory = project.metadata.manifestInventory ?? unavailableManifests();
+  const declarationCounts = manifestCounts(manifestInventory);
 
   // Allocate every node through one deterministic namespace. File ids are the
   // primary references used by imports, routes, and definitions, so they must
@@ -369,8 +378,8 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     repository: {
       name: project.repository.name,
       source: project.repository.source,
-      commitSha: null,
-      analyzedRef: null,
+      commitSha: project.repository.commitSha ?? null,
+      analyzedRef: project.repository.analyzedRef ?? null,
       languages: project.repository.languages,
       fingerprint: {
         languages: project.repository.fingerprint.languages,
@@ -386,20 +395,23 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
       },
     },
     inventory: {
+      manifestInventory,
+      sourceInventory,
+      sourceOutcomes,
       extractionLimits: project.metadata.extractionLimits ?? [],
       totalFileCount: totalFiles,
       totalBytes: project.files.reduce((a, f) => a + f.bytes, 0),
-      firstPartySourceFileCount: project.repository.sourceFileCount,
+      firstPartySourceFileCount: sourceInventory.firstPartySourceFileCount,
       firstPartyLoc,
       candidateFileCount: totalFiles,
       parsedFileCount: parsed,
-      partiallyParsedFileCount: project.files.filter((file) => file.parsed && file.error).length,
-      failedFileCount: project.files.filter((file) => !file.parsed && file.error).length,
-      unsupportedSourceFileCount: totalFiles - project.repository.sourceFileCount,
+      partiallyParsedFileCount: sourceOutcomes.partial,
+      failedFileCount: sourceOutcomes.failed,
+      unsupportedSourceFileCount: sourceInventory.unsupportedSourceFileCount,
       ignoredFileCount: 0,
       generatedFileCount: 0,
-      packageCount: Object.keys(((project.repository.fingerprint as unknown as { languageFileCounts?: Record<string, number> }).languageFileCounts) ?? {}).length,
-      declaredDependencyCount: project.metrics.localDependencies + project.metrics.externalDependencies,
+      packageCount: declarationCounts.packages,
+      declaredDependencyCount: declarationCounts.dependencies,
       skippedByReason: project.diagnostics
         .filter((d) => d.code.startsWith('skipped_'))
         .reduce<Record<string, number>>((acc, d) => {
@@ -412,12 +424,12 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     coverage: {
       percentage: coveragePct,
       parsed,
-      partial: project.files.filter((file) => file.parsed && file.error).length,
-      unsupported: totalFiles - project.repository.sourceFileCount,
+      partial: sourceOutcomes.partial,
+      unsupported: sourceInventory.unsupportedSourceFileCount,
       ignored: 0,
       skipped: project.diagnostics.filter((d) => d.code.startsWith('skipped_')).length,
       truncationReasons: project.diagnostics
-        .filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'SOURCE_EXTRACTION_LIMIT_REACHED'].includes(d.code))
+        .filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'SOURCE_EXTRACTION_LIMIT_REACHED', 'MANIFEST_INVENTORY_LIMIT_REACHED'].includes(d.code))
         .map((d) => d.code),
     },
     nodes: graphNodes,

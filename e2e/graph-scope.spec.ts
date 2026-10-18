@@ -15,7 +15,7 @@ for (const legacy of [false, true]) test(`compacted ${legacy ? 'legacy' : 'recor
   if (legacy) delete project.graphScope;
   await context.route('**/*', (route) => baseURL && route.request().url().startsWith(baseURL) ? route.continue() : route.abort());
   await page.route('**/samples/nanogpt.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(project) }));
-  await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+  await page.goto('/?sample=https://github.com/karpathy/nanoGPT');
   const expected = legacy ? 'unknown' : '900';
   await expect(page.getByRole('region', { name: 'Graph scope', exact: true })).toContainText(`Whole-analysis resolution gaps: ${expected}; retained gaps: 0`);
   await expect(page.getByRole('region', { name: 'Plain-language summary' })).toContainText('Coverage limited');

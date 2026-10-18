@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-const STRIX_URL = '/?repo=https://github.com/usestrix/strix';
+const STRIX_URL = '/?sample=https://github.com/usestrix/strix';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await context.route('**/*', (route) => {
