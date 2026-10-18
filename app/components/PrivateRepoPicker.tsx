@@ -24,6 +24,7 @@ export function PrivateRepoPicker({
   const [repos, setRepos] = useState<SafeRepositoryItem[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [listingNote, setListingNote] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +49,8 @@ export function PrivateRepoPicker({
         repositories?: SafeRepositoryItem[];
         hasMore?: boolean;
         page?: number;
+        searchScope?: string | null;
+        listingTruncated?: boolean;
       };
 
       if (!res.ok || !data.success) {
@@ -60,6 +63,7 @@ export function PrivateRepoPicker({
       setRepos(data.repositories || []);
       setHasMore(Boolean(data.hasMore));
       setPage(data.page || pageNum);
+      setListingNote(data.searchScope ?? (data.listingTruncated ? 'The installation listing reached its safety limit. Some repositories may be omitted; pagination covers the available results only.' : null));
     } catch (err) {
       const code = (err as Error & { code?: string }).code || null;
       setErrorCode(code);
@@ -241,6 +245,7 @@ export function PrivateRepoPicker({
           />
         </div>
 
+        {listingNote && <p className="muted" role="status">{listingNote}</p>}
         {/* Repository List */}
         <div style={{ flex: 1, overflowY: 'auto', minHeight: '260px', paddingRight: '4px' }}>
           {loading && repos.length === 0 ? (
