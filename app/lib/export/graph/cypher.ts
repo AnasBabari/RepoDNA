@@ -260,9 +260,10 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
       for (let i = 0; i < batch.length; i++) {
         const rel = batch[i];
         const row = [
-          `id: ${cypherValue(rel.id)}`,
-          `sourceId: ${cypherValue(rel.sourceId)}`,
-          `targetId: ${cypherValue(rel.targetId)}`,
+          `id: ${cypherValue(scoped(rel.id))}`,
+          `originalId: ${cypherValue(rel.id)}`, `snapshotKey: ${cypherValue(snapshotKey)}`,
+          `sourceId: ${cypherValue(scoped(rel.sourceId))}`,
+          `targetId: ${cypherValue(scoped(rel.targetId))}`,
           `status: ${cypherValue(rel.status)}`,
           `confidence: ${cypherValue(rel.confidence)}`,
           `why: ${cypherValue(rel.why)}`,
@@ -283,6 +284,7 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
       lines.push('MATCH (source:RepoDNAEntity {id: row.sourceId})');
       lines.push('MATCH (target:RepoDNAEntity {id: row.targetId})');
       lines.push(`MERGE (source)-[r:\`${type}\` {id: row.id}]->(target)`);
+      lines.push('SET r.originalId = row.originalId, r.snapshotKey = row.snapshotKey');
       lines.push(
         'SET r.status = row.status, r.confidence = row.confidence, r.why = row.why, r.evidenceFile = row.evidenceFile, r.evidenceStartLine = row.evidenceStartLine, r.evidenceStartCol = row.evidenceStartCol, r.evidenceEndLine = row.evidenceEndLine, r.evidenceEndCol = row.evidenceEndCol, r.resolverName = row.resolverName, r.resolverVersion = row.resolverVersion, r.alternativeCandidateIdsJson = row.alternativeCandidateIdsJson, r.unresolvedExpression = row.unresolvedExpression, r.propertiesJson = row.propertiesJson, r.syntheticTarget = false;'
       );
@@ -305,9 +307,10 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
         for (let i = 0; i < batch.length; i++) {
           const rel = batch[i];
           const row = [
-            `id: ${cypherValue(rel.id)}`,
-            `sourceId: ${cypherValue(rel.sourceId)}`,
-            `unresolvedId: ${cypherValue(`unresolved:${rel.id}`)}`,
+            `id: ${cypherValue(scoped(rel.id))}`,
+            `originalId: ${cypherValue(rel.id)}`, `snapshotKey: ${cypherValue(snapshotKey)}`,
+            `sourceId: ${cypherValue(scoped(rel.sourceId))}`,
+            `unresolvedId: ${cypherValue(scoped(`unresolved:${rel.id}`))}`,
             `status: ${cypherValue(rel.status)}`,
             `confidence: ${cypherValue(rel.confidence)}`,
             `why: ${cypherValue(rel.why)}`,
@@ -328,6 +331,7 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
         lines.push('MATCH (source:RepoDNAEntity {id: row.sourceId})');
         lines.push('MATCH (target:RepoDNAUnresolved {id: row.unresolvedId})');
         lines.push(`MERGE (source)-[r:\`${type}\` {id: row.id}]->(target)`);
+        lines.push('SET r.originalId = row.originalId, r.snapshotKey = row.snapshotKey');
         lines.push(
           'SET r.status = row.status, r.confidence = row.confidence, r.why = row.why, r.evidenceFile = row.evidenceFile, r.evidenceStartLine = row.evidenceStartLine, r.evidenceStartCol = row.evidenceStartCol, r.evidenceEndLine = row.evidenceEndLine, r.evidenceEndCol = row.evidenceEndCol, r.resolverName = row.resolverName, r.resolverVersion = row.resolverVersion, r.alternativeCandidateIdsJson = row.alternativeCandidateIdsJson, r.unresolvedExpression = row.unresolvedExpression, r.propertiesJson = row.propertiesJson, r.syntheticTarget = true;'
         );
@@ -342,13 +346,15 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
       lines.push('UNWIND [');
       for (let i = 0; i < batch.length; i++) {
         const membership = batch[i];
-        const row = [`groupId: ${cypherValue(membership.groupId)}`, `nodeId: ${cypherValue(membership.nodeId)}`].join(', ');
+        const row = [`groupId: ${cypherValue(scoped(membership.groupId))}`, `nodeId: ${cypherValue(scoped(membership.nodeId))}`,
+          `membershipReason: ${cypherValue(membership.membershipReason)}`, `snapshotKey: ${cypherValue(snapshotKey)}`].join(', ');
         lines.push(`  {${row}}${i < batch.length - 1 ? ',' : ''}`);
       }
       lines.push('] AS row');
       lines.push('MATCH (member:RepoDNAEntity {id: row.nodeId})');
       lines.push('MATCH (group:RepoDNAGroup {id: row.groupId})');
-      lines.push('MERGE (member)-[:MEMBER_OF]->(group);');
+      lines.push('MERGE (member)-[r:MEMBER_OF]->(group)');
+      lines.push('SET r.membershipReason = row.membershipReason, r.snapshotKey = row.snapshotKey;');
       lines.push('');
     }
   }
