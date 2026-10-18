@@ -47,6 +47,40 @@ local test is not evidence that production contains a fix.
    Shared URL resolution rejects ambiguity rather than substituting HEAD.
    [PR #31](https://github.com/AnasBabari/RepoDNA/pull/31) is draft and unmerged.
 
+### Remaining draft stack — verified 18 October 2026
+
+Review these after PR #31, in table order. Each targets the preceding draft,
+not main. All listed CI runs passed at the exact runtime commit shown; old
+failure emails remain historical and do not describe these current heads.
+
+| Draft PR | Issue | Verified runtime head | Successful CI run |
+| --- | --- | --- | --- |
+| [#32](https://github.com/AnasBabari/RepoDNA/pull/32) | #10: sample freshness | a7886db | [39135001374](https://github.com/AnasBabari/RepoDNA/actions/runs/39135001374) |
+| [#33](https://github.com/AnasBabari/RepoDNA/pull/33) | #11: pagination/search | 9a8712f | [39135009508](https://github.com/AnasBabari/RepoDNA/actions/runs/39135009508) |
+| [#34](https://github.com/AnasBabari/RepoDNA/pull/34) | #12: Neo4j snapshots | 556d724 | [39135015855](https://github.com/AnasBabari/RepoDNA/actions/runs/39135015855) |
+| [#35](https://github.com/AnasBabari/RepoDNA/pull/35) | #13: keyboard graph | 40344a3 | [39135023940](https://github.com/AnasBabari/RepoDNA/actions/runs/39135023940) |
+| [#36](https://github.com/AnasBabari/RepoDNA/pull/36) | #14: modal focus | f1295b5 | [39135029237](https://github.com/AnasBabari/RepoDNA/actions/runs/39135029237) |
+| [#37](https://github.com/AnasBabari/RepoDNA/pull/37) | #15: browser zoom | 3a9b027 | [39135035646](https://github.com/AnasBabari/RepoDNA/actions/runs/39135035646) |
+| [#38](https://github.com/AnasBabari/RepoDNA/pull/38) | #16: feedback delivery | f3b6968 | [39135042282](https://github.com/AnasBabari/RepoDNA/actions/runs/39135042282) |
+| [#39](https://github.com/AnasBabari/RepoDNA/pull/39) | #21: dev dependency containment | e4daab5 | [39135635261](https://github.com/AnasBabari/RepoDNA/actions/runs/39135635261) |
+
+### Final combined runtime acceptance
+
+At e4daab5: clean npm ci; lint zero errors/two existing OAuth-navigation warnings;
+strict typecheck; 481 TypeScript and 34 Python tests; both serial builds and
+post-build typechecks; 79 Next production-browser tests with one expected
+feature-gate skip, zero failures/flakes. JSON/CSV/Cypher/Parquet/TXT downloads
+passed with Parquet enabled. Real Neo4j repeated multi-snapshot imports and
+disposable Redis retention/deduplication/throttling passed; owned containers and
+the local production test server were removed/stopped.
+
+The exact-commit Vercel preview is READY, but interactive protected-preview
+acceptance remains **unverified**: the existing browser session reaches Vercel
+login. No temporary authentication-bypass link was created and protection was
+not weakened. A maintainer must sign in normally before this check can finish.
+Later documentation-only commits do not alter this runtime evidence; inspect
+the PR's latest checks separately rather than attributing old CI to a new SHA.
+
 ## Issue-by-issue state
 
 | Issue | Implementation / remaining acceptance |
@@ -59,19 +93,19 @@ local test is not evidence that production contains a fix.
 | #6 | Implemented in PR #25: searchable retained gaps, null targets, relevant-only nodes and drawable-edge counts. 368 unit / 31 Python and both local browser variants passed; hosted CI passed. Unmerged. |
 | #7 | Implemented on inventory-evidence: manifest roots/scopes, supported-source denominator, reconciled outcomes, schema/UI/TXT/all export evidence and nullable legacy counts. Local verification below; unmerged review remains. |
 | #8 | Implemented on evidence-based-roles: quantitative language ranking, syntax-backed UI roles and neutral Python src/app files. Local verification below; unmerged review remains. |
-| #9 | Implemented in PR #31: bounded tag/branch/commit resolution, pinned acquisition, portable identity and actionable failures. 466 unit / 34 Python tests, both builds/typechecks and 64 production-mode browser tests pass; hosted CI confirmation and protected interactive acceptance remain separate. Unmerged review remains. |
-| #10 | Partially addressed by visible bundled-snapshot provenance; sample short-circuit/reanalyze behavior still pending. |
-| #11 | Pending: GitHub repository pagination and search beyond first page. |
-| #12 | Pending: Neo4j multi-snapshot isolation/membership provenance. Existing same-snapshot idempotency is not sufficient. |
-| #13 | Pending: graph keyboard activation. |
-| #14 | Pending: non-export modal focus, semantics and restoration. |
-| #15 | Responsive controls verified at 320–1440px in PR #22; long names and actual 200% browser zoom still need acceptance tests. |
-| #16 | Pending: feedback delivery must not acknowledge a dropped submission. |
+| #9 | Implemented in PR #31: bounded tag/branch/commit resolution, pinned acquisition, portable identity and actionable failures. Hosted CI run 39123964983 passed; 466 unit / 34 Python and 64 production-browser tests passed at that checkpoint. Protected interactive acceptance and unmerged review remain. |
+| #10 | Implemented on sample-freshness: explicit allowlisted snapshot actions/query, visible date/commit, Analyze latest, and no sample substitution for normal URL input. Nine focused browser tests/typecheck pass; unmerged review remains. |
+| #11 | Implemented on repository-pagination: upstream OAuth pages are not sliced twice, App results remain installation-scoped, OAuth first-100 search is explicitly disclosed, truncated listings cannot create endless Next pages, and stale requests are cancelled. Seven API tests and picker browser test pass; unmerged review remains. |
+| #12 | Implemented in PR #34: snapshot-scoped IDs, original IDs, lossless manifest and membershipReason. Real Neo4j 5 verified two repositories/two commits imported twice without collisions; container removed. Unmerged review remains. |
+| #13 | Implemented on graph-keyboard: Enter/Space share pointer inspection/expansion, contextual labels, detail focus and restoration on close/Escape. Two browser regressions and typecheck pass; unmerged. |
+| #14 | Implemented on modal-accessibility: shared focus lifecycle, inert background, named dialogs, Escape and trigger restoration. Desktop/mobile private reconnect, feedback, New analysis and export tests: 10 passed, one expected Parquet-gate skip; typecheck passed. Unmerged. |
+| #15 | Responsive controls verified at 320–1440px in PR #22. zoom-acceptance adds long-name fixtures and real Chromium tabs.setZoom(2), verifies getZoom=2 plus layout-viewport shrink, control bounds and Architecture/Code Graph screenshots. Browser regression passes; unmerged. |
+| #16 | Implemented on feedback-delivery: fixed-choice daily Redis aggregates expire within 30 days; no free text/identity fields, 24h retry receipts, explicit 400/429/503 failures. Typecheck, 22 focused unit/API tests, seven browser tests and real disposable Redis integration pass. Unmerged. |
 | #17 | Scan-counter abort/single-flight lifecycle implemented in PR #22; unit/browser and hosted smoke pass. |
 | #18 | Capability/privacy copy corrected in PR #22. |
 | #19 | Browser-copy drift regressions included in PR #22. |
 | #20 | Type generation fix implemented in PR #22; clean hosted CI verifies serial mixed Next/Vinext build orders. |
-| #21 | Pending: development-tool advisories need compatible patches or an explicit time-bounded, reproducible mitigation. Production audit success does not resolve this issue. |
+| #21 | Implemented in PR #39: Satori fflate patched to compatible 0.7.5, default dev server loopback-only, maintainer-owned braces mitigation expires 25 October 2026 UTC. Full audit: eight high dev-chain findings; production: zero. Expiry/new-advisory/reachability guard, mixed builds and full browser gates passed in run 39135635261. Unmerged review remains. |
 | #26 | Implemented on file-ranking-evidence: unique full-path rankings, merged symbol reasons and explicit score scope. Canonical node data stays unchanged; local verification below and unmerged review remain. |
 | #27 | Implemented on inventory-evidence: browser grammar bytes avoid unsafe Node detection; rejected parser promises retry. Real uploads parse Python/JS/TS/TSX/Go; unmerged review remains. |
 

@@ -30,7 +30,7 @@ async function waitForWorkspace(page: Page): Promise<void> {
 
 /** Entry via the featured-repo URL; the sample fetch is intercepted in harness. */
 export async function loadSampleWorkspace(page: Page): Promise<void> {
-  await page.goto(`/?repo=${encodeURIComponent(SAMPLE_REPO_URL)}`);
+  await page.goto(`/?sample=${encodeURIComponent(SAMPLE_REPO_URL)}`);
   await waitForWorkspace(page);
 }
 

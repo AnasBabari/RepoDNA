@@ -4,6 +4,7 @@ type ErrorWithDetails = {
 };
 
 const FRIENDLY_ERROR_MESSAGES: Readonly<Record<string, string>> = {
+  SAMPLE_UNAVAILABLE: 'This bundled snapshot is unavailable or invalid. Retry the snapshot, or use browser analysis for a fresh scan.',
   GITHUB_REF_AMBIGUOUS: 'This URL matches multiple branch/tag boundaries. Percent-encode slashes inside the ref, or paste a full commit URL. The default branch was not substituted.',
   GITHUB_REF_NOT_FOUND: 'The requested revision was not found or is inaccessible. Check the tag, branch or commit; the default branch was not substituted.',
   GITHUB_REF_UNSUPPORTED: 'Use a repository root, /tree/ref, or /blob/ref/file URL. For slash-containing refs, percent-encode the slashes or use a commit URL. The scan covers the whole repository at that revision.',

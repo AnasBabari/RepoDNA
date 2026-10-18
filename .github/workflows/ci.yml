@@ -31,6 +31,8 @@ jobs:
       - run: npm ci
       - name: Audit production dependencies (high and critical)
         run: npm run audit:production
+      - name: Check bounded development advisory mitigation and reachability
+        run: npm run audit:development
       - run: npm run lint
       - run: npm run typecheck
       # The dedicated `parity` job enforces cross-engine parity fail-hard with

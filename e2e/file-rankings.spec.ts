@@ -30,7 +30,7 @@ test('technical file rankings group symbols but preserve canonical evidence and 
   });
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.route('**/samples/nanogpt.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(project) }));
-  await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+  await page.goto('/?sample=https://github.com/karpathy/nanoGPT');
   await expect(page.locator('.workspace')).toBeVisible();
   await page.getByRole('button', { name: 'Technical', exact: false }).click();
   const rows = page.locator('.important-grid article');
@@ -56,7 +56,7 @@ test('the bundled nanoGPT technical overview has unique file rows without duplic
   page.on('console', (message) => {
     if (/same key|unique.*key/i.test(message.text())) warnings.push(message.text());
   });
-  await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+  await page.goto('/?sample=https://github.com/karpathy/nanoGPT');
   await expect(page.locator('.workspace')).toBeVisible();
   await page.getByRole('button', { name: 'Technical', exact: false }).click();
   const names = await page.locator('.important-grid article strong').allTextContents();

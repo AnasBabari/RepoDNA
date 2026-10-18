@@ -24,7 +24,7 @@ test('legacy canonical language ordering cannot make a 99.6% Python project clai
   project.repository.languages = { CSS: 0.1, HTML: 0.3, Python: 99.6 };
   project.repository.fingerprint.languages = ['CSS', 'HTML', 'Python'];
   await page.route('**/samples/nanogpt.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(project) }));
-  await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+  await page.goto('/?sample=https://github.com/karpathy/nanoGPT');
   const builtWith = page.locator('.plain-summary-grid article').filter({ has: page.getByText('Built with', { exact: true }) });
   await expect(builtWith.locator('strong')).toHaveText('Python');
   await expect(builtWith).toContainText('99.6%');

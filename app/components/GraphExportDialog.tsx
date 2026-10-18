@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { useModalFocus } from './useModalFocus';
 
 import { trackGraphExported } from '../lib/analytics';
 import {
@@ -126,8 +127,6 @@ export function GraphExportDialog({
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [cacheWarning, setCacheWarning] = useState<string | null>(null);
   const abortControllers = useRef<Partial<Record<GraphExportFormat, AbortController>>>({});
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   const visibleFormats = useMemo(
     () => ALL_FORMATS.filter((format) => format !== 'parquet' || process.env.NEXT_PUBLIC_REPODNA_PARQUET_EXPORT === 'true'),
@@ -140,46 +139,7 @@ export function GraphExportDialog({
     onClose();
   }, [onClose]);
 
-  useEffect(() => {
-    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const dialog = dialogRef.current;
-    const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
-    const closeButton = dialog?.querySelector<HTMLElement>('.graph-export-close');
-    const initialFocus = dialog?.querySelector<HTMLElement>('.graph-export-close') ?? focusables()[0];
-    initialFocus?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeDialog();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const items = focusables();
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      const activeIndex = active ? items.indexOf(active) : -1;
-      if (activeIndex === -1) {
-        event.preventDefault();
-        (event.shiftKey ? last : first).focus();
-      } else if (event.shiftKey && (active === closeButton || activeIndex === 0)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && activeIndex === items.length - 1) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      if (previouslyFocusedRef.current?.isConnected) previouslyFocusedRef.current.focus();
-    };
-  }, [closeDialog]);
+  const dialogRef = useModalFocus<HTMLDivElement>(true, closeDialog);
 
   const updateState = useCallback((format: GraphExportFormat, patch: Partial<FormatState>) => {
     setStates((previous) => ({ ...previous, [format]: { ...previous[format], ...patch } }));
