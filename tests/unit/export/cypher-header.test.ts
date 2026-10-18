@@ -37,6 +37,7 @@ describe('Cypher manifest comments', () => {
   for (const field of [...manifestFields, ...repositoryFields]) {
     it(`keeps hostile ${field} metadata inert without changing graph statements`, async () => {
       const { document } = await normalizeArtifactForExport(makeSecurityFixture());
+      document.manifest.repository.commitSha ??= 'a'.repeat(40);
       const baseline = new TextDecoder().decode((await buildCypher(document)).bytes);
       for (const payload of payloads) {
         const changed = structuredClone(document);

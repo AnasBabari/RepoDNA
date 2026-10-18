@@ -319,7 +319,7 @@ const SKELETON_LINE_PATTERNS: RegExp[] = [
   /^MERGE \(n:RepoDNASnapshot \{id: row\.id\}\)$/,
   /^MERGE \(source\)-\[r:`.+?` \{id: row\.id\}\]->\(target\)$/,
   /^MERGE \(member\)-\[r:MEMBER_OF\]->\(group\)$/,
-  /^SET [nr]\.[A-Za-z]+ = (?:row\.[A-Za-z]+|true|false)(?:, [nr]\.[A-Za-z]+ = (?:row\.[A-Za-z]+|true|false))*$/,
+  /^SET [nr]\.[A-Za-z][A-Za-z0-9]* = (?:row\.[A-Za-z][A-Za-z0-9]*|true|false)(?:, [nr]\.[A-Za-z][A-Za-z0-9]* = (?:row\.[A-Za-z][A-Za-z0-9]*|true|false))*$/,
   // UNWIND row shells: string values are stripped as literals, leaving only
   // field names and any numeric/null/true/false values on each line.
   /^\s*\{[a-zA-Z_][a-zA-Z0-9_]*: \s*(?:[0-9]+(?:\.[0-9]+)?|null|true|false)?(?:, [a-zA-Z_][a-zA-Z0-9_]*: \s*(?:[0-9]+(?:\.[0-9]+)?|null|true|false)?)*\},?\s*$/,
