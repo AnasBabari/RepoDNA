@@ -32,7 +32,6 @@ export function FeedbackModal({
   const [rating, setRating] = useState<number>(5);
   const [useCase, setUseCase] = useState<string>('onboarding');
   const [selectedCaps, setSelectedCaps] = useState<string[]>([]);
-  const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const submissionRef = useRef<{ body: string; id: string } | null>(null);
@@ -129,6 +128,8 @@ export function FeedbackModal({
                     key={score}
                     type="button"
                     onClick={() => setRating(score)}
+                    disabled={submitting}
+                    aria-pressed={rating === score}
                     style={{
                       flex: 1,
                       padding: '8px 0',
@@ -176,6 +177,7 @@ export function FeedbackModal({
                       name="useCase"
                       value={uc.id}
                       checked={useCase === uc.id}
+                      disabled={submitting}
                       onChange={() => setUseCase(uc.id)}
                       style={{ accentColor: 'var(--cyan-core)' }}
                     />
@@ -198,6 +200,8 @@ export function FeedbackModal({
                       key={cap.id}
                       type="button"
                       onClick={() => toggleCap(cap.id)}
+                      disabled={submitting}
+                      aria-pressed={isSelected}
                       style={{
                         padding: '5px 10px',
                         borderRadius: '6px',
@@ -217,57 +221,11 @@ export function FeedbackModal({
               </div>
             </div>
 
-            {/* 4. Text Comments with Privacy Warning */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <label htmlFor="feedback-comment" style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
-                  Optional feedback or feature request (max 500 chars)
-                </label>
-                <span style={{ fontSize: '0.75rem', color: comment.length > 480 ? '#f87171' : 'var(--text-dim)' }}>
-                  {comment.length}/500
-                </span>
-              </div>
-              <textarea
-                id="feedback-comment"
-                value={comment}
-                onChange={(e) => setComment(e.target.value.slice(0, 500))}
-                rows={3}
-                placeholder="What worked well? What felt confusing?"
-                className="filter-input"
-                style={{
-                  width: '100%',
-                  resize: 'none',
-                  fontFamily: 'inherit',
-                  fontSize: '0.85rem',
-                  background: '#06090d',
-                  border: '1px solid var(--line)',
-                  borderRadius: '8px',
-                  padding: '10px 14px',
-                  color: 'var(--ink)',
-                  outline: 'none',
-                }}
-              />
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '0.75rem',
-                  color: 'rgba(241, 188, 85, 0.9)',
-                  background: 'rgba(241, 188, 85, 0.06)',
-                  border: '1px solid rgba(241, 188, 85, 0.18)',
-                  borderRadius: '6px',
-                  padding: '7px 10px',
-                  marginTop: '8px',
-                  lineHeight: 1.35,
-                }}
-              >
-                <span>🔒</span>
-                <span>
-                  <strong>Privacy Caution:</strong> Please do not include code snippets, passwords, or confidential company secrets.
-                </span>
-              </div>
-            </div>
+            <p className="privacy-note">
+              Only these fixed survey choices are collected as anonymous daily counts in Redis for up to 30 days.
+              No free text, repository details, credentials, or account identifiers are collected by this survey.
+              A random delivery receipt is kept for 24 hours to prevent duplicate retries.
+            </p>
 
             {/* Actions */}
             {deliveryError && <p role="alert">{deliveryError}</p>}
