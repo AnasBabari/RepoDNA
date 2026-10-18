@@ -1,3 +1,5 @@
+import { extractionNotices, retainFact, visitAstNode } from './extraction-budget';
+import type { ExtractionLimit } from './types';
 import type { Node as SyntaxNode } from 'web-tree-sitter';
 import { getTreeSitterParser } from './runtime';
 import type {
@@ -12,13 +14,8 @@ import type {
   SyntaxSymbol,
 } from './types';
 
-const MAX_AST_NODES = 25000;
-const MAX_AST_DEPTH = 128;
-const MAX_SYMBOLS_PER_FILE = 1000;
-const MAX_IMPORTS_PER_FILE = 500;
-const MAX_CALLS_PER_FILE = 2000;
 
-interface WalkState { symbols: SyntaxSymbol[]; imports: SyntaxImport[]; calls: SyntaxCall[]; errorNodes: number; nodeCount: number; packageName: string | null; }
+interface WalkState { symbols: SyntaxSymbol[]; imports: SyntaxImport[]; calls: SyntaxCall[]; errorNodes: number; extractionLimits: ExtractionLimit[]; nodeCount: number; packageName: string | null; }
 interface Frame { qualifiedName: string; kind: 'class' | 'callable'; }
 
 export class GoSyntaxParser implements SyntaxParser {
@@ -32,7 +29,7 @@ export class GoSyntaxParser implements SyntaxParser {
       tree = parser.parse(input.source);
       const root = tree?.rootNode ?? null;
       if (!root) return { facts: failedFacts('go') };
-      const state: WalkState = { symbols: [], imports: [], calls: [], errorNodes: 0, nodeCount: 0, packageName: null };
+      const state: WalkState = { symbols: [], imports: [], calls: [], errorNodes: 0, extractionLimits: [], nodeCount: 0, packageName: null };
       // package clause first
       for (const child of root.namedChildren) {
         if (child.type === 'package_clause') {
@@ -42,7 +39,7 @@ export class GoSyntaxParser implements SyntaxParser {
       }
       for (const child of root.namedChildren) walk(child, state, [], 1);
       const hasErrors = state.errorNodes > 0 || root.hasError;
-      return { facts: { language: 'go', symbols: state.symbols, imports: state.imports, calls: state.calls, hasMainGuard: false, parse: { success: true, hasErrors, errorNodes: state.errorNodes }, quality: hasErrors ? 'partial' : 'complete' } };
+      return { facts: { language: 'go', symbols: state.symbols, imports: state.imports, calls: state.calls, hasMainGuard: false, parse: { success: true, hasErrors, errorNodes: state.errorNodes }, extractionLimits: extractionNotices(state), quality: hasErrors || state.extractionLimits.length > 0 ? 'partial' : 'complete' } };
     } catch { return { facts: failedFacts('go') }; } finally { if (tree) try { tree.delete(); } catch {} }
   }
 }
@@ -50,18 +47,18 @@ function failedFacts(lang: SupportedLanguage): SyntaxFacts {
   return { language: lang, symbols: [], imports: [], calls: [], hasMainGuard: false, parse: { success: false, hasErrors: true, errorNodes: 0 }, quality: 'failed' };
 }
 function walk(node: SyntaxNode, state: WalkState, stack: Frame[], depth: number): void {
-  state.nodeCount += 1;
-  if (state.nodeCount > MAX_AST_NODES || depth > MAX_AST_DEPTH) { state.errorNodes += 1; return; }
+  if (!visitAstNode(state, depth, rangeOf(node))) return;
   if ((node as unknown as { isError?: boolean }).isError || (node as unknown as { isMissing?: boolean }).isMissing) state.errorNodes += 1;
 
   switch (node.type) {
     case 'import_declaration': {
-      if (state.imports.length < MAX_IMPORTS_PER_FILE) {
+      {
         // Go imports: import "fmt" or import ( "fmt" "net/http" )
         const text = node.text;
         // Extract all quoted strings
         const matches = Array.from(text.matchAll(/"([^"]+)"/g));
         for (const m of matches) {
+          if (!retainFact(state, 'imports', rangeOf(node))) continue;
           const mod = m[1];
           // Alias handling: import alias "pkg"
           const aliasMatch = text.match(new RegExp(`([a-zA-Z_]\\w*)\\s+"${mod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
@@ -71,7 +68,6 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], depth: number)
           } else {
             state.imports.push({ module: mod, names: [mod.split('/').pop()!], aliases: {}, relativeLevel: 0, isWildcard: false, range: rangeOf(node) });
           }
-          if (state.imports.length >= MAX_IMPORTS_PER_FILE) break;
         }
       }
       return;
@@ -88,7 +84,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], depth: number)
           const kind = isInterface ? 'interface' : isStruct ? 'class' : 'type';
           const parent = stack.length ? stack[stack.length - 1] : null;
           const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : (state.packageName ? `${state.packageName}.${name}` : name);
-          if (state.symbols.length < MAX_SYMBOLS_PER_FILE) {
+          if (retainFact(state, 'symbols', rangeOf(node))) {
             state.symbols.push({
               kind: kind as SyntaxSymbol['kind'],
               name,
@@ -129,7 +125,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], depth: number)
         if (receiverType) {
           // qualifiedName should be Receiver.Method
           const full = `${receiverType}::${name}`;
-          if (state.symbols.length < MAX_SYMBOLS_PER_FILE) {
+          if (retainFact(state, 'symbols', rangeOf(node))) {
             state.symbols.push({ kind: 'method', name, qualifiedName: full, range: rangeOf(node), parent: receiverType, exported: /^[A-Z]/.test(name), isAsync: false, bases: [], decorators: [] });
           }
           stack.push({ qualifiedName: full, kind: 'callable' });
@@ -138,7 +134,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], depth: number)
           return;
         }
       }
-      if (state.symbols.length < MAX_SYMBOLS_PER_FILE) {
+      if (retainFact(state, 'symbols', rangeOf(node))) {
         state.symbols.push({ kind: kind as SyntaxSymbol['kind'], name, qualifiedName, range: rangeOf(node), parent: parent ? parent.qualifiedName : null, exported: /^[A-Z]/.test(name), isAsync: false, bases: [], decorators: [] });
       }
       stack.push({ qualifiedName, kind: 'callable' });
@@ -154,14 +150,14 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], depth: number)
       const typeNode = receiverNode?.namedChildren[0]?.childForFieldName('type');
       const receiverType = typeNode?.text?.replace(/^\*/, '') ?? 'unknown';
       const qualifiedName = `${receiverType}::${name}`;
-      if (state.symbols.length < MAX_SYMBOLS_PER_FILE) state.symbols.push({ kind: 'method', name, qualifiedName, range: rangeOf(node), parent: receiverType, exported: /^[A-Z]/.test(name), isAsync: false, bases: [], decorators: [] });
+      if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: 'method', name, qualifiedName, range: rangeOf(node), parent: receiverType, exported: /^[A-Z]/.test(name), isAsync: false, bases: [], decorators: [] });
       stack.push({ qualifiedName, kind: 'callable' });
       for (const child of node.namedChildren) walk(child, state, stack, depth + 1);
       stack.pop();
       return;
     }
     case 'call_expression': {
-      if (state.calls.length < MAX_CALLS_PER_FILE) {
+      if (retainFact(state, 'calls', rangeOf(node))) {
         const fnNode = node.childForFieldName('function');
         if (fnNode) {
           const callee = fnNode.text;

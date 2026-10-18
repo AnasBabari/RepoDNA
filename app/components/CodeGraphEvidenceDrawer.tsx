@@ -1,12 +1,15 @@
 import { X } from './icons';
 import type { GraphEdge } from '../lib/analyzer/v2/types';
+import type { ResolutionGap } from '../lib/resolution-gaps';
 
 export function CodeGraphEvidenceDrawer({
   edge,
   onClose,
+  gap,
 }: {
   edge: GraphEdge;
   onClose: () => void;
+  gap?: ResolutionGap;
 }) {
   return (
     <aside className="graph-evidence-drawer" aria-label="Why are these connected">
@@ -15,6 +18,7 @@ export function CodeGraphEvidenceDrawer({
         <strong>{edge.type}</strong> ({edge.status}, confidence {Math.round(edge.confidence * 100)}%)
       </p>
       <p className="graph-detail-copy">{edge.explanation}</p>
+      {gap ? <p className="graph-detail-unresolved">Resolution reason: {gap.reason}</p> : null}
       <p className="graph-detail-meta">
         Evidence: {edge.evidence.file}:{edge.evidence.range.startLine}:{edge.evidence.range.startCol}-{edge.evidence.range.endLine}:{edge.evidence.range.endCol}
         {' '}· resolver {edge.resolver.name}@{edge.resolver.version}
@@ -22,8 +26,8 @@ export function CodeGraphEvidenceDrawer({
       {edge.unresolvedExpression ? (
         <p className="graph-detail-unresolved">Unresolved expression: {edge.unresolvedExpression}</p>
       ) : null}
-      {(edge.alternativeCandidates?.length ?? 0) > 0 ? (
-        <p className="graph-detail-alternatives">Alternative candidates: {edge.alternativeCandidates!.join(', ')}</p>
+      {(gap?.candidates ?? edge.alternativeCandidates ?? []).length > 0 ? (
+        <p className="graph-detail-alternatives">Alternative candidates: {(gap?.candidates ?? edge.alternativeCandidates ?? []).join(', ')}</p>
       ) : null}
       <button className="chip-button graph-detail-close" onClick={onClose} type="button">
         <X size={14} aria-hidden="true" /> Close

@@ -74,6 +74,24 @@ describe('CSP-safe schema fallback', () => {
     expect(result.valid).toBe(true);
   });
 
+  it('validates optional extraction provenance even without generated validators', () => {
+    globalAny.__repodnaAjvV1 = null;
+    globalAny.__repodnaAjvV2 = null;
+    const v1 = minimalProject();
+    const v2 = makeV2Fixture();
+    const notice = { file: 'src/a.py', category: 'symbols', limit: 1000, omittedCount: 1, countIsLowerBound: false, range: { startLine: 1, endLine: 2, startColumn: 0, endColumn: 4 } };
+    Object.assign(v1.metadata, { extractionLimits: [notice] });
+    Object.assign(v2.inventory, { extractionLimits: [notice] });
+    expect(validateRepoDNAProject(v1).valid).toBe(true);
+    expect(validateRepoDNAProjectV2(v2).valid).toBe(true);
+    for (const bad of [{}, { ...notice, limit: -1 }, { ...notice, omittedCount: -1 }, { ...notice, category: 'made-up' }, { ...notice, range: null }]) {
+      Object.assign(v1.metadata, { extractionLimits: [bad] });
+      Object.assign(v2.inventory, { extractionLimits: [bad] });
+      expect(validateRepoDNAProject(v1).valid).toBe(false);
+      expect(validateRepoDNAProjectV2(v2).valid).toBe(false);
+    }
+  });
+
   it('rejects artifacts missing required top-level collections without ajv', () => {
     globalAny.__repodnaAjvV1 = null;
     const project = minimalProject();
@@ -169,6 +187,24 @@ describe('CSP-safe schema fallback', () => {
 });
 
 describe('v1→v2 adapter edge integrity', () => {
+  it('validates optional graph-scope counts without allowing unknown to become zero', async () => {
+    const globalAny = globalThis as typeof globalThis & { __repodnaAjvV2?: unknown };
+    const { makeV2Fixture } = await import('./export/fixtures');
+    const { graphCounts, recordedGraphScope } = await import('../../app/lib/graph-scope');
+    const project = makeV2Fixture();
+    project.graphScope = recordedGraphScope({ nodes: null, relationships: null, unresolvedRelationships: null, ambiguousRelationships: null }, graphCounts(project));
+    const oldValidator = globalAny.__repodnaAjvV2;
+    try {
+      globalAny.__repodnaAjvV2 = null;
+      expect(validateRepoDNAProjectV2(project).errors).toEqual([]);
+      project.graphScope.original.nodes = -1;
+      expect(validateRepoDNAProjectV2(project).valid).toBe(false);
+      project.graphScope.original.nodes = null;
+      project.graphScope.analyticsScope = 'complete' as never;
+      expect(validateRepoDNAProjectV2(project).valid).toBe(false);
+    } finally { globalAny.__repodnaAjvV2 = oldValidator; }
+  });
+
   it('normalizes import source/target to file: node IDs so edges resolve', async () => {
     const { adaptV1ToV2Viewer } = await import('../../app/lib/schema/artifact-loader');
     const { resolveImports } = await import('../../app/lib/analyzer/graph');

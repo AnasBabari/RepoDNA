@@ -15,6 +15,13 @@ function getServices(): TreeSitterServices {
         return import(/* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ glueUrl);
       },
       assetUrl: (file) => `${WASM_BASE_PATH}/${file}`,
+      grammarInput: async (file) => {
+        // Pass bytes explicitly: browser process shims may lack `versions`,
+        // which upstream Language.load's string-path Node detection assumes.
+        const response = await fetch(`${WASM_BASE_PATH}/${file}`);
+        if (!response.ok) throw new Error(`Grammar asset request failed (${response.status}).`);
+        return new Uint8Array(await response.arrayBuffer());
+      },
     });
   }
   return services;

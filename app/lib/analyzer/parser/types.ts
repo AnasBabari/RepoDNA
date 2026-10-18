@@ -2,6 +2,19 @@ export type SupportedLanguage = 'python' | 'javascript' | 'typescript' | 'tsx' |
 
 export type ParseQuality = 'complete' | 'partial' | 'failed';
 
+export type ExtractionLimitCategory = 'symbols' | 'imports' | 'calls' | 'ast_nodes' | 'ast_depth';
+
+export interface ExtractionLimit {
+  category: ExtractionLimitCategory;
+  limit: number;
+  /** Observed omitted facts, or unknown when a traversal subtree was not visited. */
+  omittedCount: number | null;
+  countIsLowerBound: boolean;
+  range: SourceRange;
+}
+
+export type SourceExtractionLimit = ExtractionLimit & { file: string };
+
 export type ParserErrorCode =
   | 'TREE_SITTER_INIT_FAILED'
   | 'TREE_SITTER_GRAMMAR_LOAD_FAILED'
@@ -79,6 +92,7 @@ export interface SyntaxFacts {
   hasMainGuard: boolean;
   parse: ParseStats;
   quality: ParseQuality;
+  extractionLimits?: ExtractionLimit[];
 }
 
 export interface ParseInput {

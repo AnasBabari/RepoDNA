@@ -1,54 +1,11 @@
 import * as fflate from 'fflate';
 import { DEFAULT_INGESTION_LIMITS, IngestionError, type DiscoveredFile, type IngestionInventory, type IngestionLimits, type IngestionErrorCode } from './types';
-
-export const DEFAULT_IGNORES = new Set([
-  '.git', '.hg', '.svn', 'node_modules', 'venv', '.venv', 'env',
-  'dist', 'build', 'coverage', '.next', '.vinext', '__pycache__',
-  'vendor', '.tox', '.mypy_cache', '.pytest_cache', '.ruff_cache',
-  '.idea', '.vscode', '.repodna', '.turbo', '.cache',
-]);
-
-export const SOURCE_EXTENSIONS = new Set([
-  '.py', '.pyi', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx',
-  '.go', '.json', '.toml', '.yaml', '.yml', '.ini', '.cfg', '.sql',
-  '.prisma', '.md', '.mdx', '.html', '.css', '.scss', '.dockerfile',
-  '.sh', '.bash', '.graphql', '.gql',
-]);
-
-export const SUPPORTED_SOURCE_EXTENSIONS = new Set([
-  '.py', '.pyi', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.go',
-]);
+import { isCandidate, isGeneratedPath, isIgnored } from './source-policy';
+import { classifySourcePaths } from './source-inventory';
+import { pinGitHubDiscovery, resolveGitHubRevision } from '../github-revision';
+export { DEFAULT_IGNORES, SOURCE_EXTENSIONS, SUPPORTED_SOURCE_EXTENSIONS, SPECIAL_FILES } from './source-policy';
 
 const MAX_INGESTION_PATH_LENGTH = 4096;
-
-function isSupportedSource(path: string): boolean {
-  const filename = path.split('/').pop()!;
-  const dotIndex = filename.lastIndexOf('.');
-  if (dotIndex === -1) return SPECIAL_FILES.has(filename);
-  const ext = filename.slice(dotIndex).toLowerCase();
-  return SUPPORTED_SOURCE_EXTENSIONS.has(ext);
-}
-
-function isGeneratedPath(path: string): boolean {
-  const lower = path.toLowerCase();
-  return (
-    lower.includes('/generated/') ||
-    lower.includes('__generated__') ||
-    lower.endsWith('.generated.ts') ||
-    lower.endsWith('.generated.js') ||
-    lower.endsWith('.min.js') ||
-    lower.endsWith('.bundle.js') ||
-    lower.startsWith('dist/') ||
-    lower.startsWith('build/')
-  );
-}
-
-export const SPECIAL_FILES = new Set([
-  'Dockerfile', 'Procfile', 'Makefile', 'Pipfile', 'package.json',
-  'requirements.txt', 'pyproject.toml', 'poetry.lock', 'Pipfile.lock',
-  'docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml',
-  'go.mod', 'Cargo.toml', 'pom.xml', 'build.gradle', 'tsconfig.json', 'jsconfig.json',
-]);
 
 export interface GitHubFetchOptions {
   /** Pin acquisition to the commit already resolved by the public API route. */
@@ -68,6 +25,8 @@ export interface ParsedGitHubUrl {
   owner: string;
   repo: string;
   canonicalUrl: string;
+  view?: 'tree' | 'blob' | 'commit';
+  refSegments?: string[];
 }
 
 export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
@@ -75,11 +34,15 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
   let trimmed = url.trim();
 
   // Strip wrapping quotes
-  trimmed = trimmed.replace(/^["']|["']$/g, '').trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
   if (!trimmed) return null;
+  // Reject normalization hazards before WHATWG URL parsing erases them.
+  if (/[\x00-\x1f\x7f\\]/.test(trimmed) || /\/(?:\.|%2e){1,2}(?:\/|[?#]|$)/i.test(trimmed)) return null;
 
   // Reject credential-bearing URLs (e.g. https://user:pass@github.com)
-  if (/@/.test(trimmed) && /^https?:\/\//i.test(trimmed)) {
+  if (/^https?:\/\/[^/?#]*@/i.test(trimmed)) {
     return null;
   }
 
@@ -116,7 +79,7 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
       }
 
       // Reject non-standard ports or username/password in URL object
-      if (parsed.username || parsed.password) {
+      if (parsed.username || parsed.password || parsed.port) {
         return null;
       }
 
@@ -126,6 +89,16 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
         const repo = segments[1].replace(/\.git$/i, '');
 
         if (isValidOwnerRepo(owner, repo)) {
+          if (segments.length > 2) {
+            const view = segments[2];
+            if (view !== 'tree' && view !== 'blob' && view !== 'commit') return null;
+            const refSegments = segments.slice(3).map(decodeURIComponent);
+            if (!refSegments.length || (view === 'blob' && refSegments.length < 2)) return null;
+            if (view === 'commit' && (refSegments.length !== 1 || !/^[a-f0-9]{40}$/i.test(refSegments[0]))) return null;
+            if (refSegments.some((part) => !part || /[\x00-\x1f\x7f\\]/.test(part) || part === '.' || part === '..')) return null;
+            if (parsed.pathname.length > 4096 || refSegments.length > 32) return null;
+            return { owner, repo, view, refSegments, canonicalUrl: `https://github.com/${owner}/${repo}/${view}/${refSegments.map(encodeURIComponent).join('/')}` };
+          }
           return { owner, repo, canonicalUrl: `https://github.com/${owner}/${repo}` };
         }
       }
@@ -155,19 +128,6 @@ function isValidOwnerRepo(owner: string, repo: string): boolean {
   if (owner === '.' || owner === '..' || repo === '.' || repo === '..') return false;
   if (RESERVED_GITHUB_ROOT_SEGMENTS.has(owner.toLowerCase())) return false;
   return true;
-}
-
-function isCandidate(path: string): boolean {
-  const filename = path.split('/').pop()!;
-  if (SPECIAL_FILES.has(filename)) return true;
-  const dotIndex = filename.lastIndexOf('.');
-  if (dotIndex === -1) return false;
-  return SOURCE_EXTENSIONS.has(filename.slice(dotIndex).toLowerCase());
-}
-
-function isIgnored(path: string): boolean {
-  const parts = path.split('/');
-  return parts.some((p) => DEFAULT_IGNORES.has(p));
 }
 
 function validatePath(rawPath: string): void {
@@ -268,12 +228,7 @@ export async function extractFromZip(
     let candidateFileCount = 0;
     let pendingStreams = 0;
     let zipInputComplete = false;
-    let totalFileCount = 0;
     let totalBytes = 0;
-    let ignoredFileCount = 0;
-    let generatedFileCount = 0;
-    let unsupportedFileCount = 0;
-    let firstPartySourceCandidateCount = 0;
     let maxFilesReached = false;
 
     const files: DiscoveredFile[] = [];
@@ -324,16 +279,11 @@ export async function extractFromZip(
           skippedByReason[s.reason] = (skippedByReason[s.reason] ?? 0) + 1;
         }
         const inventory = {
-          totalFileCount,
           totalBytes,
-          firstPartySourceFileCount: firstPartySourceCandidateCount,
-          candidateFileCount,
-          ignoredFileCount,
-          generatedFileCount,
-          unsupportedSourceFileCount: unsupportedFileCount,
           totalArchiveEntries: archiveEntryCount,
           skippedByReason,
           acquisitionMode: 'archive' as const,
+          ...classifySourcePaths(discoveredPaths.filter((path) => !path.endsWith('/')).map((path) => prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path), normalizedSkipped),
           truncation: {
             hitLimits: maxFilesReached ? ['TOO_MANY_FILES'] : [],
             maxFilesReached,
@@ -394,7 +344,6 @@ export async function extractFromZip(
       }
       seenFilePaths.add(normalizedPath);
 
-      totalFileCount++;
       // Track total bytes where declared size is available (compressed hint)
       const declaredSize = (file as unknown as { size?: number; originalSize?: number }).size ?? (file as unknown as { originalSize?: number }).originalSize;
       if (typeof declaredSize === 'number' && Number.isFinite(declaredSize)) totalBytes += declaredSize;
@@ -411,24 +360,15 @@ export async function extractFromZip(
       }
 
       if (isIgnored(normalizedPath)) {
-        ignoredFileCount++;
         return;
       }
 
       if (isGeneratedPath(normalizedPath)) {
-        generatedFileCount++;
         return;
       }
 
       if (!isCandidate(normalizedPath)) {
-        unsupportedFileCount++;
         return;
-      }
-
-      if (isSupportedSource(normalizedPath)) {
-        firstPartySourceCandidateCount++;
-      } else {
-        unsupportedFileCount++;
       }
 
       // 3. Enforce candidate files budget
@@ -984,19 +924,13 @@ async function fetchGitHubTreeRepo(
 
     const skipped: { path: string; reason: string }[] = [];
     const candidates: GitHubTreeEntry[] = [];
-    let totalFileCount = 0;
     let totalBytes = 0;
     let candidateFileCount = 0;
-    let ignoredFileCount = 0;
-    let generatedFileCount = 0;
-    let unsupportedFileCount = 0;
-    let firstPartySourceCandidateCount = 0;
     let maxFilesReached = false;
 
     const sortedEntries = [...treeResult.entries].sort((a, b) => a.path.localeCompare(b.path));
     for (const entry of sortedEntries) {
       validatePath(entry.path);
-      totalFileCount++;
       if (typeof entry.size === 'number' && Number.isFinite(entry.size)) totalBytes += entry.size;
 
       if (entry.path.split('/').length > 32) {
@@ -1004,21 +938,13 @@ async function fetchGitHubTreeRepo(
         continue;
       }
       if (isIgnored(entry.path)) {
-        ignoredFileCount++;
         continue;
       }
       if (isGeneratedPath(entry.path)) {
-        generatedFileCount++;
         continue;
       }
       if (!isCandidate(entry.path)) {
-        unsupportedFileCount++;
         continue;
-      }
-      if (isSupportedSource(entry.path)) {
-        firstPartySourceCandidateCount++;
-      } else {
-        unsupportedFileCount++;
       }
 
       candidateFileCount++;
@@ -1091,16 +1017,11 @@ async function fetchGitHubTreeRepo(
       name: metadata.name || repo,
       source: `https://github.com/${owner}/${repo}`,
       inventory: {
-        totalFileCount,
         totalBytes,
-        firstPartySourceFileCount: firstPartySourceCandidateCount,
-        candidateFileCount,
-        ignoredFileCount,
-        generatedFileCount,
-        unsupportedSourceFileCount: unsupportedFileCount,
         totalArchiveEntries: treeResult.totalArchiveEntries,
         skippedByReason,
         acquisitionMode: 'git-tree',
+        ...classifySourcePaths(sortedEntries.map((entry) => entry.path), skipped),
         repositorySizeKb: typeof metadata.size === 'number' ? metadata.size : undefined,
         truncation: {
           hitLimits,
@@ -1133,7 +1054,7 @@ export async function fetchGitHubRepo(
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS,
   accessToken?: string,
   options: GitHubFetchOptions = {}
-): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory?: import('./types').IngestionInventory }> {
+): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; commitSha?: string; analyzedRef?: string; inventory?: import('./types').IngestionInventory }> {
   const parsed = parseGitHubUrl(urlOrOwnerRepo);
   if (!parsed) {
     throw new IngestionError(
@@ -1144,6 +1065,11 @@ export async function fetchGitHubRepo(
   }
 
   const { owner, repo } = parsed;
+  if (parsed.refSegments && !options.commitSha) {
+    const revision = await resolveGitHubRevision(parsed, { accessToken });
+    options = { ...options, commitSha: revision.commitSha };
+  }
+  const pin = <T extends { source: string }>(discovery: T) => pinGitHubDiscovery(discovery, owner, repo, options.commitSha);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), limits.fetchTimeoutMs);
@@ -1176,7 +1102,7 @@ export async function fetchGitHubRepo(
       );
       if (typeof metadata.size === 'number' && metadata.size >= limits.treeFirstSizeKb) {
         clearTimeout(timeoutId);
-        return fetchGitHubTreeRepo(owner, repo, limits, accessToken, metadata, options.commitSha);
+        return fetchGitHubTreeRepo(owner, repo, limits, accessToken, metadata, options.commitSha).then(pin);
       }
     } catch {
       // The archive path remains a useful fallback when the metadata request
@@ -1372,19 +1298,19 @@ export async function fetchGitHubRepo(
 
   const contentLength = response.headers.get('content-length');
   if (contentLength && parseInt(contentLength, 10) > limits.maxArchiveBytes) {
-    return fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha);
+    return pin(await fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha));
   }
 
   try {
     const zipBuffer = await streamBoundedArrayBuffer(response, limits.maxArchiveBytes);
     const result = await extractFromZip(zipBuffer, repo, limits);
-    return {
+    return pin({
       ...result,
       source: `https://github.com/${owner}/${repo}`,
-    };
+    });
   } catch (error) {
     if (error instanceof IngestionError && error.code === 'ARCHIVE_TOO_LARGE') {
-      return fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha);
+      return pin(await fetchGitHubTreeRepo(owner, repo, limits, accessToken, undefined, options.commitSha));
     }
     throw error;
   }
@@ -1393,11 +1319,14 @@ export async function fetchGitHubRepo(
 export async function extractFromFileList(
   fileList: FileList | File[],
   limits: IngestionLimits = DEFAULT_INGESTION_LIMITS
-): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string }> {
+): Promise<{ files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory: IngestionInventory }> {
   const files: DiscoveredFile[] = [];
   const skipped: { path: string; reason: string }[] = [];
   let repoName = 'local-repository';
   let totalExtractedBytes = 0;
+  const observedPaths = new Set<string>();
+  let totalBytes = 0;
+  let candidateCount = 0;
 
   for (let i = 0; i < fileList.length; i++) {
     const file = fileList[i];
@@ -1409,6 +1338,9 @@ export async function extractFromFileList(
       repoName = parts[0];
     }
     const relPath = parts.length > 1 ? parts.slice(1).join('/') : rawPath;
+    if (observedPaths.has(relPath)) throw new IngestionError('UNREADABLE_FILE', 'Selected files contain duplicate relative paths.', 400);
+    observedPaths.add(relPath);
+    totalBytes += file.size;
 
     if (relPath.length > MAX_INGESTION_PATH_LENGTH) {
       skipped.push({ path: relPath.slice(0, MAX_INGESTION_PATH_LENGTH), reason: 'path_too_long' });
@@ -1416,9 +1348,10 @@ export async function extractFromFileList(
     }
 
     if (isIgnored(relPath)) continue;
+    if (isGeneratedPath(relPath)) continue;
     if (!isCandidate(relPath)) continue;
 
-    if (files.length >= limits.maxFiles) {
+    if (++candidateCount > limits.maxFiles) {
       throw new IngestionError(
         'TOO_MANY_FILES',
         `Selected directory exceeds limit of ${limits.maxFiles.toLocaleString()} files`,
@@ -1468,5 +1401,6 @@ export async function extractFromFileList(
     skipped,
     name: repoName,
     source: 'upload:files',
+    inventory: { ...classifySourcePaths([...observedPaths], skipped), totalBytes, totalArchiveEntries: fileList.length, skippedByReason: skipped.reduce<Record<string, number>>((result, item) => { result[item.reason] = (result[item.reason] ?? 0) + 1; return result; }, {}), acquisitionMode: 'local-folder' },
   };
 }

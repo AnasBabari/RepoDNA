@@ -115,6 +115,8 @@ export type RepoDNAProject = {
   repository: {
     name: string;
     source: string;
+    commitSha?: string | null;
+    analyzedRef?: string | null;
     languages: Record<string, number>;
     fileCount: number;
     sourceFileCount: number;
@@ -165,6 +167,10 @@ export type RepoDNAProject = {
     analysisMode: string;
     executedRepositoryCode: boolean;
     analyzerVersion?: string;
+    extractionLimits?: import('./analyzer/parser/types').SourceExtractionLimit[];
+    manifestInventory?: import('./analyzer/manifest-types').ManifestInventory;
+    sourceInventory?: import('./analyzer/source-inventory').SourcePathCounts;
+    sourceOutcomes?: import('./analyzer/source-inventory').SourceOutcomes;
     limits: {
       maxFiles: number;
       maxFileBytes: number;

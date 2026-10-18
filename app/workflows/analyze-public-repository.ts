@@ -20,6 +20,7 @@ export interface PublicAnalysisWorkflowInput {
   owner: string;
   repo: string;
   commitSha: string;
+  requestedRef?: string;
 }
 export interface PublicAnalysisWorkflowResult {
   repository: { owner: string; name: string; url: string };
@@ -71,7 +72,7 @@ async function analyzeAndCachePublicRepository(
   };
 
   try {
-    await emit('resolve', 2, `Resolved ${input.owner}/${input.repo} at ${input.commitSha.slice(0, 7)}`);
+    await emit('resolve', 2, `Resolved ${input.owner}/${input.repo} ${input.requestedRef ?? input.commitSha} → ${input.commitSha}; analyzing the full repository`);
 
     const cached = await readCachedPublicArtifact(input);
     if (cached) {
@@ -123,7 +124,7 @@ async function analyzeAndCachePublicRepository(
       { ...discovery, inventory },
       {
         commitSha: input.commitSha,
-        analyzedRef: 'HEAD',
+        analyzedRef: input.commitSha,
         ingestionLimits: PUBLIC_REPOSITORY_INGESTION_LIMITS,
         onProgress: emitAnalysisProgress,
       }

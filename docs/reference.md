@@ -23,7 +23,7 @@ Sign in with GitHub to access your private repositories:
 
 ## Graph exports
 
-Open **Relationship explorer → Code Graph → Export** to download the full canonical graph, independent of the current visual filter or layout. Each export includes nodes, relationships, groups, group memberships, unresolved links, source evidence, confidence, properties, coverage, and completeness metadata.
+Open **Relationship explorer → Code Graph → Export** to download all retained canonical findings, independent of the current visual filter or layout. Each export includes nodes, relationships, groups, group memberships, unresolved links, source evidence, confidence, properties, coverage, completeness and graph-scope metadata. Compacted artifacts do not contain omitted facts; original/retained/omitted counts disclose that boundary, with unknown original totals explicitly marked for older artifacts.
 
 - **Graph JSON**: validated against [`schema/repodna-graph-export-v1.schema.json`](../schema/repodna-graph-export-v1.schema.json).
 - **CSV tables**: a deterministic ZIP containing `nodes.csv`, `relationships.csv`, `groups.csv`, `group_memberships.csv`, `unresolved.csv`, and `manifest.json`; spreadsheet formula-leading values are escaped.

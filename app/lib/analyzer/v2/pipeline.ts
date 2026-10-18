@@ -5,6 +5,9 @@ import type { IngestionInventory } from '../types';
 import { adaptV1ToV2Viewer } from '../../schema/artifact-loader';
 import type { GraphEdge, GraphNode, RepoDNAProjectV2 } from './types';
 import { detectCentrality, detectCommunities, detectDependencyCycles } from './analytics';
+import { analysisQuality } from '../../analysis-quality';
+import { V2_ANALYZER_VERSION } from './version';
+import { graphCounts, recordedGraphScope } from '../../graph-scope';
 
 const DEFAULT_GRAPH_LIMITS = {
   // The full repository inventory is retained separately. These caps keep a
@@ -152,7 +155,7 @@ export interface V2AnalyzeOptions extends AnalyzeOptions {
 }
 
 export async function analyzeRepositoryV2(
-  discovery: { files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory?: IngestionInventory },
+  discovery: { files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; commitSha?: string; analyzedRef?: string; inventory?: IngestionInventory },
   options?: V2AnalyzeOptions
 ): Promise<RepoDNAProjectV2> {
   const start = Date.now();
@@ -190,15 +193,8 @@ export async function analyzeRepositoryV2(
     v2.inventory.totalBytes = ingestionInventory.totalBytes ?? v2.inventory.totalBytes;
     v2.inventory.ignoredFileCount = ingestionInventory.ignoredFileCount ?? v2.inventory.ignoredFileCount;
     v2.inventory.generatedFileCount = ingestionInventory.generatedFileCount ?? v2.inventory.generatedFileCount;
-    // firstParty counts from v1 are already truthful (including Go)
-    if (typeof ingestionInventory.firstPartySourceFileCount === 'number') {
-      v2.inventory.firstPartySourceFileCount = ingestionInventory.firstPartySourceFileCount;
-    }
     if (typeof ingestionInventory.candidateFileCount === 'number') {
       v2.inventory.candidateFileCount = ingestionInventory.candidateFileCount;
-    }
-    if (typeof ingestionInventory.unsupportedSourceFileCount === 'number') {
-      v2.inventory.unsupportedSourceFileCount = ingestionInventory.unsupportedSourceFileCount;
     }
     if (ingestionInventory.skippedByReason) {
       v2.inventory.skippedByReason = { ...ingestionInventory.skippedByReason };
@@ -254,14 +250,14 @@ export async function analyzeRepositoryV2(
   v2.coverage.unsupported = v2.inventory.unsupportedSourceFileCount;
   v2.coverage.ignored = v2.inventory.ignoredFileCount;
   v2.coverage.skipped = v2.inventory.skippedByReason ? Object.values(v2.inventory.skippedByReason as Record<string, number>).reduce((a, b) => a + b, 0) : 0;
-  const coverageSourceTotal = ingestionInventory?.firstPartySourceFileCount ?? v1.repository.sourceFileCount;
+  const coverageSourceTotal = v2.inventory.sourceOutcomes?.supported ?? v1.metadata.sourceOutcomes?.supported ?? v1.repository.sourceFileCount;
   if (coverageSourceTotal > 0) {
     v2.coverage.percentage = Math.round((v2.coverage.parsed / coverageSourceTotal) * 1000) / 10;
   }
 
   // Repository identity with commit
-  v2.repository.commitSha = options?.commitSha ?? null;
-  v2.repository.analyzedRef = options?.analyzedRef ?? null;
+  v2.repository.commitSha = options?.commitSha ?? discovery.commitSha ?? null;
+  v2.repository.analyzedRef = options?.analyzedRef ?? discovery.analyzedRef ?? null;
   v2.repository.source = discovery.source;
 
   const graphLimits = {
@@ -269,7 +265,9 @@ export async function analyzeRepositoryV2(
     maxEdges: Math.max(1, Math.floor(options?.graphLimits?.maxEdges ?? DEFAULT_GRAPH_LIMITS.maxEdges)),
   };
   const tCompact = Date.now();
+  const originalGraphCounts = graphCounts(v2);
   const graphTruncation = compactGraph(v2, graphLimits);
+  v2.graphScope = recordedGraphScope(originalGraphCounts, graphCounts(v2));
   timings.compact = Date.now() - tCompact;
   v2.coverage.truncationReasons = [...new Set([...v2.coverage.truncationReasons, ...graphTruncation])];
 
@@ -318,7 +316,7 @@ export async function analyzeRepositoryV2(
       maxGraphEdges: graphLimits.maxEdges,
     },
     truncated: [...new Set([
-      ...v1.diagnostics.filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE'].includes(d.code)).map((d) => d.code),
+      ...v1.diagnostics.filter((d) => ['TOO_MANY_FILES', 'TOO_MANY_ARCHIVE_ENTRIES', 'EXTRACTED_TOO_LARGE', 'ARCHIVE_TOO_LARGE', 'SOURCE_EXTRACTION_LIMIT_REACHED', 'MANIFEST_INVENTORY_LIMIT_REACHED'].includes(d.code)).map((d) => d.code),
       ...(v2.inventory.truncation?.hitLimits ?? []),
       ...graphTruncation,
     ])],
@@ -340,7 +338,7 @@ export async function analyzeRepositoryV2(
 
   v2.metadata = {
     ...v2.metadata,
-    analyzerVersion: '2.0.0',
+    analyzerVersion: V2_ANALYZER_VERSION,
     analysisMode: 'canonical-graph',
   };
 
@@ -348,19 +346,9 @@ export async function analyzeRepositoryV2(
   const totalMs = Date.now() - start;
   v2.timings = { stages: timings, totalMs };
 
-  // Completeness
-  const hasUnresolved = v2.unresolved.length > 0 || v2.edges.some((e) => e.status === 'unresolved' || e.status === 'ambiguous');
-  const hasTruncation = v2.security.truncated.length > 0;
-  const parseOk = v1.metrics.parseSuccessRate === 100;
-  if (parseOk && !hasUnresolved && !hasTruncation) {
-    v2.completeness = { status: 'FULLY_MAPPED', reasons: [] };
-  } else if (hasTruncation) {
-    v2.completeness = { status: 'COVERAGE_LIMITED', reasons: [...v2.security.truncated, hasUnresolved ? 'unresolved relationships' : ''].filter(Boolean) };
-  } else if (!parseOk || hasUnresolved) {
-    v2.completeness = { status: parseOk ? 'MOSTLY_MAPPED' : 'PARTIAL', reasons: hasUnresolved ? ['unresolved relationships'] : [`parseSuccessRate ${v1.metrics.parseSuccessRate}%`] };
-  } else {
-    v2.completeness = { status: 'MOSTLY_MAPPED', reasons: [] };
-  }
+  // One conservative interpretation shared by the adapter, UI and exports.
+  const { status, reasons } = analysisQuality(v2);
+  v2.completeness = { status, reasons };
 
   // Ensure deterministic ordering for nodes/edges
   v2.nodes.sort((a, b) => a.id.localeCompare(b.id));

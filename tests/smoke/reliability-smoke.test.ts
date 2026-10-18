@@ -8,15 +8,15 @@ describe('Reliability Smoke Tests', () => {
     { input: 'www.github.com/AnasBabari/RepoDNA', expected: 'https://github.com/AnasBabari/RepoDNA', owner: 'AnasBabari', repo: 'RepoDNA' },
     { input: 'https://github.com/AnasBabari/RepoDNA?tab=readme-ov-file', expected: 'https://github.com/AnasBabari/RepoDNA', owner: 'AnasBabari', repo: 'RepoDNA' },
     { input: 'https://github.com/AnasBabari/RepoDNA#readme', expected: 'https://github.com/AnasBabari/RepoDNA', owner: 'AnasBabari', repo: 'RepoDNA' },
-    { input: 'https://github.com/AnasBabari/RepoDNA/tree/main', expected: 'https://github.com/AnasBabari/RepoDNA', owner: 'AnasBabari', repo: 'RepoDNA' },
-    { input: 'https://github.com/AnasBabari/RepoDNA/blob/main/README.md', expected: 'https://github.com/AnasBabari/RepoDNA', owner: 'AnasBabari', repo: 'RepoDNA' },
+    { input: 'https://github.com/AnasBabari/RepoDNA/tree/main', expected: 'https://github.com/AnasBabari/RepoDNA/tree/main', owner: 'AnasBabari', repo: 'RepoDNA' },
+    { input: 'https://github.com/AnasBabari/RepoDNA/blob/main/README.md', expected: 'https://github.com/AnasBabari/RepoDNA/blob/main/README.md', owner: 'AnasBabari', repo: 'RepoDNA' },
     { input: 'git@github.com:AnasBabari/RepoDNA.git', expected: 'https://github.com/AnasBabari/RepoDNA', owner: 'AnasBabari', repo: 'RepoDNA' },
     { input: 'ssh://git@github.com/AnasBabari/RepoDNA.git', expected: 'https://github.com/AnasBabari/RepoDNA', owner: 'AnasBabari', repo: 'RepoDNA' },
     { input: 'AnasBabari/RepoDNA', expected: 'https://github.com/AnasBabari/RepoDNA', owner: 'AnasBabari', repo: 'RepoDNA' },
     { input: '@AnasBabari/RepoDNA', expected: 'https://github.com/AnasBabari/RepoDNA', owner: 'AnasBabari', repo: 'RepoDNA' },
   ];
 
-  it('correctly canonicalizes the entire supported URL matrix to repo roots', () => {
+  it('canonicalizes supported URLs without erasing explicit revisions', () => {
     for (const testCase of urlMatrix) {
       const parsed = parseGitHubUrl(testCase.input);
       expect(parsed, `Failed on input: ${testCase.input}`).not.toBeNull();
