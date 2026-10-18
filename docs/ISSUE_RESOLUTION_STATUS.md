@@ -65,7 +65,7 @@ local test is not evidence that production contains a fix.
 | #12 | Implemented in PR #34: snapshot-scoped IDs, original IDs, lossless manifest and membershipReason. Real Neo4j 5 verified two repositories/two commits imported twice without collisions; container removed. Unmerged review remains. |
 | #13 | Implemented on graph-keyboard: Enter/Space share pointer inspection/expansion, contextual labels, detail focus and restoration on close/Escape. Two browser regressions and typecheck pass; unmerged. |
 | #14 | Implemented on modal-accessibility: shared focus lifecycle, inert background, named dialogs, Escape and trigger restoration. Desktop/mobile private reconnect, feedback, New analysis and export tests: 10 passed, one expected Parquet-gate skip; typecheck passed. Unmerged. |
-| #15 | Responsive controls verified at 320–1440px in PR #22; long names and actual 200% browser zoom still need acceptance tests. |
+| #15 | Responsive controls verified at 320–1440px in PR #22. zoom-acceptance adds long-name fixtures and real Chromium tabs.setZoom(2), verifies getZoom=2 plus layout-viewport shrink, control bounds and Architecture/Code Graph screenshots. Browser regression passes; unmerged. |
 | #16 | Pending: feedback delivery must not acknowledge a dropped submission. |
 | #17 | Scan-counter abort/single-flight lifecycle implemented in PR #22; unit/browser and hosted smoke pass. |
 | #18 | Capability/privacy copy corrected in PR #22. |
