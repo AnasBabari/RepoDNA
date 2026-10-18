@@ -24,7 +24,9 @@ session token. Credentials are never serialized into workflow input or artifacts
 ## Acquisition and portable identity
 
 Resolved source acquisition pins every archive/tree path to the same SHA.
-Worker and inline results, v1 projections, JSON, CSV, Parquet, Cypher and TXT
+The legacy server fallback also resolves root URLs before acquisition, rather
+than leaving a successful public fallback's commit unknown. Worker and inline
+results, v1 projections, JSON, CSV, Parquet, Cypher and TXT
 retain `commitSha` and `analyzedRef`. Canonical `analyzedRef` is the immutable
 SHA, not a mutable branch/tag label. Public `source` is the repository's
 `/tree/<SHA>` URL. Requested ref is public workflow progress/input only.

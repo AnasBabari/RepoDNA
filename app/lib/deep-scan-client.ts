@@ -254,17 +254,17 @@ function mapArchiveFailure(status: number, body: { code?: string; message?: stri
   }
 }
 
-  async function readArchiveFailure(response: Response): Promise<{ code?: string; message?: string; installSettingsUrl?: string }> {
-    const body: unknown = await response.json().catch(() => null);
-    if (!body || typeof body !== 'object') return {};
-    const details = 'error' in body && body.error && typeof body.error === 'object' ? body.error : body;
-    return {
-      code: 'code' in details && typeof details.code === 'string' ? details.code : undefined,
-      installSettingsUrl: 'installSettingsUrl' in details && typeof details.installSettingsUrl === 'string' ? details.installSettingsUrl : undefined,
-    };
-  }
+async function readArchiveFailure(response: Response): Promise<{ code?: string; installSettingsUrl?: string }> {
+  const body: unknown = await response.json().catch(() => null);
+  if (!body || typeof body !== 'object') return {};
+  const details = 'error' in body && body.error && typeof body.error === 'object' ? body.error : body;
+  return {
+    code: 'code' in details && typeof details.code === 'string' ? details.code : undefined,
+    installSettingsUrl: 'installSettingsUrl' in details && typeof details.installSettingsUrl === 'string' ? details.installSettingsUrl : undefined,
+  };
+}
 
-  export async function analyzePrivateRepositoryInBrowser(options: {
+export async function analyzePrivateRepositoryInBrowser(options: {
   url: string;
   onProgress?: (p: WorkerProgress) => void;
   signal?: AbortSignal;
