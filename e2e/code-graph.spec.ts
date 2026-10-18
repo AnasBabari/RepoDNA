@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const GRAPH_URL = '/?repo=https://github.com/karpathy/nanoGPT';
+const GRAPH_URL = '/?sample=https://github.com/karpathy/nanoGPT';
 
 type Point = { x: number; y: number };
 
@@ -151,8 +151,16 @@ test.describe('Code Graph view', () => {
   test('dragging a node moves it and disturbs its neighbors', async ({ page }) => {
     await openCodeGraph(page);
 
+    // A named snapshot banner can move the canvas below the fold. Drag only an
+    // actually hit-testable node, not an offscreen point or the consent overlay.
+    const visibleIds = await page.locator('.react-flow__node[data-id]').evaluateAll((elements) => elements.filter((element) => {
+      const bounds = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+      return hit?.closest('.react-flow__node') === element;
+    }).map((element) => element.getAttribute('data-id')));
+
     const before = await collectNodeCenters(page);
-    const dragId = pickIsolatedNode(before);
+    const dragId = pickIsolatedNode(Object.fromEntries(Object.entries(before).filter(([id]) => visibleIds.includes(id))));
     expect(dragId).toBeTruthy();
     const start = before[dragId];
     const dx = 120;
@@ -162,20 +170,15 @@ test.describe('Code Graph view', () => {
     await page.mouse.down();
     await page.mouse.move(start.x + dx / 2, start.y + dy / 2, { steps: 5 });
     await page.mouse.move(start.x + dx, start.y + dy, { steps: 5 });
-    await page.mouse.up();
-
-    await page.waitForTimeout(1200);
-
+    // Prove following while held; released nodes legitimately relax under springs.
     const after = await collectNodeCenters(page);
     const movedSelf = Math.hypot(after[dragId].x - start.x, after[dragId].y - start.y);
     expect(movedSelf).toBeGreaterThan(dx * 0.5);
-
-    let disturbed = 0;
-    for (const [id, point] of Object.entries(before)) {
-      if (id === dragId || !after[id]) continue;
-      if (Math.hypot(after[id].x - point.x, after[id].y - point.y) > 6) disturbed++;
-    }
-    expect(disturbed, 'the live simulation should react to the drag').toBeGreaterThan(0);
+    await page.mouse.up();
+    await expect.poll(async () => {
+      const settled = await collectNodeCenters(page);
+      return Object.entries(before).filter(([id, point]) => id !== dragId && settled[id] && Math.hypot(settled[id].x - point.x, settled[id].y - point.y) > 6).length;
+    }, { message: 'the live simulation should react to the drag' }).toBeGreaterThan(0);
   });
 
   test('hovering a node highlights its neighborhood and dims the rest', async ({ page }) => {
@@ -202,7 +205,7 @@ test.describe('Code Graph view', () => {
   });
 
   test('keeps a large repository graph bounded and represented in the minimap', async ({ page }) => {
-    await page.goto('/?repo=https://github.com/usestrix/strix');
+    await page.goto('/?sample=https://github.com/usestrix/strix');
     await expect(page.getByRole('button', { name: 'Code Graph' })).toBeVisible({ timeout: 60_000 });
     await page.getByRole('button', { name: 'Code Graph' }).click();
     await expect(page.locator('.react-flow__node[data-id]').first()).toBeVisible({ timeout: 30_000 });

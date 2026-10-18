@@ -5,6 +5,8 @@ import { isJsonBodyTooLarge, readBoundedJson } from '../../../../lib/bounded-jso
 import { parseGitHubUrl } from '../../../../lib/analyzer';
 import { auth } from '../../../../lib/auth';
 import { getGitHubAccessToken } from '../../../../lib/github-session';
+import { resolveGitHubRevision } from '../../../../lib/github-revision';
+import { IngestionError } from '../../../../lib/analyzer/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,8 +114,9 @@ export async function POST(request: NextRequest) {
 
   // Stream the bounded archive through to the client without persisting it.
   try {
+    const revision = parsed.refSegments ? await resolveGitHubRevision(parsed, { accessToken }) : null;
     const upstream = await fetch(
-      `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/zipball/HEAD`,
+      `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/zipball/${revision?.commitSha ?? 'HEAD'}`,
       { headers, cache: 'no-store', signal: AbortSignal.timeout(60000) }
     );
     if (!upstream.ok || !upstream.body) {
@@ -147,10 +150,12 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Length': String(total),
+        ...(revision ? { 'X-RepoDNA-Commit': revision.commitSha } : {}),
         ...PRIVATE_NO_STORE_HEADERS,
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof IngestionError) return createApiErrorResponse(error.code, error.message, error.status);
     return createApiErrorResponse('ARCHIVE_FETCH_FAILED', 'Repository archive transfer failed.', 502);
   }
 }

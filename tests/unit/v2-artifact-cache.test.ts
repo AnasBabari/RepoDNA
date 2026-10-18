@@ -41,7 +41,7 @@ describe('public v2 artifact cache', () => {
       commitSha: 'ABC123def456',
     });
     expect(path).toBe(
-      'repodna/public/graphify-labs/graphify-repo/abc123def456/2.0.5/repodna-v2.json'
+      'repodna/public/graphify-labs/graphify-repo/abc123def456/2.0.7/repodna-v2.json'
     );
   });
 

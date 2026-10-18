@@ -1641,6 +1641,8 @@ code, kbd {
   grid-template-columns: repeat(5, 1fr);
 }
 
+.snapshot-provenance code { overflow-wrap: anywhere; }
+
 .important-grid article {
   min-width: 0;
   min-height: 145px;
@@ -4153,3 +4155,5 @@ button.file-row:hover {
 .unresolved-relationship-list ul { padding-left: 20px; }
 .unresolved-relationship-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .unresolved-pagination { display: flex; flex-wrap: wrap; gap: 8px; }
+.sample-provenance { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:14px; margin-bottom:20px; border:1px solid var(--line); border-radius:8px; }
+.sample-provenance span { min-width:0; overflow-wrap:anywhere; }

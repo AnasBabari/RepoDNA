@@ -378,8 +378,8 @@ export function adaptV1ToV2Viewer(project: RepoDNAProject): RepoDNAProjectV2 {
     repository: {
       name: project.repository.name,
       source: project.repository.source,
-      commitSha: null,
-      analyzedRef: null,
+      commitSha: project.repository.commitSha ?? null,
+      analyzedRef: project.repository.analyzedRef ?? null,
       languages: project.repository.languages,
       fingerprint: {
         languages: project.repository.fingerprint.languages,

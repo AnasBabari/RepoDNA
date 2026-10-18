@@ -5,7 +5,7 @@ import type { RepoDNAProjectV2 } from '../app/lib/analyzer/v2/types';
 async function load(page: Page, context: BrowserContext, baseURL: string | undefined, project: RepoDNAProjectV2) {
   await context.route('**/*', (route) => baseURL && route.request().url().startsWith(baseURL) ? route.continue() : route.abort());
   await page.route('**/samples/nanogpt.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(project) }));
-  await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+  await page.goto('/?sample=https://github.com/karpathy/nanoGPT');
   await page.getByRole('button', { name: 'Code Graph' }).click();
   await page.getByRole('button', { name: 'Unresolved only', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Unresolved only', exact: true })).toHaveAttribute('aria-pressed', 'true');

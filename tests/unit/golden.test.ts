@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { zipSync } from 'fflate';
 import { analyzeRepositoryFiles } from '../../app/lib/analyzer';
 import type { DiscoveredFile } from '../../app/lib/analyzer/types';
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('Cross-Engine Golden Structure Verification', () => {
   it('correctly maps mixed-language full stack architecture', async () => {
@@ -130,15 +134,32 @@ export function Dashboard() {
     expect(project.flows.length).toBe(1);
   });
 
-  it('analyzes public GitHub repository live: Twitter-Sentiment-Analysis', async () => {
+  it('analyzes a pinned public GitHub acquisition from deterministic mixed-language source', async () => {
     const { analyzeGitHubUrl } = await import('../../app/lib/analyzer');
-    const project = await analyzeGitHubUrl('https://github.com/yusrababari/Twitter-Sentiment-Analysis');
+    const sha = 'a'.repeat(40);
+    const root = 'https://github.com/fixture-owner/golden-app';
+    const paths = ['package.json', 'requirements.txt', 'frontend/App.tsx', 'backend/main.py'];
+    const archive = zipSync(Object.fromEntries(paths.map((path) => [
+      `golden-app/${path}`, readFileSync(new URL(`../fixtures/mixed-basic/${path}`, import.meta.url)),
+    ])));
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const target = String(input);
+      if (target === 'https://api.github.com/repos/fixture-owner/golden-app/commits/HEAD') return Response.json({ sha });
+      if (target === 'https://api.github.com/repos/fixture-owner/golden-app') return Response.json({ name: 'golden-app', size: 1, default_branch: 'main' });
+      if (target === `https://codeload.github.com/fixture-owner/golden-app/zip/${sha}`) return new Response(archive);
+      throw new Error(`Unexpected golden acquisition request: ${target}`);
+    });
+    const project = await analyzeGitHubUrl(root);
 
     expect(project.schemaVersion).toBe('1.1.0');
-    expect(project.repository.name).toBe('Twitter-Sentiment-Analysis');
-    expect(project.repository.fileCount).toBeGreaterThan(0);
+    expect(project.repository.name).toBe('golden-app');
+    expect(project.repository.fileCount).toBe(paths.length);
+    expect(project.repository).toMatchObject({ commitSha: sha, analyzedRef: sha, source: `${root}/tree/${sha}` });
+    expect(project.technologies).toContain('React');
+    expect(project.technologies).toContain('FastAPI');
     expect(project.metadata.executedRepositoryCode).toBe(false);
     expect(project.metadata.limits.maxFiles).toBe(10000);
     expect(project.architecture.components.length).toBeGreaterThan(0);
-  }, 25000);
+    expect(fetchMock.mock.calls.map(([target]) => String(target))).not.toContain('https://codeload.github.com/fixture-owner/golden-app/zip/HEAD');
+  });
 });

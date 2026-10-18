@@ -220,6 +220,10 @@ function validateStructurallyV1(data: unknown): ValidationResult {
       errors.push(`repository.${k} is required`);
     }
     checkFingerprint(p.repository.fingerprint, errors, 'repository');
+    for (const key of ['commitSha', 'analyzedRef'] as const) {
+      const value = p.repository[key];
+      if (value !== undefined && value !== null && typeof value !== 'string') errors.push(`repository.${key} must be a string or null`);
+    }
   } else {
     errors.push('repository must be an object');
   }

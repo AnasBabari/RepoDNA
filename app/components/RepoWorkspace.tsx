@@ -6,6 +6,7 @@ import Link from 'next/link';
 import packageMetadata from '../../package.json';
 
 import { ArchitectureGraph } from './ArchitectureGraph';
+import { useModalFocus } from './useModalFocus';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 import { CodeGraph } from './CodeGraph';
 import { GraphScopeSummary } from './GraphScopeSummary';
@@ -66,6 +67,7 @@ import {
 } from '../lib/export/browser-export-cache';
 import { computeSourceArtifactDigest } from '../lib/export/graph/normalize';
 import { getUserFacingErrorMessage } from '../lib/user-facing-errors';
+import { bundledSample } from '../lib/bundled-samples';
 import type {
   ArchitectureComponent,
   FileRecord,
@@ -496,6 +498,7 @@ function Overview({
   const extractionNotices = project.diagnostics.filter((item) => item.code === 'SOURCE_EXTRACTION_LIMIT_REACHED');
   const primaryStack = primaryTechnology(project.repository);
   const otherTechnologyCount = project.technologies.filter((name) => name !== primaryStack.name).length;
+  const snapshotCommit = deepProject?.repository.commitSha ?? project.repository.commitSha;
 
   return (
     <div className="view-stack overview-view">
@@ -543,6 +546,7 @@ function Overview({
               View request paths
             </button>
           </div>
+          {snapshotCommit && <p className="muted snapshot-provenance" aria-label="Analyzed GitHub snapshot">Full repository at commit <code>{snapshotCommit}</code>. A file or directory URL does not narrow the scan.</p>}
         </div>
         <div className="analysis-trust-card">
           <span>✓</span>
@@ -1271,6 +1275,7 @@ function AnalyseDialog({
 }) {
   const [githubUrl, setGithubUrl] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useModalFocus<HTMLElement>(open, onClose);
 
   if (!open) return null;
 
@@ -1286,6 +1291,8 @@ function AnalyseDialog({
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
         className="analyse-dialog"
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="analyse-title"
@@ -1311,7 +1318,6 @@ function AnalyseDialog({
               value={githubUrl}
               onChange={(event) => setGithubUrl(event.target.value)}
               placeholder="https://github.com/owner/repository"
-              autoFocus
             />
           </label>
           <button className="analyse-button" style={{ width: '100%', marginTop: '14px' }} type="submit">
@@ -1556,6 +1562,8 @@ function WorkspaceContent() {
 
   function showAnalysisError(controller: AbortController, error: unknown, fallbackMessage: string) {
     if (!isActiveAnalysis(controller) || error instanceof AnalysisCancelledError) return;
+    const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' ? error.code : null;
+    setAnalyzingErrorCode(code);
     setAnalyzingError(getUserFacingErrorMessage(error, fallbackMessage));
   }
 
@@ -1568,6 +1576,8 @@ function WorkspaceContent() {
         void handleAnalyzeGitHub(repoParam);
         return;
       }
+      const sampleParam = params.get('sample');
+      if (sampleParam) { void handleOpenSample(sampleParam); return; }
       const pendingRun = readPendingDurableRun();
       if (pendingRun) void handleResumeDurableRun(pendingRun);
     }
@@ -1611,11 +1621,6 @@ function WorkspaceContent() {
         event.preventDefault();
         searchInputRef.current?.focus();
       }
-      if (event.key === 'Escape') {
-        if (dialogOpen) setDialogOpen(false);
-        if (privatePickerOpen) setPrivatePickerOpen(false);
-        if (feedbackModalOpen) setFeedbackModalOpen(false);
-      }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -1627,38 +1632,21 @@ function WorkspaceContent() {
     trackViewChanged(newView);
   }
 
-  const SAMPLE_ARTIFACTS: Record<string, string> = {
-    'https://github.com/usestrix/strix': '/samples/strix.json',
-    'https://github.com/karpathy/nanoGPT': '/samples/nanogpt.json',
-    'https://github.com/karpathy/nanogpt': '/samples/nanogpt.json',
-    'https://github.com/tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
-    'https://github.com/pytorch/pytorch': '/samples/pytorch.json',
-    'https://github.com/fastapi/fastapi': '/samples/fastapi.json',
-    'https://github.com/expressjs/express': '/samples/express.json',
-    'https://github.com/yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
-    'usestrix/strix': '/samples/strix.json',
-    'karpathy/nanoGPT': '/samples/nanogpt.json',
-    'karpathy/nanogpt': '/samples/nanogpt.json',
-    'tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
-    'pytorch/pytorch': '/samples/pytorch.json',
-    'fastapi/fastapi': '/samples/fastapi.json',
-    'expressjs/express': '/samples/express.json',
-    'yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
-  };
+  function handleOpenSample(url: string) { return handleAnalyzeGitHub(url, false, null, true); }
 
   async function handleAnalyzeGitHub(
     url: string,
     forceClientOnly = false,
-    requestedOrigin: 'github-private' | null = null
+    requestedOrigin: 'github-private' | null = null,
+    bundledSnapshot = false
   ) {
     const cleanUrl = url.trim();
     const parsed = parseGitHubUrl(cleanUrl);
-    const targetUrl = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}` : cleanUrl;
-    const shortKey = parsed ? `${parsed.owner.toLowerCase()}/${parsed.repo.toLowerCase()}` : '';
-    const canonicalFull = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}`.toLowerCase() : '';
+    const targetUrl = parsed?.canonicalUrl ?? cleanUrl;
 
     const startTime = Date.now();
     const controller = beginAnalysis(targetUrl);
+    if (parsed?.refSegments) setAnalyzingMessage('Resolving the selected revision; scanning the full repository, not only the URL subpath.');
     let failureCode = 'CLIENT_ERROR';
     let loadedSample = false;
     let canonicalProject: RepoDNAProjectV2 | null = null;
@@ -1732,16 +1720,13 @@ function WorkspaceContent() {
 
     try {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
+        if (!parsed) throw Object.assign(new Error('Invalid GitHub repository URL.'), { code: 'INVALID_GITHUB_URL' });
         if (requestedOrigin === 'github-private') return runPrivateBrowserAnalysis();
 
-        // Check pre-cached sample artifacts without bypassing the shared progress lifecycle.
-        if (!forceClientOnly) {
-          const samplePath =
-            SAMPLE_ARTIFACTS[targetUrl] ||
-            SAMPLE_ARTIFACTS[canonicalFull] ||
-            (shortKey ? SAMPLE_ARTIFACTS[shortKey] : undefined) ||
-            SAMPLE_ARTIFACTS[cleanUrl] ||
-            SAMPLE_ARTIFACTS[cleanUrl.replace(/\/$/, '')];
+        // Only an explicit snapshot action may load bundled data, never normal URL input.
+        if (bundledSnapshot) {
+          const samplePath = bundledSample(targetUrl)?.path;
+          if (!samplePath) throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
 
           if (samplePath) {
             try {
@@ -1760,9 +1745,10 @@ function WorkspaceContent() {
               }
             } catch {
               if (controller.signal.aborted) throw new AnalysisCancelledError();
-              // Continue with standard fetch if a sample artifact is unavailable.
+              throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
             }
           }
+          throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
         }
 
         if (forceClientOnly) return runPublicBrowserFallback();
@@ -1790,6 +1776,8 @@ function WorkspaceContent() {
         } catch (error) {
           if (controller.signal.aborted) throw new AnalysisCancelledError();
           if (error instanceof DurableAnalysisUnavailableError) {
+            if (error.code === 'GITHUB_REF_NOT_FOUND' && session?.user && !forceClientOnly) return runPrivateBrowserAnalysis();
+            if (error.code.startsWith('GITHUB_REF_') || error.code === 'INVALID_GITHUB_URL') throw error;
             failureCode = error.code;
             setAnalyzingRetryAfter(error.retryAfter ?? null);
             if (!error.fallbackAvailable) {
@@ -1880,7 +1868,8 @@ function WorkspaceContent() {
 
         try {
           return await runPublicBrowserFallback();
-        } catch {
+        } catch (fallbackError) {
+          if (fallbackError && typeof fallbackError === 'object' && 'code' in fallbackError && String(fallbackError.code).startsWith('GITHUB_REF_')) throw fallbackError;
           // The fallback failure is recorded via trackAnalysisFailed above the
           // throw path; the user-facing code intentionally reports the primary
           // server failure, and the fallback error may contain local file paths
@@ -2100,7 +2089,9 @@ function WorkspaceContent() {
           requestId={analyzingRequestId}
           retryAfter={analyzingRetryAfter}
           onRetry={() => {
-            if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
+            if (analyzingErrorCode === 'SAMPLE_UNAVAILABLE') {
+              void handleOpenSample(analyzingTarget);
+            } else if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
               handleAnalyzeGitHub(analyzingTarget);
             } else {
               handleLoadDemo();
@@ -2134,6 +2125,7 @@ function WorkspaceContent() {
       <>
         <LandingView
           onAnalyzeGitHub={handleAnalyzeGitHub}
+          onOpenSample={handleOpenSample}
           onAnalyzeFolder={handleAnalyzeFolder}
           onAnalyzeZip={handleAnalyzeZipOrJson}
           onLoadDemo={handleLoadDemo}
@@ -2264,6 +2256,11 @@ function WorkspaceContent() {
       </aside>
 
       <section className="workspace">
+        {analysisOrigin === 'sample' && <section className="sample-provenance" aria-label="Bundled snapshot provenance">
+          <strong>Bundled snapshot — not a fresh scan.</strong>
+          <span>Analyzed: {project.generatedAt || 'not recorded'} · Commit: <code>{project.repository.commitSha || 'not recorded'}</code></span>
+          {bundledSample(project.repository.source) && <button className="chip-button" type="button" onClick={() => void handleAnalyzeGitHub(bundledSample(project.repository.source)!.url)}>Analyze latest</button>}
+        </section>}
         <nav className="mobile-view-nav" aria-label="Workspace views">
           {navigation.map((item) => (
             <button

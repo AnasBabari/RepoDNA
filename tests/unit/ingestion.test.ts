@@ -49,17 +49,17 @@ describe('Ingestion & Resource Limits', () => {
     expect(parseGitHubUrl('git+ssh://git@github.com/owner/repo.git')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
     expect(parseGitHubUrl('git+https://github.com/owner/repo')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
 
-    // Deep branch / tree / blob / issues URLs canonicalize to repo root
-    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
-    expect(parseGitHubUrl('https://github.com/owner/repo/tree/feature/nested-path')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
-    expect(parseGitHubUrl('https://github.com/owner/repo/blob/main/src/index.ts')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
-    expect(parseGitHubUrl('https://github.com/owner/repo/issues/42')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
-    expect(parseGitHubUrl('https://github.com/owner/repo/pull/123')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    // Explicit revisions survive canonicalization; unrelated GitHub pages are not sources.
+    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main')).toMatchObject({ view: 'tree', refSegments: ['main'], canonicalUrl: 'https://github.com/owner/repo/tree/main' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/tree/feature/nested-path')).toMatchObject({ refSegments: ['feature', 'nested-path'] });
+    expect(parseGitHubUrl('https://github.com/owner/repo/blob/main/src/index.ts')).toMatchObject({ view: 'blob', refSegments: ['main', 'src', 'index.ts'] });
+    expect(parseGitHubUrl('https://github.com/owner/repo/issues/42')).toBeNull();
+    expect(parseGitHubUrl('https://github.com/owner/repo/pull/123')).toBeNull();
 
     // Query parameters & fragments
     expect(parseGitHubUrl('https://github.com/owner/repo?tab=readme-ov-file')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
     expect(parseGitHubUrl('https://github.com/owner/repo#readme')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
-    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main?tab=readme-ov-file#install')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });
+    expect(parseGitHubUrl('https://github.com/owner/repo/tree/main?tab=readme-ov-file#install')?.canonicalUrl).toBe('https://github.com/owner/repo/tree/main');
 
     // Quoted strings and scoped prefix
     expect(parseGitHubUrl('"https://github.com/owner/repo"')).toEqual({ owner: 'owner', repo: 'repo', canonicalUrl: 'https://github.com/owner/repo' });

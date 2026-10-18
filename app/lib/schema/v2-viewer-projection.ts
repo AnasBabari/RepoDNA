@@ -174,6 +174,8 @@ export function projectV2ForWorkspace(project: RepoDNAProjectV2): RepoDNAProject
     repository: {
       name: project.repository.name,
       source: project.repository.source,
+      commitSha: project.repository.commitSha,
+      analyzedRef: project.repository.analyzedRef,
       languages: project.repository.languages,
       fileCount: files.length,
       // Inventory counts include source files intentionally left out by a
