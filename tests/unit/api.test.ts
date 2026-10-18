@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('../../app/lib/feedback-store', () => ({ storeAggregateFeedback: vi.fn().mockResolvedValue(true) }));
 import { NextRequest } from 'next/server';
 import { readFileSync } from 'node:fs';
 import { POST } from '../../app/api/analyze/route';
@@ -275,7 +276,7 @@ describe('/api/feedback Route Handler', () => {
     const { POST: postFeedback } = await import('../../app/api/feedback/route');
     const req = new NextRequest('http://localhost:3000/api/feedback', {
       method: 'POST',
-      body: JSON.stringify({ usefulnessScore: 5, primaryUsecase: 'Onboarding to new codebase' }),
+      body: JSON.stringify({ usefulnessScore: 5, primaryUsecase: 'onboarding', missingCapabilities: [], submissionId: '12345678-1234-4234-8234-123456789abc' }),
       headers: { 'Content-Type': 'application/json' },
     });
 
