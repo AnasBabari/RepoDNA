@@ -6,6 +6,15 @@ import { assertExportableDocument } from './validate';
 
 const CYPHER_BATCH_SIZE = 500;
 
+/** Same artifact is idempotent; distinct repository/commit/analysis evidence coexists. */
+export async function cypherSnapshotKey(document: GraphExportDocumentV1): Promise<string> {
+  return sha256Hex(utf8Bytes(compactStableStringify({
+    repository: document.manifest.repository,
+    artifact: document.manifest.sourceArtifactSha256,
+    analyzer: document.manifest.analyzerVersion,
+  })));
+}
+
 const ALLOWED_LABELS = new Set([
   'repository',
   'workspace',
@@ -104,6 +113,8 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
 
   const lines: string[] = [];
   const manifest = document.manifest;
+  const snapshotKey = await cypherSnapshotKey(document);
+  const scoped = (id: string | null) => id === null ? null : `${snapshotKey}:${id}`;
 
   lines.push('// RepoDNA Graph Export — Cypher');
   lines.push(`// Export manifest JSON (base64 UTF-8): ${utf8Base64(compactStableStringify(manifest))}`);
@@ -122,6 +133,10 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
   lines.push('CREATE CONSTRAINT repo_dna_entity_id IF NOT EXISTS FOR (n:RepoDNAEntity) REQUIRE n.id IS UNIQUE;');
   lines.push('CREATE CONSTRAINT repo_dna_group_id IF NOT EXISTS FOR (n:RepoDNAGroup) REQUIRE n.id IS UNIQUE;');
   lines.push('CREATE CONSTRAINT repo_dna_unresolved_id IF NOT EXISTS FOR (n:RepoDNAUnresolved) REQUIRE n.id IS UNIQUE;');
+  lines.push('CREATE CONSTRAINT repo_dna_snapshot_id IF NOT EXISTS FOR (n:RepoDNASnapshot) REQUIRE n.id IS UNIQUE;');
+  lines.push(`UNWIND [{id: ${cypherValue(snapshotKey)}, manifestJson: ${cypherValue(compactStableStringify(manifest))}}] AS row`);
+  lines.push('MERGE (n:RepoDNASnapshot {id: row.id})');
+  lines.push('SET n.manifestJson = row.manifestJson;');
   lines.push('');
 
   const nodesByKind = new Map<string, typeof document.nodes>();
@@ -139,7 +154,8 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
       for (let i = 0; i < batch.length; i++) {
         const node = batch[i];
         const row = [
-          `id: ${cypherValue(node.id)}`,
+          `id: ${cypherValue(scoped(node.id))}`,
+          `originalId: ${cypherValue(node.id)}`, `snapshotKey: ${cypherValue(snapshotKey)}`,
           `name: ${cypherValue(node.name)}`,
           `qualifiedName: ${cypherValue(node.qualifiedName)}`,
           `path: ${cypherValue(node.path)}`,
@@ -158,6 +174,7 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
       }
       lines.push('] AS row');
       lines.push(`MERGE (n:RepoDNAEntity:\`${kind}\` {id: row.id})`);
+      lines.push('SET n.originalId = row.originalId, n.snapshotKey = row.snapshotKey');
       lines.push(
         'SET n.name = row.name, n.qualifiedName = row.qualifiedName, n.path = row.path, n.language = row.language, n.startLine = row.startLine, n.startCol = row.startCol, n.endLine = row.endLine, n.endCol = row.endCol, n.confidence = row.confidence, n.evidenceJson = row.evidenceJson, n.propertiesJson = row.propertiesJson, n.communityIdsJson = row.communityIdsJson, n.architectureGroupIdsJson = row.architectureGroupIdsJson;'
       );
@@ -171,7 +188,8 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
       for (let i = 0; i < batch.length; i++) {
         const group = batch[i];
         const row = [
-          `id: ${cypherValue(group.id)}`,
+          `id: ${cypherValue(scoped(group.id))}`,
+          `originalId: ${cypherValue(group.id)}`, `snapshotKey: ${cypherValue(snapshotKey)}`,
           `groupType: ${cypherValue(group.groupType)}`,
           `label: ${cypherValue(group.label)}`,
           `cohesion: ${cypherValue(group.cohesion)}`,
@@ -184,6 +202,7 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
       }
       lines.push('] AS row');
       lines.push('MERGE (n:RepoDNAGroup {id: row.id})');
+      lines.push('SET n.originalId = row.originalId, n.snapshotKey = row.snapshotKey');
       lines.push(
         'SET n.groupType = row.groupType, n.label = row.label, n.cohesion = row.cohesion, n.architectureType = row.architectureType, n.confidence = row.confidence, n.evidenceJson = row.evidenceJson, n.propertiesJson = row.propertiesJson;'
       );
@@ -200,9 +219,10 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
         const rel = batch[i];
         const unresolvedEntry = unresolvedById.get(rel.id);
         const row = [
-          `id: ${cypherValue(`unresolved:${rel.id}`)}`,
+          `id: ${cypherValue(scoped(`unresolved:${rel.id}`))}`,
+          `originalId: ${cypherValue(`unresolved:${rel.id}`)}`, `snapshotKey: ${cypherValue(snapshotKey)}`,
           `edgeId: ${cypherValue(rel.id)}`,
-          `sourceId: ${cypherValue(rel.sourceId)}`,
+          `sourceId: ${cypherValue(scoped(rel.sourceId))}`,
           `relationshipType: ${cypherValue(rel.type)}`,
           `reason: ${cypherValue(unresolvedEntry?.reason ?? `status:${rel.status}`)}`,
           `unresolvedExpression: ${cypherValue(rel.unresolvedExpression)}`,
@@ -217,6 +237,7 @@ export async function buildCypher(document: GraphExportDocumentV1): Promise<Grap
       }
       lines.push('] AS row');
       lines.push('MERGE (n:RepoDNAUnresolved {id: row.id})');
+      lines.push('SET n.originalId = row.originalId, n.snapshotKey = row.snapshotKey');
       lines.push(
         'SET n.edgeId = row.edgeId, n.sourceId = row.sourceId, n.relationshipType = row.relationshipType, n.reason = row.reason, n.unresolvedExpression = row.unresolvedExpression, n.candidateIdsJson = row.candidateIdsJson, n.evidenceFile = row.evidenceFile, n.evidenceStartLine = row.evidenceStartLine, n.evidenceStartCol = row.evidenceStartCol, n.evidenceEndLine = row.evidenceEndLine, n.evidenceEndCol = row.evidenceEndCol;'
       );
