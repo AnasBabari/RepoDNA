@@ -32,3 +32,11 @@ it('maps actual Python src/app and actual React/Next components from syntax evid
   expect(frontend.evidence).toContain('UI component symbol');
   expect(frontend.confidence).toBe(0.94);
 });
+
+it('keeps a capitalized plain-TypeScript factory out of the frontend layer', async () => {
+  const content = 'export const ValueFactory = (): number => 42;';
+  const project = await analyzeRepositoryFiles({ files: [{ path: 'src/factory.ts', content, size: content.length, hash: 'factory' }], skipped: [], name: 'typed-factory', source: 'local://typed-factory' });
+  expect(project.symbols.find((symbol) => symbol.name === 'ValueFactory')?.type).toBe('function');
+  expect(project.architecture.components.find((area) => area.type === 'frontend')).toBeUndefined();
+  expect(project.architecture.components.find((area) => area.type === 'other')?.files).toContain('src/factory.ts');
+});

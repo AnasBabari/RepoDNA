@@ -1,4 +1,5 @@
 import { extractionNotices, retainFact, visitAstNode } from './extraction-budget';
+import { promoteComponentSymbols } from './component-evidence';
 import type { ExtractionLimit } from './types';
 import type { Node as SyntaxNode } from 'web-tree-sitter';
 import { getTreeSitterParser } from './runtime';
@@ -39,6 +40,7 @@ export class TypeScriptSyntaxParser implements SyntaxParser {
       const state: WalkState = { symbols: [], imports: [], calls: [], errorNodes: 0, extractionLimits: [], nodeCount: 0 };
       for (const child of root.namedChildren) walk(child, state, [], [], 1, input.source);
       const hasErrors = state.errorNodes > 0 || root.hasError;
+      promoteComponentSymbols(state.symbols, new Set(), state.imports, state.calls);
       return { facts: { language: 'typescript', symbols: state.symbols, imports: state.imports, calls: state.calls, hasMainGuard: false, parse: { success: true, hasErrors, errorNodes: state.errorNodes }, extractionLimits: extractionNotices(state), quality: hasErrors || state.extractionLimits.length > 0 ? 'partial' : 'complete' } };
     } catch { return { facts: failedFacts('typescript') }; } finally { if (tree) try { tree.delete(); } catch {} }
   }
@@ -142,8 +144,7 @@ function walk(node: SyntaxNode, state: WalkState, stack: Frame[], decorators: Sy
           if (isArrow || isFuncExpr) {
             const parent = stack.length ? stack[stack.length - 1] : null;
             const qualifiedName = parent ? `${parent.qualifiedName}::${name}` : name;
-            const isComponent = /[A-Z]/.test(name[0]);
-            if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: isComponent ? 'component' : 'function', name, qualifiedName, range: rangeOf(child), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: valueNode?.text.includes('async') ?? false, bases: [], decorators: [] });
+            if (retainFact(state, 'symbols', rangeOf(node))) state.symbols.push({ kind: 'function', name, qualifiedName, range: rangeOf(child), parent: parent ? parent.qualifiedName : null, exported: isExported(node), isAsync: valueNode?.text.includes('async') ?? false, bases: [], decorators: [] });
             if (valueNode) { stack.push({ qualifiedName, kind: 'callable' }); walk(valueNode, state, stack, [], depth + 1, source); stack.pop(); continue; }
           } else {
             if (retainFact(state, 'symbols', rangeOf(node))) {

@@ -49,3 +49,11 @@ The TypeScript and Python architecture classifiers use matching rules, evidence
 strings and grouping weights. Parser implementation details can still differ.
 No repository code is run, and no extra AST traversal or unbounded UI state is
 introduced: component evidence is collected during the existing bounded walk.
+# Pre-merge TypeScript regression
+
+The 18 October review found that plain `.ts` arrow functions still used uppercase
+names as component evidence. They now share the imported-React-factory rule with
+JavaScript and TSX. A capitalized numeric factory stays neutral; an imported
+`createElement` call may establish a component. Parser and end-to-end analyzer
+unit regressions cover both cases. Analyzer 2.0.7 isolates caches from old results.
+
