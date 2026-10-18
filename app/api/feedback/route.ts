@@ -5,12 +5,7 @@ import { storeAggregateFeedback } from '../../lib/feedback-store';
 
 export const dynamic = 'force-dynamic';
 
-export interface FeedbackPayload {
-  usefulnessScore: number;
-  primaryUsecase: string;
-  missingCapabilities: string[];
-  comments?: string;
-}
+import type { AggregateFeedback } from '../../lib/feedback-contract';
 
 const MAX_FEEDBACK_BYTES = 16 * 1024;
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
@@ -61,9 +56,9 @@ async function readBoundedJson<T>(request: NextRequest, maxBytes: number): Promi
 
 export async function POST(request: NextRequest) {
   const requestId = `req_fb_${crypto.randomUUID().slice(0, 12)}`;
-  let body: Partial<FeedbackPayload>;
+  let body: Partial<AggregateFeedback>;
   try {
-    body = await readBoundedJson<Partial<FeedbackPayload>>(request, MAX_FEEDBACK_BYTES);
+    body = await readBoundedJson<Partial<AggregateFeedback>>(request, MAX_FEEDBACK_BYTES);
   } catch (err: unknown) {
     if (err instanceof Error && err.message === 'PAYLOAD_TOO_LARGE') {
       return NextResponse.json(
