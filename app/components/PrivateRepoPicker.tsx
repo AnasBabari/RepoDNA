@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { SafeRepositoryItem } from '../api/github/repositories/route';
 import { trackAuthFlow } from '../lib/analytics';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
@@ -32,8 +32,12 @@ export function PrivateRepoPicker({
   const [revoking, setRevoking] = useState(false);
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
 
   const fetchRepos = useCallback(async (searchQuery: string, pageNum: number) => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError(null);
     setErrorCode(null);
@@ -42,7 +46,7 @@ export function PrivateRepoPicker({
         page: String(pageNum),
         query: searchQuery,
       });
-      const res = await fetch(`/api/github/repositories?${params.toString()}`);
+      const res = await fetch(`/api/github/repositories?${params.toString()}`, { signal: controller.signal, cache: 'no-store' });
       const data = (await res.json()) as {
         success?: boolean;
         error?: { code?: string; message?: string };
@@ -53,6 +57,7 @@ export function PrivateRepoPicker({
         listingTruncated?: boolean;
       };
 
+      if (controller.signal.aborted) return;
       if (!res.ok || !data.success) {
         const code = data.error?.code || (res.status === 401 ? 'UNAUTHORIZED' : res.status === 403 ? 'FORBIDDEN' : res.status === 429 ? 'RATE_LIMITED' : null);
         const err = new Error(data.error?.message || 'Failed to fetch repositories') as Error & { code?: string };
@@ -65,11 +70,12 @@ export function PrivateRepoPicker({
       setPage(data.page || pageNum);
       setListingNote(data.searchScope ?? (data.listingTruncated ? 'The installation listing reached its safety limit. Some repositories may be omitted; pagination covers the available results only.' : null));
     } catch (err) {
+      if (controller.signal.aborted) return;
       const code = (err as Error & { code?: string }).code || null;
       setErrorCode(code);
       setError(getUserFacingErrorMessage(err, 'Could not load repositories.', code));
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -78,7 +84,7 @@ export function PrivateRepoPicker({
       const timeout = setTimeout(() => {
         fetchRepos(query, 1);
       }, query ? 300 : 0);
-      return () => clearTimeout(timeout);
+      return () => { clearTimeout(timeout); requestRef.current?.abort(); };
     }
   }, [isOpen, query, fetchRepos]);
 
