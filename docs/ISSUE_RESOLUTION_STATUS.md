@@ -45,6 +45,7 @@ local test is not evidence that production contains a fix.
 8. `codex/github-ref-identity` → `codex/file-ranking-evidence`: immutable revision
    identity across durable, legacy-server, browser-worker and private paths (#9).
    Shared URL resolution rejects ambiguity rather than substituting HEAD.
+   [PR #31](https://github.com/AnasBabari/RepoDNA/pull/31) is draft and unmerged.
 
 ## Issue-by-issue state
 
@@ -58,7 +59,7 @@ local test is not evidence that production contains a fix.
 | #6 | Implemented in PR #25: searchable retained gaps, null targets, relevant-only nodes and drawable-edge counts. 368 unit / 31 Python and both local browser variants passed; hosted CI passed. Unmerged. |
 | #7 | Implemented on inventory-evidence: manifest roots/scopes, supported-source denominator, reconciled outcomes, schema/UI/TXT/all export evidence and nullable legacy counts. Local verification below; unmerged review remains. |
 | #8 | Implemented on evidence-based-roles: quantitative language ranking, syntax-backed UI roles and neutral Python src/app files. Local verification below; unmerged review remains. |
-| #9 | Implemented on github-ref-identity: bounded tag/branch/commit resolution, pinned acquisition, portable identity and actionable failures. 466 unit / 34 Python tests, both builds/typechecks pass; full production-mode browser run and hosted acceptance are pending. Unmerged review remains. |
+| #9 | Implemented in PR #31: bounded tag/branch/commit resolution, pinned acquisition, portable identity and actionable failures. 466 unit / 34 Python tests, both builds/typechecks and 64 production-mode browser tests pass; hosted CI confirmation and protected interactive acceptance remain separate. Unmerged review remains. |
 | #10 | Partially addressed by visible bundled-snapshot provenance; sample short-circuit/reanalyze behavior still pending. |
 | #11 | Pending: GitHub repository pagination and search beyond first page. |
 | #12 | Pending: Neo4j multi-snapshot isolation/membership provenance. Existing same-snapshot idempotency is not sufficient. |
@@ -163,3 +164,28 @@ are conservatively counted as gaps even if an older artifact flags them resolved
   resolved by these checks; protected interactive preview acceptance is separate.
   A fresh Chrome check still redirects to Vercel login, and the browser connector
   subsequently requests an extension update. No authentication or protection was changed.
+
+## GitHub revision verification checkpoint (18 October 2026)
+
+- 466 unit tests and 34 Python tests pass; production dependency audit has zero
+  findings. Lint has zero errors and the same two authentication-navigation warnings.
+- Vinext build → typecheck → Next production build → typecheck pass without
+  deleting generated outputs or overwriting environment files.
+- Five targeted Vinext browser tests passed. Final local Next production browser
+  suite: 64 passed / one expected feature-off skip with Parquet enabled; zero
+  failures/flaky cases. The saved JSON report records all 65 cases. Actual worker
+  scans of a tag, encoded-slash branch and commit URL retain identity in UI/JSON;
+  ambiguity, missing and unsupported ref errors stop without substituting HEAD.
+- JSON, CSV, Cypher, readable Parquet and TXT downloads pass. Unit regressions
+  verify manifest identity across these formats and v1 adaptation, archive/tree
+  parity, private credential isolation and public-cache identity rejection.
+- Hosted run 39123645945 exposed a pre-existing live GitHub call in a golden
+  unit test: the shared runner IP received HTTP 429. The test now extracts and
+  analyzes a real ZIP of checked-in mixed-language fixtures; all original safety/
+  architecture assertions remain, with additional exact-count/SHA checks. No
+  skip, credential injection or rate-limit relaxation was added. Replacement
+  hosted CI must be checked before claiming hosted success.
+- See `docs/github-revisions.md` for immutable SHA identity, whole-repository URL
+  scope, conservative ambiguity handling and non-destructive cache namespaces.
+  Vercel preview readiness is not interactive acceptance or a production release.
+  No PR was merged and no production deployment was promoted.
