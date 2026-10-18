@@ -12,7 +12,7 @@ test('long repository names and controls reflow at actual 200% browser zoom', as
     await context.route('**/samples/nanogpt.json', async (route) => {
       const response = await route.fetch();
       const project = await response.json();
-      project.project.name = 'a-very-long-repository-name-with-many-components-and-shared-packages'.repeat(2);
+      project.repository.name = 'a-very-long-repository-name-with-many-components-and-shared-packages'.repeat(2);
       await route.fulfill({ json: project });
     });
     const page = context.pages()[0];
