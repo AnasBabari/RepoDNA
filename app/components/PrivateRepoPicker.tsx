@@ -5,6 +5,7 @@ import type { SafeRepositoryItem } from '../api/github/repositories/route';
 import { trackAuthFlow } from '../lib/analytics';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 import { getUserFacingErrorMessage } from '../lib/user-facing-errors';
+import { useModalFocus } from './useModalFocus';
 
 export function PrivateRepoPicker({
   isOpen,
@@ -33,6 +34,7 @@ export function PrivateRepoPicker({
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
+  const dialogRef = useModalFocus<HTMLDivElement>(isOpen, () => { setConfirmingRevoke(false); onClose(); });
 
   const fetchRepos = useCallback(async (searchQuery: string, pageNum: number) => {
     requestRef.current?.abort();
@@ -135,12 +137,17 @@ export function PrivateRepoPicker({
     <div className="dialog-backdrop" onClick={handleClose}>
       <div
         className="dialog-card"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="private-repositories-title"
+        tabIndex={-1}
         style={{ maxWidth: '720px', width: '94%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-header">
           <div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Your GitHub Repositories (Beta)</h2>
+            <h2 id="private-repositories-title" style={{ fontSize: '1.25rem', fontWeight: 600 }}>Your GitHub Repositories (Beta)</h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '2px' }}>
               Select any private or public repository to analyze.
             </p>
@@ -195,7 +202,7 @@ export function PrivateRepoPicker({
           </div>
           {confirmingRevoke && (
             <div
-              role="alertdialog"
+              role="group"
               aria-labelledby="disconnect-github-title"
               aria-describedby="disconnect-github-description"
               style={{
