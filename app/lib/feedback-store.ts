@@ -24,7 +24,7 @@ export async function storeAggregateFeedback(payload: AggregateFeedback, now = n
   const expiry = Math.floor(Date.parse(`${day}T00:00:00Z`) / 1000) + FEEDBACK_RETENTION_SECONDS;
   const fields = ['total', `rating:${payload.usefulnessScore}`, `usecase:${payload.primaryUsecase}`,
     ...payload.missingCapabilities.map((item) => `capability:${item}`)];
-  const result = await redis.eval<number>(FEEDBACK_SCRIPT, [
+  const result = await redis.eval(FEEDBACK_SCRIPT, [
     `repodna:feedback:v1:daily:${day}`, `repodna:feedback:v1:ack:${payload.submissionId}`,
     `repodna:feedback:v1:rate:${Math.floor(now.getTime() / 60_000)}`,
   ], [expiry, ...fields]);

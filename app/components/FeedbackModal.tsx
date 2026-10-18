@@ -62,7 +62,7 @@ export function FeedbackModal({
       });
       if (!response.ok) throw new Error(response.status === 429 ? 'busy' : 'delivery');
       const acknowledgement = await response.json();
-      if (acknowledgement.success !== true) throw new Error('delivery');
+      if (!acknowledgement || typeof acknowledgement !== 'object' || !('success' in acknowledgement) || acknowledgement.success !== true) throw new Error('delivery');
 
       trackFeedbackSubmitted({
         usefulnessScore: rating,
