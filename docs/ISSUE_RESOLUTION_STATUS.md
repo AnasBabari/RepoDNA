@@ -71,7 +71,7 @@ local test is not evidence that production contains a fix.
 | #18 | Capability/privacy copy corrected in PR #22. |
 | #19 | Browser-copy drift regressions included in PR #22. |
 | #20 | Type generation fix implemented in PR #22; clean hosted CI verifies serial mixed Next/Vinext build orders. |
-| #21 | Pending: development-tool advisories need compatible patches or an explicit time-bounded, reproducible mitigation. Production audit success does not resolve this issue. |
+| #21 | Implemented on development-dependency-containment: Satori fflate patched compatibly to 0.7.5, default dev server loopback-only, explicit maintainer-owned braces mitigation expires 25 October 2026 UTC. Full audit still has eight high dev-chain findings; production has zero. Separate CI guard rejects expiry/new advisory/runtime reachability. Final mixed-build/browser gates pending. |
 | #26 | Implemented on file-ranking-evidence: unique full-path rankings, merged symbol reasons and explicit score scope. Canonical node data stays unchanged; local verification below and unmerged review remain. |
 | #27 | Implemented on inventory-evidence: browser grammar bytes avoid unsafe Node detection; rejected parser promises retry. Real uploads parse Python/JS/TS/TSX/Go; unmerged review remains. |
 
