@@ -13,5 +13,5 @@ uses bundled Chromium with its `chromium` channel for headless extensions.
 
 The fixture supplies a very long canonical repository name. Both Architecture
 and Code Graph headings/topbar controls must remain horizontally in-bounds.
-Full-page screenshots are saved in the Playwright test output directory.
+Viewport screenshots preserve the physical zoomed view in the test output directory.
 Existing responsive tests separately cover 320, 390, 480, 768 and 1440px.
