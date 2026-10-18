@@ -66,6 +66,7 @@ import {
 } from '../lib/export/browser-export-cache';
 import { computeSourceArtifactDigest } from '../lib/export/graph/normalize';
 import { getUserFacingErrorMessage } from '../lib/user-facing-errors';
+import { bundledSample } from '../lib/bundled-samples';
 import type {
   ArchitectureComponent,
   FileRecord,
@@ -1631,35 +1632,17 @@ function WorkspaceContent() {
     trackViewChanged(newView);
   }
 
-  const SAMPLE_ARTIFACTS: Record<string, string> = {
-    'https://github.com/usestrix/strix': '/samples/strix.json',
-    'https://github.com/karpathy/nanoGPT': '/samples/nanogpt.json',
-    'https://github.com/karpathy/nanogpt': '/samples/nanogpt.json',
-    'https://github.com/tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
-    'https://github.com/pytorch/pytorch': '/samples/pytorch.json',
-    'https://github.com/fastapi/fastapi': '/samples/fastapi.json',
-    'https://github.com/expressjs/express': '/samples/express.json',
-    'https://github.com/yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
-    'usestrix/strix': '/samples/strix.json',
-    'karpathy/nanoGPT': '/samples/nanogpt.json',
-    'karpathy/nanogpt': '/samples/nanogpt.json',
-    'tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
-    'pytorch/pytorch': '/samples/pytorch.json',
-    'fastapi/fastapi': '/samples/fastapi.json',
-    'expressjs/express': '/samples/express.json',
-    'yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
-  };
+  function handleOpenSample(url: string) { return handleAnalyzeGitHub(url, false, null, true); }
 
   async function handleAnalyzeGitHub(
     url: string,
     forceClientOnly = false,
-    requestedOrigin: 'github-private' | null = null
+    requestedOrigin: 'github-private' | null = null,
+    bundledSnapshot = false
   ) {
     const cleanUrl = url.trim();
     const parsed = parseGitHubUrl(cleanUrl);
     const targetUrl = parsed?.canonicalUrl ?? cleanUrl;
-    const shortKey = parsed ? `${parsed.owner.toLowerCase()}/${parsed.repo.toLowerCase()}` : '';
-    const canonicalFull = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}`.toLowerCase() : '';
 
     const startTime = Date.now();
     const controller = beginAnalysis(targetUrl);
@@ -1740,14 +1723,10 @@ function WorkspaceContent() {
         if (!parsed) throw Object.assign(new Error('Invalid GitHub repository URL.'), { code: 'INVALID_GITHUB_URL' });
         if (requestedOrigin === 'github-private') return runPrivateBrowserAnalysis();
 
-        // Check pre-cached sample artifacts without bypassing the shared progress lifecycle.
-        if (!forceClientOnly && !parsed.refSegments) {
-          const samplePath =
-            SAMPLE_ARTIFACTS[targetUrl] ||
-            SAMPLE_ARTIFACTS[canonicalFull] ||
-            (shortKey ? SAMPLE_ARTIFACTS[shortKey] : undefined) ||
-            SAMPLE_ARTIFACTS[cleanUrl] ||
-            SAMPLE_ARTIFACTS[cleanUrl.replace(/\/$/, '')];
+        // Only an explicit snapshot action may load bundled data, never normal URL input.
+        if (bundledSnapshot) {
+          const samplePath = bundledSample(targetUrl)?.path;
+          if (!samplePath) throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
 
           if (samplePath) {
             try {
@@ -1766,9 +1745,10 @@ function WorkspaceContent() {
               }
             } catch {
               if (controller.signal.aborted) throw new AnalysisCancelledError();
-              // Continue with standard fetch if a sample artifact is unavailable.
+              throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
             }
           }
+          throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
         }
 
         if (forceClientOnly) return runPublicBrowserFallback();
