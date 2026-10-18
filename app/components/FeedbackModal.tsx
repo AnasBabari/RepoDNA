@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { trackFeedbackSubmitted } from '../lib/analytics';
+import { useModalFocus } from './useModalFocus';
 
 const USE_CASES = [
   { id: 'onboarding', label: 'Onboarding to new codebase' },
@@ -31,9 +32,11 @@ export function FeedbackModal({
   const [rating, setRating] = useState<number>(5);
   const [useCase, setUseCase] = useState<string>('onboarding');
   const [selectedCaps, setSelectedCaps] = useState<string[]>([]);
-  const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const submissionRef = useRef<{ body: string; id: string } | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const dialogRef = useModalFocus<HTMLDivElement>(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -45,31 +48,34 @@ export function FeedbackModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     setSubmitting(true);
+    setDeliveryError(null);
 
     try {
-      await fetch('/api/feedback', {
+      const body = JSON.stringify({ usefulnessScore: rating, primaryUsecase: useCase, missingCapabilities: selectedCaps });
+      if (submissionRef.current?.body !== body) submissionRef.current = { body, id: crypto.randomUUID() };
+      const response = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          usefulnessScore: rating,
-          primaryUsecase: useCase,
-          missingCapabilities: selectedCaps,
-          comments: comment.trim().slice(0, 500),
-        }),
+        body: JSON.stringify({ ...JSON.parse(body), submissionId: submissionRef.current.id }),
       });
+      if (!response.ok) throw new Error(response.status === 429 ? 'busy' : 'delivery');
+      const acknowledgement = await response.json();
+      if (!acknowledgement || typeof acknowledgement !== 'object' || !('success' in acknowledgement) || acknowledgement.success !== true) throw new Error('delivery');
 
       trackFeedbackSubmitted({
         usefulnessScore: rating,
         primaryUsecase: useCase,
         missingCapabilities: selectedCaps,
-        hasTextFeedback: comment.trim().length > 0,
+        hasTextFeedback: false,
       });
 
       setSubmitted(true);
-    } catch {
-      // Still show thank you
-      setSubmitted(true);
+    } catch (error) {
+      setDeliveryError(error instanceof Error && error.message === 'busy'
+        ? 'Feedback is busy. Your selections are preserved; retry in a minute.'
+        : 'Your feedback was not confirmed. Your selections are preserved; check your connection and retry.');
     } finally {
       setSubmitting(false);
     }
@@ -79,11 +85,16 @@ export function FeedbackModal({
     <div className="dialog-backdrop" onClick={onClose}>
       <div
         className="dialog-card"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="feedback-title"
+        tabIndex={-1}
         style={{ maxWidth: '580px', width: '92%' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-header">
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>
+          <h2 id="feedback-title" style={{ fontSize: '1.25rem', fontWeight: 600 }}>
             {submitted ? 'Thank You!' : 'RepoDNA Feedback & Beta Survey'}
           </h2>
           <button className="icon-button" onClick={onClose} aria-label="Close survey">
@@ -117,6 +128,8 @@ export function FeedbackModal({
                     key={score}
                     type="button"
                     onClick={() => setRating(score)}
+                    disabled={submitting}
+                    aria-pressed={rating === score}
                     style={{
                       flex: 1,
                       padding: '8px 0',
@@ -164,6 +177,7 @@ export function FeedbackModal({
                       name="useCase"
                       value={uc.id}
                       checked={useCase === uc.id}
+                      disabled={submitting}
                       onChange={() => setUseCase(uc.id)}
                       style={{ accentColor: 'var(--cyan-core)' }}
                     />
@@ -186,6 +200,8 @@ export function FeedbackModal({
                       key={cap.id}
                       type="button"
                       onClick={() => toggleCap(cap.id)}
+                      disabled={submitting}
+                      aria-pressed={isSelected}
                       style={{
                         padding: '5px 10px',
                         borderRadius: '6px',
@@ -205,59 +221,14 @@ export function FeedbackModal({
               </div>
             </div>
 
-            {/* 4. Text Comments with Privacy Warning */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <label htmlFor="feedback-comment" style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
-                  Optional feedback or feature request (max 500 chars)
-                </label>
-                <span style={{ fontSize: '0.75rem', color: comment.length > 480 ? '#f87171' : 'var(--text-dim)' }}>
-                  {comment.length}/500
-                </span>
-              </div>
-              <textarea
-                id="feedback-comment"
-                value={comment}
-                onChange={(e) => setComment(e.target.value.slice(0, 500))}
-                rows={3}
-                placeholder="What worked well? What felt confusing?"
-                className="filter-input"
-                style={{
-                  width: '100%',
-                  resize: 'none',
-                  fontFamily: 'inherit',
-                  fontSize: '0.85rem',
-                  background: '#06090d',
-                  border: '1px solid var(--line)',
-                  borderRadius: '8px',
-                  padding: '10px 14px',
-                  color: 'var(--ink)',
-                  outline: 'none',
-                }}
-              />
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '0.75rem',
-                  color: 'rgba(241, 188, 85, 0.9)',
-                  background: 'rgba(241, 188, 85, 0.06)',
-                  border: '1px solid rgba(241, 188, 85, 0.18)',
-                  borderRadius: '6px',
-                  padding: '7px 10px',
-                  marginTop: '8px',
-                  lineHeight: 1.35,
-                }}
-              >
-                <span>🔒</span>
-                <span>
-                  <strong>Privacy Caution:</strong> Please do not include code snippets, passwords, or confidential company secrets.
-                </span>
-              </div>
-            </div>
+            <p className="privacy-note">
+              Only these fixed survey choices are collected as anonymous daily counts in Redis for up to 30 days.
+              No free text, repository details, credentials, or account identifiers are collected by this survey.
+              A random delivery receipt is kept for 24 hours to prevent duplicate retries.
+            </p>
 
             {/* Actions */}
+            {deliveryError && <p role="alert">{deliveryError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
               <button className="chip-button" type="button" onClick={onClose} disabled={submitting}>
                 Cancel
