@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const GRAPH_URL = '/?repo=https://github.com/karpathy/nanoGPT';
+const GRAPH_URL = '/?sample=https://github.com/karpathy/nanoGPT';
 
 type Point = { x: number; y: number };
 
@@ -202,7 +202,7 @@ test.describe('Code Graph view', () => {
   });
 
   test('keeps a large repository graph bounded and represented in the minimap', async ({ page }) => {
-    await page.goto('/?repo=https://github.com/usestrix/strix');
+    await page.goto('/?sample=https://github.com/usestrix/strix');
     await expect(page.getByRole('button', { name: 'Code Graph' })).toBeVisible({ timeout: 60_000 });
     await page.getByRole('button', { name: 'Code Graph' }).click();
     await expect(page.locator('.react-flow__node[data-id]').first()).toBeVisible({ timeout: 30_000 });
