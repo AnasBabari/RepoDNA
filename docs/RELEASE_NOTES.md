@@ -1,5 +1,9 @@
 # Unreleased — local review candidate
 
+- File rankings group recorded centrality nodes by full path while preserving
+  per-symbol evidence. Scores disclose their retained-node scope, not unique dependents.
+
+- Primary technology follows recorded language shares (or explicitly labelled fallbacks), not alphabetical order. Generic src/app containers stay unclassified; frontend roles and heuristic confidence use actual presentation/component evidence. Current role caches use analyzer 2.0.5 / exporter 1.0.5; see `docs/role-evidence.md`.
 - Manifest-backed package/dependency counts and supported-source coverage replace language/import proxies. Overview, TXT and portable manifests expose declaration scopes, owning roots, observed-path partitions and disjoint parse outcomes; legacy missing evidence is explicitly unavailable.
 - Browser grammar loading uses explicit bytes instead of unreliable Node detection through process shims; failed parser promises can retry without weakening CSP. Real uploaded fixtures cover all five grammars.
 - These inventory semantics use analyzer 2.0.4 / graph exporter 1.0.4 cache namespaces. No production release or merge is implied.

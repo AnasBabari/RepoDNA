@@ -91,6 +91,8 @@
       "properties": {
         "name": { "type": "string" },
         "source": { "type": "string" },
+        "commitSha": { "type": ["string", "null"] },
+        "analyzedRef": { "type": ["string", "null"] },
         "languages": {
           "type": "object",
           "additionalProperties": { "type": "number" }

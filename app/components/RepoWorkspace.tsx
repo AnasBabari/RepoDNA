@@ -6,6 +6,7 @@ import Link from 'next/link';
 import packageMetadata from '../../package.json';
 
 import { ArchitectureGraph } from './ArchitectureGraph';
+import { useModalFocus } from './useModalFocus';
 import { BrowserRetentionToggle } from './BrowserRetentionToggle';
 import { CodeGraph } from './CodeGraph';
 import { GraphScopeSummary } from './GraphScopeSummary';
@@ -20,6 +21,7 @@ import { Activity, Dna, Download, FileCode, FileText, LayoutDashboard, Map, Mess
 import { analyzeUploadedFiles, analyzeZipBuffer, parseGitHubUrl } from '../lib/analyzer';
 import { filterMeaningfulDependencyCycles } from '../lib/analyzer/cycles';
 import { analysisQuality } from '../lib/analysis-quality';
+import { primaryTechnology } from '../lib/technology-evidence';
 import type { RepoDNAProjectV2 } from '../lib/analyzer/v2/types';
 import {
   analyzePublicRepositoryDurably,
@@ -65,6 +67,7 @@ import {
 } from '../lib/export/browser-export-cache';
 import { computeSourceArtifactDigest } from '../lib/export/graph/normalize';
 import { getUserFacingErrorMessage } from '../lib/user-facing-errors';
+import { bundledSample } from '../lib/bundled-samples';
 import type {
   ArchitectureComponent,
   FileRecord,
@@ -493,7 +496,9 @@ function Overview({
   const isFullyMapped = quality.status === 'FULLY_MAPPED';
   const mapQualityLabel = quality.label;
   const extractionNotices = project.diagnostics.filter((item) => item.code === 'SOURCE_EXTRACTION_LIMIT_REACHED');
-  const primaryTechnology = project.technologies[0] ?? Object.keys(project.repository.languages)[0] ?? 'Custom application';
+  const primaryStack = primaryTechnology(project.repository);
+  const otherTechnologyCount = project.technologies.filter((name) => name !== primaryStack.name).length;
+  const snapshotCommit = deepProject?.repository.commitSha ?? project.repository.commitSha;
 
   return (
     <div className="view-stack overview-view">
@@ -541,6 +546,7 @@ function Overview({
               View request paths
             </button>
           </div>
+          {snapshotCommit && <p className="muted snapshot-provenance" aria-label="Analyzed GitHub snapshot">Full repository at commit <code>{snapshotCommit}</code>. A file or directory URL does not narrow the scan.</p>}
         </div>
         <div className="analysis-trust-card">
           <span>✓</span>
@@ -575,8 +581,8 @@ function Overview({
             </article>
             <article>
               <span>Built with</span>
-              <strong>{primaryTechnology}</strong>
-              <p>{project.technologies.length > 1 ? `Plus ${project.technologies.length - 1} other detected technologies.` : 'Primary detected technology.'}</p>
+              <strong>{primaryStack.name}</strong>
+              <p>{primaryStack.evidence}{otherTechnologyCount > 0 ? ` Plus ${otherTechnologyCount} other detected technologies.` : ''}</p>
             </article>
             <article>
               <span>Map quality</span>
@@ -768,7 +774,8 @@ function Overview({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Structural importance</p>
-                <h2>Highest-impact files</h2>
+                <h2>Recorded file rankings</h2>
+                {deepProject && <p className="muted">Scores sum retained node records per file, not unique inter-file dependencies. Internal links can count twice; unranked files are not assessed.</p>}
               </div>
               <span>Top {Math.min(5, project.important_files.length)}</span>
             </div>
@@ -777,7 +784,7 @@ function Overview({
                 <article key={file.file}>
                   <span>0{index + 1}</span>
                   <strong>{file.file}</strong>
-                  <p>{file.reasons.slice(0, 2).join(' · ')}</p>
+                  <p>{file.reasons.slice(0, 2).join(' · ')}{file.reasons.length > 2 ? ` · +${file.reasons.length - 2} more recorded node summaries` : ''}</p>
                   <i>{file.score} pts</i>
                 </article>
               ))}
@@ -1219,7 +1226,7 @@ function DetailPanel({
       <div className="detail-icon">{component.name.slice(0, 1)}</div>
       <h2>{component.name}</h2>
       <p className="muted">
-        Inferred structural cluster based on source paths, symbol definitions, and dependency directions.
+        Inferred cluster based on recorded evidence. Confidence is a heuristic, not a measured probability.
       </p>
       <dl>
         <div>
@@ -1227,8 +1234,8 @@ function DetailPanel({
           <dd>{component.type}</dd>
         </div>
         <div>
-          <dt>Confidence</dt>
-          <dd className="good">{Math.round(component.confidence * 100)}%</dd>
+          <dt>Heuristic confidence</dt>
+          <dd className={component.confidence >= 0.8 ? 'good' : 'muted'}>{Math.round(component.confidence * 100)}%</dd>
         </div>
         <div>
           <dt>Files</dt>
@@ -1268,6 +1275,7 @@ function AnalyseDialog({
 }) {
   const [githubUrl, setGithubUrl] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useModalFocus<HTMLElement>(open, onClose);
 
   if (!open) return null;
 
@@ -1283,6 +1291,8 @@ function AnalyseDialog({
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
         className="analyse-dialog"
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="analyse-title"
@@ -1308,7 +1318,6 @@ function AnalyseDialog({
               value={githubUrl}
               onChange={(event) => setGithubUrl(event.target.value)}
               placeholder="https://github.com/owner/repository"
-              autoFocus
             />
           </label>
           <button className="analyse-button" style={{ width: '100%', marginTop: '14px' }} type="submit">
@@ -1553,6 +1562,8 @@ function WorkspaceContent() {
 
   function showAnalysisError(controller: AbortController, error: unknown, fallbackMessage: string) {
     if (!isActiveAnalysis(controller) || error instanceof AnalysisCancelledError) return;
+    const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' ? error.code : null;
+    setAnalyzingErrorCode(code);
     setAnalyzingError(getUserFacingErrorMessage(error, fallbackMessage));
   }
 
@@ -1565,6 +1576,8 @@ function WorkspaceContent() {
         void handleAnalyzeGitHub(repoParam);
         return;
       }
+      const sampleParam = params.get('sample');
+      if (sampleParam) { void handleOpenSample(sampleParam); return; }
       const pendingRun = readPendingDurableRun();
       if (pendingRun) void handleResumeDurableRun(pendingRun);
     }
@@ -1608,11 +1621,6 @@ function WorkspaceContent() {
         event.preventDefault();
         searchInputRef.current?.focus();
       }
-      if (event.key === 'Escape') {
-        if (dialogOpen) setDialogOpen(false);
-        if (privatePickerOpen) setPrivatePickerOpen(false);
-        if (feedbackModalOpen) setFeedbackModalOpen(false);
-      }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -1624,38 +1632,21 @@ function WorkspaceContent() {
     trackViewChanged(newView);
   }
 
-  const SAMPLE_ARTIFACTS: Record<string, string> = {
-    'https://github.com/usestrix/strix': '/samples/strix.json',
-    'https://github.com/karpathy/nanoGPT': '/samples/nanogpt.json',
-    'https://github.com/karpathy/nanogpt': '/samples/nanogpt.json',
-    'https://github.com/tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
-    'https://github.com/pytorch/pytorch': '/samples/pytorch.json',
-    'https://github.com/fastapi/fastapi': '/samples/fastapi.json',
-    'https://github.com/expressjs/express': '/samples/express.json',
-    'https://github.com/yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
-    'usestrix/strix': '/samples/strix.json',
-    'karpathy/nanoGPT': '/samples/nanogpt.json',
-    'karpathy/nanogpt': '/samples/nanogpt.json',
-    'tiangolo/full-stack-fastapi-template': '/samples/full-stack-fastapi-template.json',
-    'pytorch/pytorch': '/samples/pytorch.json',
-    'fastapi/fastapi': '/samples/fastapi.json',
-    'expressjs/express': '/samples/express.json',
-    'yusrababari/Twitter-Sentiment-Analysis': '/samples/twitter-sentiment.json',
-  };
+  function handleOpenSample(url: string) { return handleAnalyzeGitHub(url, false, null, true); }
 
   async function handleAnalyzeGitHub(
     url: string,
     forceClientOnly = false,
-    requestedOrigin: 'github-private' | null = null
+    requestedOrigin: 'github-private' | null = null,
+    bundledSnapshot = false
   ) {
     const cleanUrl = url.trim();
     const parsed = parseGitHubUrl(cleanUrl);
-    const targetUrl = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}` : cleanUrl;
-    const shortKey = parsed ? `${parsed.owner.toLowerCase()}/${parsed.repo.toLowerCase()}` : '';
-    const canonicalFull = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}`.toLowerCase() : '';
+    const targetUrl = parsed?.canonicalUrl ?? cleanUrl;
 
     const startTime = Date.now();
     const controller = beginAnalysis(targetUrl);
+    if (parsed?.refSegments) setAnalyzingMessage('Resolving the selected revision; scanning the full repository, not only the URL subpath.');
     let failureCode = 'CLIENT_ERROR';
     let loadedSample = false;
     let canonicalProject: RepoDNAProjectV2 | null = null;
@@ -1729,16 +1720,13 @@ function WorkspaceContent() {
 
     try {
       const analyzedProject = await analyzeThroughSplash(controller, async () => {
+        if (!parsed) throw Object.assign(new Error('Invalid GitHub repository URL.'), { code: 'INVALID_GITHUB_URL' });
         if (requestedOrigin === 'github-private') return runPrivateBrowserAnalysis();
 
-        // Check pre-cached sample artifacts without bypassing the shared progress lifecycle.
-        if (!forceClientOnly) {
-          const samplePath =
-            SAMPLE_ARTIFACTS[targetUrl] ||
-            SAMPLE_ARTIFACTS[canonicalFull] ||
-            (shortKey ? SAMPLE_ARTIFACTS[shortKey] : undefined) ||
-            SAMPLE_ARTIFACTS[cleanUrl] ||
-            SAMPLE_ARTIFACTS[cleanUrl.replace(/\/$/, '')];
+        // Only an explicit snapshot action may load bundled data, never normal URL input.
+        if (bundledSnapshot) {
+          const samplePath = bundledSample(targetUrl)?.path;
+          if (!samplePath) throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
 
           if (samplePath) {
             try {
@@ -1757,9 +1745,10 @@ function WorkspaceContent() {
               }
             } catch {
               if (controller.signal.aborted) throw new AnalysisCancelledError();
-              // Continue with standard fetch if a sample artifact is unavailable.
+              throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
             }
           }
+          throw Object.assign(new Error('Snapshot unavailable.'), { code: 'SAMPLE_UNAVAILABLE' });
         }
 
         if (forceClientOnly) return runPublicBrowserFallback();
@@ -1787,6 +1776,8 @@ function WorkspaceContent() {
         } catch (error) {
           if (controller.signal.aborted) throw new AnalysisCancelledError();
           if (error instanceof DurableAnalysisUnavailableError) {
+            if (error.code === 'GITHUB_REF_NOT_FOUND' && session?.user && !forceClientOnly) return runPrivateBrowserAnalysis();
+            if (error.code.startsWith('GITHUB_REF_') || error.code === 'INVALID_GITHUB_URL') throw error;
             failureCode = error.code;
             setAnalyzingRetryAfter(error.retryAfter ?? null);
             if (!error.fallbackAvailable) {
@@ -1877,7 +1868,8 @@ function WorkspaceContent() {
 
         try {
           return await runPublicBrowserFallback();
-        } catch {
+        } catch (fallbackError) {
+          if (fallbackError && typeof fallbackError === 'object' && 'code' in fallbackError && String(fallbackError.code).startsWith('GITHUB_REF_')) throw fallbackError;
           // The fallback failure is recorded via trackAnalysisFailed above the
           // throw path; the user-facing code intentionally reports the primary
           // server failure, and the fallback error may contain local file paths
@@ -2097,7 +2089,9 @@ function WorkspaceContent() {
           requestId={analyzingRequestId}
           retryAfter={analyzingRetryAfter}
           onRetry={() => {
-            if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
+            if (analyzingErrorCode === 'SAMPLE_UNAVAILABLE') {
+              void handleOpenSample(analyzingTarget);
+            } else if (analyzingTarget.startsWith('http') || analyzingTarget.includes('/')) {
               handleAnalyzeGitHub(analyzingTarget);
             } else {
               handleLoadDemo();
@@ -2131,6 +2125,7 @@ function WorkspaceContent() {
       <>
         <LandingView
           onAnalyzeGitHub={handleAnalyzeGitHub}
+          onOpenSample={handleOpenSample}
           onAnalyzeFolder={handleAnalyzeFolder}
           onAnalyzeZip={handleAnalyzeZipOrJson}
           onLoadDemo={handleLoadDemo}
@@ -2261,6 +2256,11 @@ function WorkspaceContent() {
       </aside>
 
       <section className="workspace">
+        {analysisOrigin === 'sample' && <section className="sample-provenance" aria-label="Bundled snapshot provenance">
+          <strong>Bundled snapshot — not a fresh scan.</strong>
+          <span>Analyzed: {project.generatedAt || 'not recorded'} · Commit: <code>{project.repository.commitSha || 'not recorded'}</code></span>
+          {bundledSample(project.repository.source) && <button className="chip-button" type="button" onClick={() => void handleAnalyzeGitHub(bundledSample(project.repository.source)!.url)}>Analyze latest</button>}
+        </section>}
         <nav className="mobile-view-nav" aria-label="Workspace views">
           {navigation.map((item) => (
             <button

@@ -28,7 +28,7 @@ COMPONENT_NAMES = {
     "infrastructure": "Infrastructure",
     "tests": "Tests",
     "configuration": "Configuration",
-    "other": "Application core",
+    "other": "Unclassified files",
 }
 COMPONENT_ORDER = [
     "frontend", "api", "services", "domain", "repositories", "database",
@@ -223,6 +223,14 @@ def resolve_calls(
             edge.confidence = 0.82 if "." in edge.callee else 0.72
 
 
+def classification_confidence(category: str, evidence: list[str]) -> float:
+    if category == "other":
+        return 0.35
+    if category == "frontend":
+        return 0.94 if "UI component symbol" in evidence else 0.82 if "presentation-capable file extension" in evidence else 0.65
+    return 0.94 if category in {"api", "database", "tests"} else 0.82
+
+
 def classify_file(path: str, route_files: set[str], symbol_types: set[str]) -> tuple[str, list[str]]:
     lowered = path.lower()
     parts = set(PurePosixPath(lowered).parts)
@@ -241,8 +249,12 @@ def classify_file(path: str, route_files: set[str], symbol_types: set[str]) -> t
         return "database", ["database path or ORM model evidence"]
     if parts.intersection({"workers", "worker", "jobs", "tasks", "queues"}):
         return "workers", ["worker, job, or queue path"]
-    if parts.intersection({"frontend", "client", "components", "pages", "views", "ui"}) or "component" in symbol_types:
-        return "frontend", ["frontend path or component symbols"]
+    if "component" in symbol_types:
+        return "frontend", ["UI component symbol"]
+    if PurePosixPath(lowered).suffix in {".jsx", ".tsx", ".vue", ".svelte", ".html", ".css", ".scss", ".sass", ".less"}:
+        return "frontend", ["presentation-capable file extension"]
+    if PurePosixPath(lowered).suffix in {".js", ".ts", ".mjs", ".cjs"} and parts.intersection({"frontend", "client", "components", "pages", "views", "ui"}):
+        return "frontend", ["frontend directory with JS/TS source; UI behavior unverified"]
     if parts.intersection({"domain", "core"}):
         return "domain", ["domain or core path"]
     if parts.intersection({"infra", "infrastructure", ".github", "deploy"}) or PurePosixPath(path).name in {"Dockerfile", "docker-compose.yml", "compose.yml"}:
@@ -250,7 +262,7 @@ def classify_file(path: str, route_files: set[str], symbol_types: set[str]) -> t
     if PurePosixPath(path).suffix.lower() in {".json", ".toml", ".yaml", ".yml", ".ini", ".cfg"}:
         return "configuration", ["configuration file"]
     if parts.intersection({"src", "app"}):
-        return "frontend", ["frontend container path"]
+        return "other", ["generic src/app container; no specific layer evidence"]
     return "other", ["source file outside a recognized layer"]
 
 
@@ -268,19 +280,21 @@ def build_architecture(
     groups: dict[str, list[str]] = defaultdict(list)
     evidence: dict[str, set[str]] = defaultdict(set)
     file_component: dict[str, str] = {}
+    component_confidences: dict[str, float] = {}
 
     for file in files:
         component, reasons = classify_file(file.path, route_files, symbol_types_by_file[file.path])
         groups[component].append(file.path)
         evidence[component].update(reasons)
         file_component[file.path] = component
+        component_confidences[component] = min(component_confidences.get(component, 1.0), classification_confidence(component, reasons))
 
     components: list[ArchitectureComponent] = []
     for component_type in COMPONENT_ORDER:
         paths = groups.get(component_type)
         if not paths:
             continue
-        confidence = 0.94 if component_type in {"api", "database", "tests"} else 0.82
+        confidence = component_confidences[component_type]
         components.append(ArchitectureComponent(
             id=component_type,
             name=COMPONENT_NAMES[component_type],

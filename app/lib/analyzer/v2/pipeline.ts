@@ -155,7 +155,7 @@ export interface V2AnalyzeOptions extends AnalyzeOptions {
 }
 
 export async function analyzeRepositoryV2(
-  discovery: { files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; inventory?: IngestionInventory },
+  discovery: { files: DiscoveredFile[]; skipped: { path: string; reason: string }[]; name: string; source: string; commitSha?: string; analyzedRef?: string; inventory?: IngestionInventory },
   options?: V2AnalyzeOptions
 ): Promise<RepoDNAProjectV2> {
   const start = Date.now();
@@ -256,8 +256,8 @@ export async function analyzeRepositoryV2(
   }
 
   // Repository identity with commit
-  v2.repository.commitSha = options?.commitSha ?? null;
-  v2.repository.analyzedRef = options?.analyzedRef ?? null;
+  v2.repository.commitSha = options?.commitSha ?? discovery.commitSha ?? null;
+  v2.repository.analyzedRef = options?.analyzedRef ?? discovery.analyzedRef ?? null;
   v2.repository.source = discovery.source;
 
   const graphLimits = {

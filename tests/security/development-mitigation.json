@@ -1,0 +1,7 @@
+{
+  "issue": "https://github.com/AnasBabari/RepoDNA/issues/21",
+  "owner": "AnasBabari",
+  "expiresAt": "2026-10-25T00:00:00Z",
+  "advisory": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+  "packages": ["@next/eslint-plugin-next", "braces", "eslint-config-next", "fast-glob", "micromatch", "vinext", "vite-plugin-commonjs", "vite-plugin-dynamic-import"]
+}

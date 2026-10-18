@@ -8,7 +8,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 });
 
 test('nanoGPT never claims full mapping beside its 444 unresolved relationships', async ({ page }) => {
-  await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+  await page.goto('/?sample=https://github.com/karpathy/nanoGPT');
   const summary = page.getByRole('region', { name: 'Plain-language summary' });
   await expect(summary).toContainText('Mostly mapped');
   await expect(summary).toContainText('444 relationships could not be proven statically.');
@@ -31,7 +31,7 @@ for (const category of ['compaction', 'extraction'] as const) {
       project.inventory.extractionLimits = [{ file: 'train.py', category: 'symbols', limit: 1000, omittedCount: 1, countIsLowerBound: false, range: { startLine: 1001, endLine: 1002, startColumn: 0, endColumn: 4 } }];
     }
     await page.route('**/samples/nanogpt.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(project) }));
-    await page.goto('/?repo=https://github.com/karpathy/nanoGPT');
+    await page.goto('/?sample=https://github.com/karpathy/nanoGPT');
     await expect(page.getByRole('region', { name: 'Plain-language summary' })).toContainText('Coverage limited');
     if (category === 'extraction') {
       const disclosure = page.getByRole('region', { name: 'Extraction limits' });
