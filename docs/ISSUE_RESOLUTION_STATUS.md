@@ -61,7 +61,7 @@ local test is not evidence that production contains a fix.
 | #8 | Implemented on evidence-based-roles: quantitative language ranking, syntax-backed UI roles and neutral Python src/app files. Local verification below; unmerged review remains. |
 | #9 | Implemented in PR #31: bounded tag/branch/commit resolution, pinned acquisition, portable identity and actionable failures. 466 unit / 34 Python tests, both builds/typechecks and 64 production-mode browser tests pass; hosted CI confirmation and protected interactive acceptance remain separate. Unmerged review remains. |
 | #10 | Implemented on sample-freshness: explicit allowlisted snapshot actions/query, visible date/commit, Analyze latest, and no sample substitution for normal URL input. Nine focused browser tests/typecheck pass; unmerged review remains. |
-| #11 | Pending: GitHub repository pagination and search beyond first page. |
+| #11 | Implemented on repository-pagination: upstream OAuth pages are not sliced twice, App results remain installation-scoped, OAuth first-100 search is explicitly disclosed, truncated listings cannot create endless Next pages, and stale requests are cancelled. Seven API tests and picker browser test pass; unmerged review remains. |
 | #12 | Pending: Neo4j multi-snapshot isolation/membership provenance. Existing same-snapshot idempotency is not sufficient. |
 | #13 | Pending: graph keyboard activation. |
 | #14 | Pending: non-export modal focus, semantics and restoration. |
