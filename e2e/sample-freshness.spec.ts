@@ -1,17 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { installRevisionHarness, REVISION_REPO, REVISION_SHA } from './helpers/revision-harness';
+declare global { interface Window { scanEvents: number } }
 
 test('a bundled snapshot discloses its old commit and Analyze latest runs fresh source', async ({ page, baseURL }) => {
   const calls = await installRevisionHarness(page, baseURL, ['HEAD']);
-  await page.addInitScript(() => { (window as Window & { scanEvents: number }).scanEvents = 0; window.addEventListener('repodna:analysis-complete', () => (window as Window & { scanEvents: number }).scanEvents++); });
+  await page.addInitScript(() => { window.scanEvents = 0; window.addEventListener('repodna:analysis-complete', () => window.scanEvents++); });
   const sample = JSON.parse(readFileSync('public/samples/nanogpt.json', 'utf8'));
   await page.goto(`/?sample=${REVISION_REPO}`);
   const notice = page.getByRole('region', { name: 'Bundled snapshot provenance' });
   await expect(notice).toContainText(sample.generatedAt);
   await expect(notice).toContainText(sample.repository.commitSha);
   expect(calls.submitted).toEqual([]);
-  expect(await page.evaluate(() => (window as Window & { scanEvents: number }).scanEvents)).toBe(0);
+  expect(await page.evaluate(() => window.scanEvents)).toBe(0);
   await notice.getByRole('button', { name: 'Analyze latest', exact: true }).click();
   await expect(page.locator('.snapshot-provenance')).toContainText(REVISION_SHA, { timeout: 60_000 });
   await expect(notice).toHaveCount(0);
