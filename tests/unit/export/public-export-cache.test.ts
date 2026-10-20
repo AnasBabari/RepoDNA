@@ -10,7 +10,9 @@ const blobMocks = vi.hoisted(() => ({
   put: vi.fn(),
 }));
 
-vi.mock('@vercel/blob', () => blobMocks);
+vi.mock('@vercel/blob', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@vercel/blob')>(), ...blobMocks,
+}));
 
 import {
   createSignedDownloadUrl,
@@ -52,9 +54,10 @@ describe('public export Blob cache', () => {
       sourceDigest: 'b'.repeat(64),
       expiresEpoch: 1_800_000_000_000,
       format: 'csv',
+      filename: 'graphify-repo-aaaaaaa-repodna-csv.zip',
     });
     expect(pathname).toBe(
-      `repodna/public/graphify-labs/graphify-repo/${'a'.repeat(40)}/2.0.7/exports/1.0.0/1.0.7/${'b'.repeat(64)}/expires-1800000000000/csv.zip`
+      `repodna/public/graphify-labs/graphify-repo/${'a'.repeat(40)}/2.0.7/exports/1.0.0/1.0.7/${'b'.repeat(64)}/expires-1800000000000/graphify-repo-aaaaaaa-repodna-csv.zip`
     );
     expect(publicExportMetadataPath(pathname)).toBe(`${pathname}.metadata.json`);
   });
@@ -64,7 +67,7 @@ describe('public export Blob cache', () => {
     const signed = await createSignedDownloadUrl('repodna/public/export.json');
     const after = Date.now();
 
-    expect(signed.url).toBe('https://blob.example.test/signed');
+    expect(signed.url).toBe('https://blob.example.test/signed?download=1');
     expect(blobMocks.issueSignedToken).toHaveBeenCalledWith(expect.objectContaining({
       pathname: 'repodna/public/export.json',
       operations: ['get'],
@@ -81,6 +84,22 @@ describe('public export Blob cache', () => {
     const expiry = Date.parse(signed.expiresAt);
     expect(expiry).toBeGreaterThanOrEqual(before + 299_000);
     expect(expiry).toBeLessThanOrEqual(after + 301_000);
+  });
+
+  it.each(['graph-json', 'csv', 'parquet', 'cypher'] as const)('preserves the %s download basename', (format) => {
+    const filename = `repo-aaaaaaa-repodna-${format}.zip`;
+    const input = { owner: 'o', repo: 'r', commitSha: 'a'.repeat(40),
+      sourceDigest: 'b'.repeat(64), expiresEpoch: 1_800_000_000_000, format, filename };
+    expect(publicExportBlobPath(input).split('/').at(-1)).toBe(filename);
+    for (const unsafe of ['../file.zip', 'a/b.zip', 'bad\r\nname', 'x'.repeat(121)]) {
+      expect(() => publicExportBlobPath({ ...input, filename: unsafe })).toThrow('INVALID_EXPORT_FILENAME');
+    }
+  });
+
+  it('preserves signing parameters when requesting attachment delivery', async () => {
+    blobMocks.presignUrl.mockResolvedValueOnce({ presignedUrl: 'https://blob.example.test/a?token=opaque&signature=abc&expires=123' });
+    const url = new URL((await createSignedDownloadUrl('a')).url);
+    expect(Object.fromEntries(url.searchParams)).toEqual({ token: 'opaque', signature: 'abc', expires: '123', download: '1' });
   });
 
   it('stores export bytes and integrity metadata as private blobs', async () => {
