@@ -22,6 +22,7 @@ import {
   readCachedPublicExport,
   storePublicExport,
 } from '../../../app/lib/export/public-export-cache';
+import { graphExportFilename, type GraphExportManifest } from '../../../app/lib/export/graph';
 
 const originalBlobToken = process.env.BLOB_READ_WRITE_TOKEN;
 
@@ -94,6 +95,15 @@ describe('public export Blob cache', () => {
     for (const unsafe of ['../file.zip', 'a/b.zip', 'bad\r\nname', 'x'.repeat(121)]) {
       expect(() => publicExportBlobPath({ ...input, filename: unsafe })).toThrow('INVALID_EXPORT_FILENAME');
     }
+  });
+
+  it.each(['graph-json', 'csv', 'parquet', 'cypher'] as const)('accepts canonical underscore-prefixed %s filenames', (format) => {
+    const manifest = { repository: { name: '_repo', commitSha: 'a'.repeat(40) }, sourceArtifactSha256: 'b'.repeat(64) } as GraphExportManifest;
+    const filename = graphExportFilename(manifest, format);
+    expect(filename).toMatch(/^_repo-aaaaaaa-repodna-/);
+    const pathname = publicExportBlobPath({ owner: 'o', repo: '_repo', commitSha: 'a'.repeat(40),
+      sourceDigest: 'b'.repeat(64), expiresEpoch: 1_800_000_000_000, format, filename });
+    expect(pathname.split('/').at(-1)).toBe(filename);
   });
 
   it('preserves signing parameters when requesting attachment delivery', async () => {

@@ -25,7 +25,7 @@ export function publicExportBlobPath(input: {
 }): string {
   const analyzer = input.analyzerVersion ?? V2_ANALYZER_VERSION;
   // Cross-origin downloads use Blob's basename, not the anchor download hint.
-  if (!/^[a-z0-9][a-z0-9._-]{0,119}$/.test(input.filename)) throw new Error('INVALID_EXPORT_FILENAME');
+  if (!/^[a-z0-9_][a-z0-9._-]{0,119}$/.test(input.filename)) throw new Error('INVALID_EXPORT_FILENAME');
   return [
     'repodna',
     'public',
