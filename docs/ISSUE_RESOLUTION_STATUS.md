@@ -1,8 +1,9 @@
-# Audit remediation — unmerged review work
+# Audit remediation — historical review checkpoints
 
-The audit issues remain open for review. No pull request may be merged or
-production deployment promoted without the maintainer's direction. A completed
-local test is not evidence that production contains a fix.
+The entries below preserve the original pre-release review checkpoints. The
+maintainer subsequently authorized review/merge; all sixteen PRs reached main
+on 18 October. See [current acceptance evidence](issue-closure-evidence.md)
+and the issue closure comments before interpreting historical draft/pending text.
 
 ## Review order
 
