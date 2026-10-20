@@ -28,7 +28,8 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,9 +40,10 @@ const REPO_ROOT = resolve(HERE, '..', '..');
 const GENERATED_DIR = join(REPO_ROOT, 'tests', 'integration', 'generated');
 const CYPHER_PATH = join(GENERATED_DIR, 'cypher.txt');
 const COUNTS_PATH = join(GENERATED_DIR, 'counts.json');
-// Playwright clears test-results at startup; keep integration fixtures in our
-// owned generated directory, which this harness already removes in finally.
-const SNAPSHOT_DIR = join(GENERATED_DIR, 'neo4j-snapshots');
+// Neither Playwright nor another fixture suite may erase these mid-import.
+const SNAPSHOT_ROOT = resolve(tmpdir());
+const SNAPSHOT_PREFIX = join(SNAPSHOT_ROOT, 'repodna-neo4j-snapshots-');
+const SNAPSHOT_DIR = mkdtempSync(SNAPSHOT_PREFIX);
 const NEO4J_IMAGE = 'neo4j:5-community';
 const READY_CAP_MS = 120_000;
 const QUERY_BUDGET_MS = 180_000;
@@ -477,4 +479,6 @@ main()
   })
   .then(() => {
     if (!tornDown) teardown('end');
+    if (dirname(SNAPSHOT_DIR) !== SNAPSHOT_ROOT || !SNAPSHOT_DIR.startsWith(SNAPSHOT_PREFIX)) throw new Error('Unsafe snapshot cleanup target');
+    rmSync(SNAPSHOT_DIR, { recursive: true, force: true });
   });
