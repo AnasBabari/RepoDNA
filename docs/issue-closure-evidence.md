@@ -72,4 +72,4 @@ before then the owner must patch/remove affected tooling or explicitly reassess.
 Closing the containment ticket does not declare the dependency risk eliminated.
 
 No protected-preview bypass, live GitHub App consent/revoke, paid-plan upgrade,
-production-data mutation or secret retrieval is part of this acceptance claim.
+manual production database edits or secret retrieval is part of this acceptance claim.
