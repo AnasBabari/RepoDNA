@@ -39,7 +39,9 @@ const REPO_ROOT = resolve(HERE, '..', '..');
 const GENERATED_DIR = join(REPO_ROOT, 'tests', 'integration', 'generated');
 const CYPHER_PATH = join(GENERATED_DIR, 'cypher.txt');
 const COUNTS_PATH = join(GENERATED_DIR, 'counts.json');
-const SNAPSHOT_DIR = join(REPO_ROOT, 'test-results', 'neo4j-snapshots');
+// Playwright clears test-results at startup; keep integration fixtures in our
+// owned generated directory, which this harness already removes in finally.
+const SNAPSHOT_DIR = join(GENERATED_DIR, 'neo4j-snapshots');
 const NEO4J_IMAGE = 'neo4j:5-community';
 const READY_CAP_MS = 120_000;
 const QUERY_BUDGET_MS = 180_000;
@@ -197,7 +199,7 @@ function regenerateFixturesViaVitest() {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     shell: true, // required on Windows so npx.cmd can execute
-    env: { ...process.env, REPODNA_KEEP_EXPORT_FIXTURES: '1', REPODNA_KEEP_SNAPSHOT_FIXTURES: '1' },
+    env: { ...process.env, REPODNA_KEEP_EXPORT_FIXTURES: '1', REPODNA_KEEP_SNAPSHOT_FIXTURES: '1', REPODNA_SNAPSHOT_FIXTURE_DIR: SNAPSHOT_DIR },
     timeout: 240_000,
     maxBuffer: 32 * 1024 * 1024,
   });
