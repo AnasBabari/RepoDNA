@@ -154,6 +154,22 @@ def _is_binary(path: Path) -> bool:
     return b"\0" in sample
 
 
+def _iter_paths_sorted(root: Path) -> Iterator[Path]:
+    """Stable depth-first order, sorting one directory rather than the whole repo."""
+    pending = [root]
+    while pending:
+        path = pending.pop()
+        if path != root:
+            yield path
+        if path.is_symlink() or not path.is_dir():
+            continue
+        try:
+            pending.extend(sorted(path.iterdir(), key=lambda child: child.name, reverse=True))
+        except OSError:
+            # Match pathlib glob's behavior for inaccessible directories.
+            continue
+
+
 def discover_local(root: Path, limits: IngestionLimits | None = None) -> DiscoveryResult:
     limits = limits or IngestionLimits()
     root = root.resolve()
@@ -165,15 +181,15 @@ def discover_local(root: Path, limits: IngestionLimits | None = None) -> Discove
     total_source_bytes = 0
 
     # First pass: load any nested .gitignores in subdirectories
-    for gitignore_path in root.rglob(".gitignore"):
-        if gitignore_path.is_file() and gitignore_path.parent != root:
+    for gitignore_path in _iter_paths_sorted(root):
+        if gitignore_path.name == ".gitignore" and gitignore_path.is_file() and gitignore_path.parent != root:
             try:
                 rel_dir = gitignore_path.parent.relative_to(root).as_posix()
                 matcher.add_nested_gitignore(gitignore_path.parent, rel_dir)
             except ValueError:
                 pass
 
-    for path in root.rglob("*"):
+    for path in _iter_paths_sorted(root):
         try:
             relative = path.relative_to(root).as_posix()
         except ValueError:

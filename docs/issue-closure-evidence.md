@@ -57,7 +57,19 @@ real worker-generated JSON/CSV/Cypher/Parquet downloads. It does not pretend a
 mock signed URL proves the deployed Blob service: production acceptance must
 also download real signed URLs and compare both misses and hits.
 
-## Security and verification boundaries
+## Post-release traversal regression (#42)
+
+Main's engine job in run 39384100088 exposed nondeterministic Python local
+selection under source-byte caps (`b.py` instead of `a.py`). A controlled
+reverse-enumeration test reproduced both byte and file-count failures before
+the fix. Discovery now uses stable, iterative, per-directory traversal before
+admission; it never follows directory symlinks or sorts the entire repository
+path set. Nested ignore loading is stable too. Boundary regressions preserve
+symlink/unreadable-directory handling. All 36 Python and 492 TypeScript tests,
+including fail-hard cross-engine parity, pass locally. Hosted acceptance and
+merge are recorded in the linked #42 resolution rather than assumed here.
+
+## Security and earlier verification checkpoint
 
 Fresh 20 October checks: production audit zero; 492 TypeScript and 34 Python
 tests; lint zero errors/two existing auth-navigation warnings; Vinext and Next
