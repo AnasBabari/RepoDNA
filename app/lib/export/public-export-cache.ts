@@ -1,8 +1,8 @@
-import { del, get, head, issueSignedToken, list, presignUrl, put } from '@vercel/blob';
+import { del, get, getDownloadUrl, head, issueSignedToken, list, presignUrl, put } from '@vercel/blob';
 import { Buffer } from 'node:buffer';
 
 import { PUBLIC_ARTIFACT_TTL_SECONDS, V2_ANALYZER_VERSION, isPublicArtifactCacheConfigured } from '../analyzer/v2/artifact-cache';
-import { GRAPH_EXPORTER_VERSION, GRAPH_EXPORT_SCHEMA_VERSION, GRAPH_EXPORT_EXTENSIONS, type GraphExportFormat } from './graph/types';
+import { GRAPH_EXPORTER_VERSION, GRAPH_EXPORT_SCHEMA_VERSION, type GraphExportFormat } from './graph/types';
 import { sha256Hex } from './graph/stable-json';
 
 const SIGNED_URL_TTL_MS = 5 * 60 * 1000;
@@ -21,10 +21,11 @@ export function publicExportBlobPath(input: {
   sourceDigest: string;
   expiresEpoch: number;
   format: GraphExportFormat;
+  filename: string;
 }): string {
   const analyzer = input.analyzerVersion ?? V2_ANALYZER_VERSION;
-  const extension = GRAPH_EXPORT_EXTENSIONS[input.format];
-  const formatSegment = input.format === 'graph-json' ? 'graph-json' : input.format;
+  // Cross-origin downloads use Blob's basename, not the anchor download hint.
+  if (!/^[a-z0-9][a-z0-9._-]{0,119}$/.test(input.filename)) throw new Error('INVALID_EXPORT_FILENAME');
   return [
     'repodna',
     'public',
@@ -37,7 +38,7 @@ export function publicExportBlobPath(input: {
     GRAPH_EXPORTER_VERSION,
     input.sourceDigest,
     `expires-${input.expiresEpoch}`,
-    `${formatSegment}.${extension}`,
+    input.filename,
   ].join('/');
 }
 
@@ -72,7 +73,7 @@ export async function createSignedDownloadUrl(pathname: string): Promise<{ url: 
     validUntil,
     access: 'private',
   });
-  return { url: result.presignedUrl, expiresAt: new Date(validUntil).toISOString() };
+  return { url: getDownloadUrl(result.presignedUrl), expiresAt: new Date(validUntil).toISOString() };
 }
 
 export async function readCachedPublicExport(

@@ -160,6 +160,7 @@ export async function POST(request: NextRequest) {
     return createApiErrorResponse('ANALYSIS_ARTIFACT_EXPIRED', 'Canonical artifact has expired.', 410);
   }
 
+  const filename = filenameForFormat(normalized.document.manifest, format);
   const pathname = publicExportBlobPath({
     owner,
     repo,
@@ -167,6 +168,7 @@ export async function POST(request: NextRequest) {
     sourceDigest,
     expiresEpoch,
     format,
+    filename,
   });
 
   const existing = await readCachedPublicExport(pathname);
@@ -180,7 +182,6 @@ export async function POST(request: NextRequest) {
       });
     }
     const exportId = await sha256Hex(graphExportCacheIdentity(sourceDigest, format));
-    const filename = filenameForFormat(normalized.document.manifest, format);
     return NextResponse.json({
       exportId,
       format,

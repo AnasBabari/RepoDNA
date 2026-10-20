@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 import { makeV2Fixture } from './fixtures';
@@ -49,6 +49,7 @@ function validBody(format = 'graph-json') {
 }
 
 describe('POST /api/v2/exports', () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue(null);
@@ -201,6 +202,24 @@ describe('POST /api/v2/exports', () => {
       cache: { layer: 'vercel-blob', hit: true },
     });
     expect(mocks.storePublicExport).not.toHaveBeenCalled();
+  });
+
+  it.each(['graph-json', 'csv', 'parquet', 'cypher'])('uses the canonical %s filename on misses and hits', async (format) => {
+    vi.stubEnv('NEXT_PUBLIC_REPODNA_PARQUET_EXPORT', 'true');
+    const miss = await POST(request(validBody(format)));
+    expect(miss.status).toBe(200);
+    const generated = await miss.json();
+    expect(mocks.publicExportBlobPath).toHaveBeenLastCalledWith(expect.objectContaining({ filename: generated.filename, format }));
+    mocks.readCachedPublicExport.mockResolvedValueOnce({ metadata: {
+      byteSize: generated.byteSize, sha256: generated.sha256, mediaType: generated.mediaType,
+    } });
+    const hit = await POST(request(validBody(format)));
+    const cached = await hit.json();
+    expect(hit.status).toBe(200);
+    expect(cached).toMatchObject({ filename: generated.filename, sha256: generated.sha256, byteSize: generated.byteSize, cache: { hit: true } });
+    expect(mocks.publicExportBlobPath).toHaveBeenLastCalledWith(expect.objectContaining({ filename: cached.filename, format }));
+    expect(mocks.storePublicExport).toHaveBeenCalledTimes(1);
+    expect(mocks.createSignedDownloadUrl).toHaveBeenCalledTimes(2);
   });
 
   it('keeps Parquet hidden behind the production gate', async () => {
