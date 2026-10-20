@@ -7,7 +7,7 @@ import { buildCypher, cypherSnapshotKey } from '../../../app/lib/export/graph/cy
 
 it('scopes identical local IDs across repositories and commits and preserves membership evidence', async () => {
   const snapshots = [];
-  const output = resolve('test-results/neo4j-snapshots');
+  const output = resolve(process.env.REPODNA_SNAPSHOT_FIXTURE_DIR ?? 'test-results/neo4j-snapshots');
   if (process.env.REPODNA_KEEP_SNAPSHOT_FIXTURES === '1') mkdirSync(output, { recursive: true });
   for (const [index, [owner, sha]] of [['first', 'a'.repeat(40)], ['second', 'a'.repeat(40)], ['first', 'b'.repeat(40)]].entries()) {
     const project = makeV2Fixture();
